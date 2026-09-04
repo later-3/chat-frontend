@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN" translate="no" class="notranslate">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <meta name="description" content="Chat interface" />
+    <meta name="application-name" content="Chat" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Chat" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="google" content="notranslate" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1a1a1a" />
+    <link rel="manifest" href="/manifest.webmanifest?v=lifeos-astronaut-v2" />
+    <link rel="icon" href="/lifeos-astronaut-192x192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/lifeos-astronaut-apple-touch-icon.png" />
+    <title>Chat</title>
+    <script>
+      // 在 React 渲染前应用已保存的主题，避免深色模式下启动 PWA 时先闪现浅色页面。
+      (function () {
+        try {
+          var preference = localStorage.getItem("pi-theme");
+          var dark = preference === "dark"
+            || ((preference == null || preference === "" || preference === "auto")
+              && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) document.documentElement.classList.add("dark");
+        } catch (_error) {
+          // 隐私浏览模式可能禁止访问存储；React 启动后还会重新解析一次主题。
+        }
+      })();
+    </script>
+  </head>
+  <body translate="no" class="notranslate">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

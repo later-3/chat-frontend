@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "Chat",
+  "short_name": "Chat",
+  "description": "Chat Web frontend",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#1a1a1a",
+  "theme_color": "#1a1a1a",
+  "categories": ["developer", "productivity"],
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "/lifeos-astronaut-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/lifeos-astronaut-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/lifeos-astronaut-maskable-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/lifeos-astronaut-maskable-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

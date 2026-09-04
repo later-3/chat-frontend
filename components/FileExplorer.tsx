@@ -1,0 +1,1375 @@
+"use client";
+
+import { forwardRef, useState, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from "react";
+import { getFileIcon, FolderIcon } from "./FileIcons";
+import {
+  encodeFilePathForApi,
+  getFileDirectory,
+  getFileName,
+  getRelativeFilePath,
+  joinFilePath,
+  normalizeFilePathSlashes,
+} from "@/lib/file-paths";
+import type { GitFileStatus, GitFileStatusKind, GitStatusResponse } from "@/lib/git-types";
+import type { FileIndexEntry } from "@/lib/file-fuzzy";
+import { buildSearchTree, type SearchTreeNode } from "@/lib/search-tree";
+import { useI18n } from "@/hooks/useI18n";
+import { useIsMobile } from "@/hooks/useIsMobile";
+import { IconAt, IconChevronLeft, IconChevronRight, IconDotsVertical, IconDownload, IconX } from "@tabler/icons-react";
+
+type Translate = ReturnType<typeof useI18n>["t"];
+
+interface FileEntry {
+  name: string;
+  isDir: boolean;
+  size: number;
+  modified: string;
+}
+
+interface FileNode {
+  name: string;
+  fullPath: string;
+  isDir: boolean;
+  size: number;
+  children?: FileNode[];
+  loaded?: boolean;
+}
+
+interface Props {
+  cwd: string;
+  onOpenFile: (filePath: string, fileName: string, options?: OpenFileOptions) => void;
+  refreshKey?: number;
+  onAtMention?: (relativePath: string, isDir: boolean) => void;
+  onAtMentions?: (relativePaths: string[]) => void;
+  onUploadBusyChange?: (busy: boolean) => void;
+  changesCollapsed: boolean;
+  onChangesCountChange?: (count: number) => void;
+  navigationMode?: "tree" | "drilldown";
+  fileSearchOpen?: boolean;
+  onFileSearchOpenChange?: (open: boolean) => void;
+}
+
+export interface FileExplorerHandle {
+  openUploadPicker: () => void;
+}
+
+type UploadPhase = "idle" | "checking" | "uploading";
+type UploadConflictStrategy = "error" | "overwrite" | "skip";
+
+interface UploadError {
+  name: string;
+  error: string;
+}
+
+interface UploadResponse {
+  uploaded?: string[];
+  skipped?: string[];
+  errors?: UploadError[];
+  conflicts?: string[];
+  nonReplaceable?: string[];
+  error?: string;
+}
+
+interface UploadSummary {
+  uploaded: string[];
+  skipped: string[];
+  errors: UploadError[];
+}
+
+interface PendingConflict {
+  files: File[];
+  conflicts: string[];
+  nonReplaceable: string[];
+}
+
+async function fetchEntries(dirPath: string): Promise<FileNode[]> {
+  const encoded = encodeFilePathForApi(dirPath);
+  const res = await fetch(`/api/files/${encoded}?type=list`);
+  if (!res.ok) {
+    let message = `Failed to load files (HTTP ${res.status})`;
+    try {
+      const data = await res.json() as { error?: string };
+      if (data.error) message = data.error;
+    } catch {
+      // ignore non-JSON error bodies
+    }
+    throw new Error(message);
+  }
+  const data = await res.json() as { entries?: FileEntry[] };
+  return (data.entries ?? []).map((e) => ({
+    name: e.name,
+    fullPath: joinFilePath(dirPath, e.name),
+    isDir: e.isDir,
+    size: e.size,
+    children: e.isDir ? [] : undefined,
+    loaded: !e.isDir,
+  }));
+}
+
+async function fetchGitStatus(cwd: string): Promise<GitStatusResponse> {
+  const params = new URLSearchParams({ cwd });
+  const res = await fetch(`/api/git/status?${params.toString()}`);
+  if (!res.ok) throw new Error(`Failed to load Git status (HTTP ${res.status})`);
+  return res.json() as Promise<GitStatusResponse>;
+}
+
+const GIT_STATUS_KEYS: Record<GitFileStatusKind, string> = {
+  modified: "files.modified",
+  added: "files.added",
+  deleted: "files.deleted",
+  renamed: "files.renamed",
+  untracked: "files.untracked",
+  conflict: "files.conflict",
+};
+
+const GIT_STATUS_COLORS: Record<GitFileStatusKind, string> = {
+  modified: "#d6a84b",
+  added: "#4ade80",
+  deleted: "#f87171",
+  renamed: "#60a5fa",
+  untracked: "#4ade80",
+  conflict: "#f87171",
+};
+
+function GitStatusBadge({ status, t }: { status: GitFileStatus; t: Translate }) {
+  return (
+    <span
+      title={t(GIT_STATUS_KEYS[status.status])}
+      aria-label={t(GIT_STATUS_KEYS[status.status])}
+      style={{
+        width: 14,
+        height: 14,
+        flexShrink: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: GIT_STATUS_COLORS[status.status],
+        fontFamily: "var(--font-mono)",
+        fontSize: 11,
+        fontWeight: 600,
+      }}
+    >
+      {status.code}
+    </span>
+  );
+}
+
+function uploadFiles(
+  targetDirectory: string,
+  files: File[],
+  strategy: UploadConflictStrategy,
+  onProgress: (progress: number) => void,
+): Promise<{ status: number; data: UploadResponse }> {
+  return new Promise((resolve, reject) => {
+    const formData = new FormData();
+    files.forEach((file) => formData.append("files", file, file.name));
+
+    const xhr = new XMLHttpRequest();
+    xhr.open(
+      "POST",
+      `/api/files/${encodeFilePathForApi(targetDirectory)}?type=upload&conflict=${strategy}`,
+    );
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && event.total > 0) {
+        onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+    xhr.onerror = () => reject(new Error("Network error while uploading files"));
+    xhr.onabort = () => reject(new Error("Upload cancelled"));
+    xhr.onload = () => {
+      let data: UploadResponse = {};
+      try {
+        data = JSON.parse(xhr.responseText) as UploadResponse;
+      } catch {
+        if (xhr.responseText) data.error = xhr.responseText;
+      }
+      resolve({ status: xhr.status, data });
+    };
+    xhr.send(formData);
+  });
+}
+
+function MentionIcon({ size = 11 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
+    </svg>
+  );
+}
+
+function DismissButton({ onClick, title }: { onClick: () => void; title: string }) {
+  const isMobile = useIsMobile();
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      style={{ width: isMobile ? 44 : 24, height: isMobile ? 44 : 24, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, border: "none", borderRadius: isMobile ? 8 : 4, background: "none", color: "var(--text-dim)", cursor: "pointer" }}
+      onMouseEnter={(event) => { event.currentTarget.style.color = "var(--text-muted)"; event.currentTarget.style.background = "var(--bg-hover)"; }}
+      onMouseLeave={(event) => { event.currentTarget.style.color = "var(--text-dim)"; event.currentTarget.style.background = "none"; }}
+    >
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+        <path d="m6 6 12 12" />
+        <path d="m18 6-12 12" />
+      </svg>
+    </button>
+  );
+}
+
+function TreeNode({
+  node,
+  depth,
+  cwd,
+  onOpenFile,
+  onAtMention,
+  expandedPaths,
+  onToggleExpanded,
+  refreshToken,
+  highlightedPaths,
+  gitStatusByPath,
+  changedDirectoryPaths,
+  t,
+}: {
+  node: FileNode;
+  depth: number;
+  cwd: string;
+  onOpenFile: (filePath: string, fileName: string, options?: OpenFileOptions) => void;
+  onAtMention?: (relativePath: string, isDir: boolean) => void;
+  expandedPaths: Set<string>;
+  onToggleExpanded: (fullPath: string, open: boolean) => void;
+  refreshToken?: string;
+  highlightedPaths: Set<string>;
+  gitStatusByPath: Map<string, GitFileStatus>;
+  changedDirectoryPaths: Set<string>;
+  t: Translate;
+}) {
+  const isMobile = useIsMobile();
+  const open = expandedPaths.has(node.fullPath);
+  const highlighted = highlightedPaths.has(node.fullPath);
+  const normalizedPath = normalizeFilePathSlashes(node.fullPath);
+  const gitStatus = gitStatusByPath.get(normalizedPath);
+  const containsGitChanges = node.isDir && (
+    gitStatus !== undefined || changedDirectoryPaths.has(normalizedPath)
+  );
+  const [children, setChildren] = useState<FileNode[]>(node.children ?? []);
+  const [loaded, setLoaded] = useState(node.loaded ?? false);
+  const [loading, setLoading] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
+
+  const loadChildren = useCallback(async (force = false) => {
+    if (loaded && !force) return;
+    setLoading(true);
+    try {
+      const entries = await fetchEntries(node.fullPath);
+      setChildren(entries);
+      setLoaded(true);
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }, [loaded, node.fullPath]);
+
+  // Re-fetch children when the tree refreshes and the directory is open.
+  useEffect(() => {
+    if (refreshToken !== undefined && open && loaded) {
+      loadChildren(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshToken]);
+
+  const handleClick = useCallback(() => {
+    if (node.isDir) {
+      const next = !open;
+      onToggleExpanded(node.fullPath, next);
+      if (next && !loaded) loadChildren();
+    } else {
+      onOpenFile(node.fullPath, node.name);
+    }
+  }, [node.isDir, node.fullPath, node.name, loaded, open, loadChildren, onOpenFile, onToggleExpanded]);
+
+  return (
+    <div>
+      <div
+        onClick={handleClick}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          paddingLeft: 8 + depth * 14,
+          paddingRight: 8,
+          height: isMobile ? 44 : 24,
+          cursor: "pointer",
+          background: hovered ? "var(--bg-hover)" : "transparent",
+          borderRadius: 4,
+          userSelect: "none",
+        }}
+      >
+        {node.isDir && (
+          <svg
+            width="10" height="10" viewBox="0 0 10 10" fill="none"
+            stroke="var(--text-dim)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+            style={{ flexShrink: 0, transform: open ? "rotate(90deg)" : "none", transition: "transform 0.1s" }}
+          >
+            <polyline points="3 2 7 5 3 8" />
+          </svg>
+        )}
+        {!node.isDir && <span style={{ width: 10, flexShrink: 0 }} />}
+        <span style={{ flexShrink: 0, display: "flex", alignItems: "center" }}>
+          {node.isDir ? <FolderIcon size={14} open={open} /> : getFileIcon(node.name, 14)}
+        </span>
+        <span
+          style={{
+            fontSize: 12,
+            color: "var(--text)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            flex: 1,
+          }}
+          title={node.fullPath}
+        >
+          {node.name}
+        </span>
+        {highlighted && (
+          <span
+            title={t("files.newlyUploaded")}
+            aria-label={t("files.newlyUploaded")}
+            style={{ width: 14, height: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
+          >
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#3b82f6" }} />
+          </span>
+        )}
+        {!hovered && !node.isDir && gitStatus && (
+          <GitStatusBadge status={gitStatus} t={t} />
+        )}
+        {!hovered && containsGitChanges && (
+          <span
+            title={t("files.containsChangedFiles")}
+            aria-label={t("files.containsChangedFiles")}
+            style={{
+              width: 14,
+              height: 14,
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#d6a84b" }} />
+          </span>
+        )}
+        {loading && (
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4" />
+          </svg>
+        )}
+        {onAtMention && hovered && !isMobile && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onAtMention(getRelativeFilePath(node.fullPath, cwd), node.isDir);
+            }}
+            title={t("files.insertPath")}
+            style={{
+              position: "absolute",
+              right: !node.isDir ? 28 : 4,
+              top: "50%",
+              transform: "translateY(-50%)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 4,
+              padding: "0 8px",
+              height: 20,
+              background: "var(--bg-panel)",
+              border: "1px solid var(--border)",
+              borderRadius: 4,
+              color: "var(--accent)",
+              cursor: "pointer",
+              fontSize: 11,
+              fontWeight: 600,
+              whiteSpace: "nowrap",
+            }}
+          >
+            <MentionIcon />
+            {t("files.mention")}
+          </button>
+        )}
+        {hovered && !isMobile && !node.isDir && (
+          <a
+            href={`/api/files/${encodeFilePathForApi(node.fullPath)}?type=download`}
+            download
+            onClick={(e) => e.stopPropagation()}
+            title={t("files.download")}
+            style={{
+              position: "absolute",
+              right: 4,
+              top: "50%",
+              transform: "translateY(-50%)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 4,
+              padding: "0 5px",
+              height: 20,
+              background: "var(--bg-panel)",
+              border: "1px solid var(--border)",
+              borderRadius: 4,
+              color: "var(--text-muted)",
+              cursor: "pointer",
+              fontSize: 11,
+              fontWeight: 600,
+              whiteSpace: "nowrap",
+              textDecoration: "none",
+            }}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+          </a>
+        )}
+        {isMobile && (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              setMobileActionsOpen(true);
+            }}
+            aria-label={t("files.actionsFor", { name: node.name })}
+            title={t("files.actions")}
+            style={{
+              width: 44,
+              height: 44,
+              marginRight: -8,
+              padding: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              color: "var(--text-muted)",
+              background: "transparent",
+              border: "none",
+              borderRadius: 8,
+            }}
+          >
+            <IconDotsVertical size={18} stroke={1.8} aria-hidden="true" />
+          </button>
+        )}
+        {isMobile && mobileActionsOpen && (
+          <>
+            <button
+              type="button"
+              className="mobile-action-backdrop"
+              onClick={(event) => {
+                event.stopPropagation();
+                setMobileActionsOpen(false);
+              }}
+              aria-label={t("files.closeActions")}
+            />
+            <div className="mobile-action-sheet" role="dialog" aria-modal="true" aria-label={t("files.actionsFor", { name: node.name })}>
+              <div className="mobile-action-sheet-header">
+                <div>
+                  <strong>{node.name}</strong>
+                  <span>{node.isDir ? t("files.folder") : t("files.file")}</span>
+                </div>
+                <button
+                  type="button"
+                  className="mobile-icon-button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setMobileActionsOpen(false);
+                  }}
+                  aria-label={t("files.closeActions")}
+                >
+                  <IconX size={22} stroke={1.8} aria-hidden="true" />
+                </button>
+              </div>
+              <div className="mobile-action-grid">
+                {onAtMention && (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setMobileActionsOpen(false);
+                      onAtMention(getRelativeFilePath(node.fullPath, cwd), node.isDir);
+                    }}
+                  >
+                    <IconAt size={21} stroke={1.7} aria-hidden="true" />
+                    <span>{t("files.insertChat")}</span>
+                  </button>
+                )}
+                {!node.isDir && (
+                  <a
+                    href={`/api/files/${encodeFilePathForApi(node.fullPath)}?type=download`}
+                    download
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setMobileActionsOpen(false);
+                    }}
+                  >
+                    <IconDownload size={21} stroke={1.7} aria-hidden="true" />
+                    <span>{t("files.downloadFile")}</span>
+                  </a>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+      {node.isDir && open && (
+        <div>
+          {children.map((child) => (
+            <TreeNode
+              key={child.fullPath}
+              node={child}
+              depth={depth + 1}
+              cwd={cwd}
+              onOpenFile={onOpenFile}
+              onAtMention={onAtMention}
+              expandedPaths={expandedPaths}
+              onToggleExpanded={onToggleExpanded}
+              refreshToken={refreshToken}
+              highlightedPaths={highlightedPaths}
+              gitStatusByPath={gitStatusByPath}
+              changedDirectoryPaths={changedDirectoryPaths}
+              t={t}
+            />
+          ))}
+          {children.length === 0 && loaded && (
+            <div style={{ paddingLeft: 8 + (depth + 1) * 14, fontSize: 11, color: "var(--text-dim)", height: 22, display: "flex", alignItems: "center" }}>
+              empty
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MobileFileRow({
+  node,
+  cwd,
+  onOpenFile,
+  onOpenDirectory,
+  onAtMention,
+  highlighted,
+  gitStatus,
+  containsGitChanges,
+  t,
+}: {
+  node: FileNode;
+  cwd: string;
+  onOpenFile: OpenFileHandler;
+  onOpenDirectory: (path: string) => void;
+  onAtMention?: (relativePath: string, isDir: boolean) => void;
+  highlighted: boolean;
+  gitStatus?: GitFileStatus;
+  containsGitChanges: boolean;
+  t: Translate;
+}) {
+  const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
+  const handleOpen = () => {
+    if (node.isDir) onOpenDirectory(node.fullPath);
+    else onOpenFile(node.fullPath, node.name);
+  };
+
+  return (
+    <div className="mobile-file-row">
+      <button type="button" className="mobile-file-row-primary" onClick={handleOpen} title={node.fullPath}>
+        <span className="mobile-file-row-icon" aria-hidden="true">
+          {node.isDir ? <FolderIcon size={20} open={false} /> : getFileIcon(node.name, 20)}
+        </span>
+        <span className="mobile-file-row-label">{node.name}</span>
+        {highlighted && <span className="mobile-file-highlight" title={t("files.newlyUploaded")} aria-label={t("files.newlyUploaded")} />}
+        {gitStatus && <GitStatusBadge status={gitStatus} t={t} />}
+        {!gitStatus && containsGitChanges && <span className="mobile-file-changed-dot" title={t("files.containsChangedFiles")} aria-label={t("files.containsChangedFiles")} />}
+        {node.isDir && <IconChevronRight size={20} stroke={1.8} aria-hidden="true" />}
+      </button>
+      <button
+        type="button"
+        className="mobile-file-row-actions"
+        onClick={() => setMobileActionsOpen(true)}
+        aria-label={t("files.actionsFor", { name: node.name })}
+        title={t("files.actions")}
+      >
+        <IconDotsVertical size={20} stroke={1.8} aria-hidden="true" />
+      </button>
+      {mobileActionsOpen && (
+        <>
+          <button
+            type="button"
+            className="mobile-action-backdrop"
+            onClick={() => setMobileActionsOpen(false)}
+            aria-label={t("files.closeActions")}
+          />
+          <div className="mobile-action-sheet" role="dialog" aria-modal="true" aria-label={t("files.actionsFor", { name: node.name })}>
+            <div className="mobile-action-sheet-header">
+              <div>
+                <strong>{node.name}</strong>
+                <span>{node.isDir ? t("files.folder") : t("files.file")}</span>
+              </div>
+              <button type="button" className="mobile-icon-button" onClick={() => setMobileActionsOpen(false)} aria-label={t("files.closeActions")}>
+                <IconX size={22} stroke={1.8} aria-hidden="true" />
+              </button>
+            </div>
+            <div className="mobile-action-grid">
+              {onAtMention && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileActionsOpen(false);
+                    onAtMention(getRelativeFilePath(node.fullPath, cwd), node.isDir);
+                  }}
+                >
+                  <IconAt size={21} stroke={1.7} aria-hidden="true" />
+                  <span>{t("files.insertChat")}</span>
+                </button>
+              )}
+              {!node.isDir && (
+                <a
+                  href={`/api/files/${encodeFilePathForApi(node.fullPath)}?type=download`}
+                  download
+                  onClick={() => setMobileActionsOpen(false)}
+                >
+                  <IconDownload size={21} stroke={1.7} aria-hidden="true" />
+                  <span>{t("files.downloadFile")}</span>
+                </a>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+type OpenFileOptions = { sourceSessionId?: string | null; modeHint?: "diff" };
+
+type OpenFileHandler = (filePath: string, fileName: string, options?: OpenFileOptions) => void;
+
+function ChangeRow({
+  status,
+  cwd,
+  onOpenFile,
+  t,
+}: {
+  status: GitFileStatus;
+  cwd: string;
+  onOpenFile: OpenFileHandler;
+  t: Translate;
+}) {
+  const isMobile = useIsMobile();
+  const [hovered, setHovered] = useState(false);
+  const name = getFileName(status.filePath);
+  const rel = getRelativeFilePath(status.filePath, cwd);
+  return (
+    <button
+      type="button"
+      onClick={() => onOpenFile(status.filePath, name, { modeHint: "diff" })}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      title={status.filePath}
+      style={{
+        display: "flex",
+        width: "100%",
+        alignItems: "center",
+        gap: 6,
+        paddingLeft: isMobile ? 14 : 10,
+        paddingRight: isMobile ? 12 : 8,
+        height: isMobile ? 52 : 24,
+        cursor: "pointer",
+        background: hovered ? "var(--bg-hover)" : "transparent",
+        border: "none",
+        borderRadius: 4,
+        color: "inherit",
+        font: "inherit",
+        textAlign: "left",
+        userSelect: "none",
+      }}
+    >
+      <GitStatusBadge status={status} t={t} />
+      <span style={{ flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.85 }}>
+        {getFileIcon(name, isMobile ? 18 : 13)}
+      </span>
+      <span
+        style={{
+          fontSize: isMobile ? 14 : 12,
+          color: "var(--text)",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          flex: 1,
+        }}
+      >
+        {rel}
+      </span>
+    </button>
+  );
+}
+
+export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileExplorer({
+  cwd,
+  onOpenFile,
+  refreshKey,
+  onAtMention,
+  onAtMentions,
+  onUploadBusyChange,
+  changesCollapsed,
+  onChangesCountChange,
+  navigationMode = "tree",
+  fileSearchOpen = false,
+  onFileSearchOpenChange,
+}, ref) {
+  const { t } = useI18n();
+  const [roots, setRoots] = useState<FileNode[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+  const [treeRefreshKey, setTreeRefreshKey] = useState(0);
+  const [highlightedPaths, setHighlightedPaths] = useState<Set<string>>(new Set());
+  const [gitFiles, setGitFiles] = useState<GitFileStatus[]>([]);
+  const [gitLineStats, setGitLineStats] = useState({ additions: 0, deletions: 0 });
+  const [uploadPhase, setUploadPhase] = useState<UploadPhase>("idle");
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadSummary, setUploadSummary] = useState<UploadSummary | null>(null);
+  const [pendingConflict, setPendingConflict] = useState<PendingConflict | null>(null);
+  const [currentDirectory, setCurrentDirectory] = useState(cwd);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchPaths, setSearchPaths] = useState<string[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState(false);
+  const [searchExpanded, setSearchExpanded] = useState<Set<string>>(new Set());
+  const prevCwdRef = useRef<string | null>(null);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const refreshToken = `${refreshKey ?? 0}:${treeRefreshKey}`;
+  const uploadBusy = uploadPhase !== "idle";
+  const isDrilldown = navigationMode === "drilldown";
+  const listingDirectory = isDrilldown ? currentDirectory : cwd;
+  const hasSearchQuery = searchQuery.trim().length > 0;
+
+  useEffect(() => {
+    if (!fileSearchOpen) {
+      setSearchLoading(false);
+      return;
+    }
+    const query = searchQuery.trim();
+    if (query === "") {
+      setSearchPaths([]);
+      setSearchLoading(false);
+      setSearchError(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setSearchLoading(true);
+    setSearchError(false);
+    const timer = setTimeout(() => {
+      fetch(`/api/file-index?cwd=${encodeURIComponent(cwd)}&q=${encodeURIComponent(query)}`, {
+        signal: controller.signal,
+      })
+        .then((response) => response.ok
+          ? response.json() as Promise<{ matches?: FileIndexEntry[] }>
+          : Promise.reject(new Error(`Search failed (HTTP ${response.status})`)))
+        .then((data) => setSearchPaths(
+          (data.matches ?? []).filter((entry) => !entry.isDir).map((entry) => entry.path),
+        ))
+        .catch(() => {
+          if (!controller.signal.aborted) {
+            setSearchPaths([]);
+            setSearchError(true);
+          }
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setSearchLoading(false);
+        });
+    }, 150);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [cwd, fileSearchOpen, searchQuery]);
+
+  useEffect(() => {
+    if (fileSearchOpen) searchInputRef.current?.focus();
+  }, [fileSearchOpen]);
+
+  useEffect(() => {
+    if (searchPaths.length === 0) return;
+    const directories = new Set<string>();
+    for (const relative of searchPaths) {
+      const segments = relative.split("/");
+      let directory = "";
+      for (let index = 0; index < segments.length - 1; index += 1) {
+        directory = directory ? `${directory}/${segments[index]}` : segments[index];
+        directories.add(joinFilePath(cwd, directory));
+      }
+    }
+    setSearchExpanded((previous) => {
+      const next = new Set(previous);
+      directories.forEach((directory) => next.add(directory));
+      return next.size === previous.size ? previous : next;
+    });
+  }, [cwd, searchPaths]);
+
+  const searchRoots = useMemo(() => {
+    const toFileNode = (node: SearchTreeNode): FileNode => ({
+      name: node.name,
+      fullPath: joinFilePath(cwd, node.path),
+      isDir: node.isDir,
+      size: 0,
+      children: node.children.map(toFileNode),
+      loaded: true,
+    });
+    return buildSearchTree(searchPaths).map(toFileNode);
+  }, [cwd, searchPaths]);
+
+  const gitStatusByPath = useMemo(() => new Map(
+    gitFiles.map((status) => [normalizeFilePathSlashes(status.filePath), status]),
+  ), [gitFiles]);
+
+  const changedDirectoryPaths = useMemo(() => {
+    const directories = new Set<string>();
+    const normalizedCwd = normalizeFilePathSlashes(cwd).replace(/\/$/, "");
+    for (const status of gitFiles) {
+      let directory = getFileDirectory(normalizeFilePathSlashes(status.filePath));
+      while (directory === normalizedCwd || directory.startsWith(`${normalizedCwd}/`)) {
+        directories.add(directory);
+        if (directory === normalizedCwd) break;
+        const parent = getFileDirectory(directory);
+        if (parent === directory) break;
+        directory = parent;
+      }
+    }
+    return directories;
+  }, [cwd, gitFiles]);
+
+  const handleToggleExpanded = useCallback((fullPath: string, open: boolean) => {
+    setExpandedPaths((prev) => {
+      const next = new Set(prev);
+      if (open) next.add(fullPath); else next.delete(fullPath);
+      return next;
+    });
+  }, []);
+
+  const applyUploadResult = useCallback((data: UploadResponse) => {
+    const uploaded = data.uploaded ?? [];
+    const skipped = data.skipped ?? [];
+    const errors = data.errors ?? [];
+    setUploadSummary({ uploaded, skipped, errors });
+
+    if (uploaded.length > 0) {
+      setHighlightedPaths(new Set(uploaded.map((name) => joinFilePath(listingDirectory, name))));
+      setTreeRefreshKey((key) => key + 1);
+    }
+  }, [listingDirectory]);
+
+  const performUpload = useCallback(async (
+    files: File[],
+    strategy: UploadConflictStrategy,
+  ) => {
+    setPendingConflict(null);
+    setUploadError(null);
+    setUploadProgress(0);
+    setUploadPhase("uploading");
+
+    try {
+      const { status, data } = await uploadFiles(listingDirectory, files, strategy, setUploadProgress);
+      if (status === 409 && data.conflicts?.length) {
+        setPendingConflict({
+          files,
+          conflicts: data.conflicts,
+          nonReplaceable: data.nonReplaceable ?? [],
+        });
+        return;
+      }
+      if (status < 200 || status >= 300) {
+        throw new Error(data.error ?? `Upload failed (HTTP ${status})`);
+      }
+      setUploadProgress(100);
+      applyUploadResult(data);
+    } catch (uploadFailure) {
+      setUploadError(uploadFailure instanceof Error ? uploadFailure.message : String(uploadFailure));
+    } finally {
+      setUploadPhase("idle");
+    }
+  }, [applyUploadResult, listingDirectory]);
+
+  const prepareUpload = useCallback(async (files: File[]) => {
+    if (files.length === 0 || uploadBusy) return;
+    setUploadSummary(null);
+    setHighlightedPaths(new Set());
+    setPendingConflict(null);
+    setUploadError(null);
+    setUploadProgress(0);
+    setUploadPhase("checking");
+
+    try {
+      const res = await fetch(
+        `/api/files/${encodeFilePathForApi(listingDirectory)}?type=upload-check`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileNames: files.map((file) => file.name) }),
+        },
+      );
+      const data = await res.json().catch(() => ({})) as UploadResponse;
+      if (!res.ok) throw new Error(data.error ?? `Upload check failed (HTTP ${res.status})`);
+
+      if (data.conflicts?.length) {
+        setPendingConflict({
+          files,
+          conflicts: data.conflicts,
+          nonReplaceable: data.nonReplaceable ?? [],
+        });
+        return;
+      }
+
+      await performUpload(files, "error");
+    } catch (uploadFailure) {
+      setUploadError(uploadFailure instanceof Error ? uploadFailure.message : String(uploadFailure));
+    } finally {
+      setUploadPhase("idle");
+    }
+  }, [listingDirectory, performUpload, uploadBusy]);
+
+  const handleUploadInput = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    void prepareUpload(files);
+  }, [prepareUpload]);
+
+  useImperativeHandle(ref, () => ({
+    openUploadPicker() {
+      if (!uploadBusy) uploadInputRef.current?.click();
+    },
+  }), [uploadBusy]);
+
+  useEffect(() => {
+    onUploadBusyChange?.(uploadBusy);
+  }, [onUploadBusyChange, uploadBusy]);
+
+  useEffect(() => () => onUploadBusyChange?.(false), [onUploadBusyChange]);
+
+  useEffect(() => {
+    setCurrentDirectory(cwd);
+  }, [cwd]);
+
+  useEffect(() => {
+    const cwdChanged = prevCwdRef.current !== cwd;
+    prevCwdRef.current = cwd;
+
+    // Reset expanded state only when cwd changes, not on refreshKey bumps
+    if (cwdChanged) {
+      setExpandedPaths(new Set());
+      setHighlightedPaths(new Set());
+      setUploadSummary(null);
+      setPendingConflict(null);
+      setUploadError(null);
+      setSearchQuery("");
+      setSearchPaths([]);
+      setSearchExpanded(new Set());
+    }
+
+    setLoading(cwdChanged || isDrilldown);
+    setError(null);
+    let cancelled = false;
+    fetchEntries(listingDirectory)
+      .then((entries) => { if (!cancelled) setRoots(entries); })
+      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [cwd, isDrilldown, listingDirectory, refreshKey, treeRefreshKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchGitStatus(cwd)
+      .then((status) => {
+        if (!cancelled) {
+          setGitFiles(status.isGitRepository ? status.files : []);
+          setGitLineStats(status.isGitRepository
+            ? { additions: status.additions, deletions: status.deletions }
+            : { additions: 0, deletions: 0 });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setGitFiles([]);
+          setGitLineStats({ additions: 0, deletions: 0 });
+        }
+      });
+    return () => { cancelled = true; };
+  }, [cwd, refreshKey, treeRefreshKey]);
+
+  useEffect(() => {
+    onChangesCountChange?.(gitFiles.length);
+  }, [gitFiles, onChangesCountChange]);
+
+  const showUploadFeedback = uploadBusy || pendingConflict !== null || uploadError !== null || uploadSummary !== null;
+
+  const addUploadedFilesToChat = useCallback(() => {
+    if (!uploadSummary || uploadSummary.uploaded.length === 0) return;
+    onAtMentions?.(
+      uploadSummary.uploaded.map((name) => getRelativeFilePath(joinFilePath(listingDirectory, name), cwd)),
+    );
+  }, [cwd, listingDirectory, onAtMentions, uploadSummary]);
+
+  const breadcrumbs = useMemo(() => {
+    const root = normalizeFilePathSlashes(cwd).replace(/\/$/, "");
+    const current = normalizeFilePathSlashes(currentDirectory).replace(/\/$/, "");
+    const crumbs = [{ label: getFileName(root) || root, path: root }];
+    if (!isDrilldown || current === root || !current.startsWith(`${root}/`)) return crumbs;
+    let path = root;
+    for (const part of current.slice(root.length + 1).split("/").filter(Boolean)) {
+      path = joinFilePath(path, part);
+      crumbs.push({ label: part, path });
+    }
+    return crumbs;
+  }, [currentDirectory, cwd, isDrilldown]);
+
+  const goToParentDirectory = useCallback(() => {
+    const root = normalizeFilePathSlashes(cwd).replace(/\/$/, "");
+    const parent = normalizeFilePathSlashes(getFileDirectory(currentDirectory)).replace(/\/$/, "");
+    if (parent === root || parent.startsWith(`${root}/`)) setCurrentDirectory(parent);
+  }, [currentDirectory, cwd]);
+
+  return (
+    <div style={{ minHeight: "100%" }}>
+      <input ref={uploadInputRef} type="file" multiple hidden onChange={handleUploadInput} />
+      {showUploadFeedback && (
+        <div style={{ padding: "6px 8px", borderBottom: "1px solid var(--border)" }}>
+        {uploadBusy && (
+          <div role="status" aria-live="polite" aria-label={uploadPhase === "checking" ? t("files.checking") : t("files.uploading", { progress: uploadProgress })}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minHeight: 14, color: "var(--text-muted)" }}>
+              {uploadPhase === "checking" ? (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" style={{ animation: "spin 0.8s linear infinite" }} aria-hidden="true">
+                  <path d="M21 12a9 9 0 1 1-5.7-8.4" />
+                </svg>
+              ) : (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 16V4" />
+                  <path d="m7 9 5-5 5 5" />
+                  <path d="M5 20h14" />
+                </svg>
+              )}
+              {uploadPhase === "uploading" && <span style={{ fontSize: 10 }}>{uploadProgress}%</span>}
+            </div>
+            {uploadPhase === "uploading" && (
+              <div style={{ height: 3, marginTop: 4, overflow: "hidden", borderRadius: 2, background: "var(--border)" }}>
+                <div style={{ width: `${uploadProgress}%`, height: "100%", background: "var(--text-muted)", transition: "width 120ms ease" }} />
+              </div>
+            )}
+          </div>
+        )}
+
+        {pendingConflict && (
+          <div role="alert" style={{ padding: 7, border: "1px solid color-mix(in srgb, #f59e0b 55%, var(--border))", borderRadius: 4, background: "color-mix(in srgb, #f59e0b 9%, var(--bg-panel))" }}>
+            <div style={{ fontSize: 11, color: "var(--text)", lineHeight: 1.35, overflowWrap: "anywhere" }}>
+              {t("files.conflictSummary", { count: pendingConflict.conflicts.length, countSuffix: pendingConflict.conflicts.length === 1 ? "" : "s", files: pendingConflict.conflicts.join(", ") })}
+            </div>
+            {pendingConflict.nonReplaceable.length > 0 && (
+              <div style={{ marginTop: 3, fontSize: 10, color: "#f59e0b", lineHeight: 1.35, overflowWrap: "anywhere" }}>
+                {t("files.cannotReplace", { files: pendingConflict.nonReplaceable.join(", ") })}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: isDrilldown ? 8 : 5, marginTop: 7, flexWrap: "wrap" }}>
+              <button type="button" onClick={() => void performUpload(pendingConflict.files, "overwrite")} style={{ height: isDrilldown ? 40 : 22, padding: isDrilldown ? "0 12px" : "0 7px", border: "1px solid #ef4444", borderRadius: isDrilldown ? 8 : 4, background: "transparent", color: "#ef4444", cursor: "pointer", fontSize: isDrilldown ? 13 : 10 }}>
+                {t("files.replace")}
+              </button>
+              <button type="button" onClick={() => void performUpload(pendingConflict.files, "skip")} style={{ height: isDrilldown ? 40 : 22, padding: isDrilldown ? "0 12px" : "0 7px", border: "1px solid var(--border)", borderRadius: isDrilldown ? 8 : 4, background: "var(--bg-panel)", color: "var(--text)", cursor: "pointer", fontSize: isDrilldown ? 13 : 10 }}>
+                {t("files.skipExisting")}
+              </button>
+              <button type="button" onClick={() => setPendingConflict(null)} style={{ height: isDrilldown ? 40 : 22, padding: isDrilldown ? "0 12px" : "0 7px", border: "none", borderRadius: isDrilldown ? 8 : 4, background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: isDrilldown ? 13 : 10 }}>
+                {t("files.cancel")}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {uploadError && (
+          <div role="alert" style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 11, lineHeight: 1.35, color: "#f87171" }}>
+            <span style={{ minWidth: 0, flex: 1, overflowWrap: "anywhere" }}>{uploadError}</span>
+            <DismissButton onClick={() => setUploadError(null)} title={t("files.dismissError")} />
+          </div>
+        )}
+
+        {uploadSummary && (
+          <div aria-live="polite">
+            <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 22, fontSize: 11 }}>
+              <div style={{ minWidth: 0, flex: 1, display: "flex", alignItems: "center", gap: 8 }}>
+                {uploadSummary.uploaded.length > 0 && (
+                  <span title={`${uploadSummary.uploaded.length} uploaded`} aria-label={`${uploadSummary.uploaded.length} uploaded`} style={{ display: "flex", alignItems: "center", gap: 3, color: "#22c55e" }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="m5 12 4 4L19 6" />
+                    </svg>
+                    <span>{uploadSummary.uploaded.length}</span>
+                  </span>
+                )}
+                {uploadSummary.skipped.length > 0 && (
+                  <span title={`${uploadSummary.skipped.length} skipped`} aria-label={`${uploadSummary.skipped.length} skipped`} style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--text-dim)" }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M8 12h8" />
+                    </svg>
+                    <span>{uploadSummary.skipped.length}</span>
+                  </span>
+                )}
+                {uploadSummary.errors.length > 0 && (
+                  <span title={`${uploadSummary.errors.length} failed`} aria-label={`${uploadSummary.errors.length} failed`} style={{ display: "flex", alignItems: "center", gap: 3, color: "#f87171" }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M12 3 2.5 20h19L12 3Z" />
+                      <path d="M12 9v4" />
+                      <path d="M12 17h.01" />
+                    </svg>
+                    <span>{uploadSummary.errors.length}</span>
+                  </span>
+                )}
+              </div>
+              {uploadSummary.uploaded.length > 0 && onAtMentions && (
+                <button
+                  type="button"
+                  onClick={addUploadedFilesToChat}
+                  title={uploadSummary.uploaded.length === 1 ? t("files.addUploadedFile") : t("files.addAllUploadedFiles")}
+                  aria-label={uploadSummary.uploaded.length === 1 ? t("files.addUploadedFile") : t("files.addAllUploadedFiles")}
+                  style={{ height: isDrilldown ? 40 : 22, padding: isDrilldown ? "0 12px" : "0 7px", display: "flex", alignItems: "center", justifyContent: "center", gap: 4, flexShrink: 0, border: "1px solid var(--border)", borderRadius: isDrilldown ? 8 : 4, background: "var(--bg-panel)", color: "var(--accent)", cursor: "pointer", fontSize: isDrilldown ? 13 : 11, fontWeight: 600, whiteSpace: "nowrap" }}
+                >
+                  <MentionIcon />
+                  {t("files.mention")}
+                </button>
+              )}
+              <DismissButton onClick={() => setUploadSummary(null)} title={t("files.dismissUploadResults")} />
+            </div>
+            {uploadSummary.errors.map((item) => (
+              <div key={item.name} title={item.error} style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3, minWidth: 0, fontSize: 10, color: "#f87171" }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }} aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 8v5" />
+                  <path d="M12 17h.01" />
+                </svg>
+                <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        </div>
+      )}
+
+      {fileSearchOpen && (
+        <div style={{ padding: isDrilldown ? "10px 12px" : "6px 8px", borderBottom: "1px solid var(--border)" }}>
+          <div style={{ position: "relative" }}>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+              style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)", pointerEvents: "none" }}
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-4-4" />
+            </svg>
+            <input
+              ref={searchInputRef}
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") onFileSearchOpenChange?.(false);
+              }}
+              placeholder={t("sidebar.searchFilesPlaceholder")}
+              aria-label={t("sidebar.searchFiles")}
+              style={{
+                width: "100%",
+                height: isDrilldown ? 42 : undefined,
+                boxSizing: "border-box",
+                padding: isDrilldown ? "8px 34px" : "6px 24px",
+                border: "1px solid var(--border)",
+                borderRadius: isDrilldown ? 9 : 5,
+                outline: "none",
+                background: "var(--bg)",
+                color: "var(--text)",
+                fontFamily: "var(--font-mono)",
+                fontSize: isDrilldown ? 14 : 11,
+              }}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                title={t("sidebar.clearFileSearch")}
+                aria-label={t("sidebar.clearFileSearch")}
+                style={{
+                  position: "absolute",
+                  right: isDrilldown ? 6 : 4,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: isDrilldown ? 32 : 18,
+                  height: isDrilldown ? 32 : 18,
+                  padding: 0,
+                  border: "none",
+                  borderRadius: 4,
+                  background: "none",
+                  color: "var(--text-dim)",
+                  cursor: "pointer",
+                }}
+              >
+                <IconX size={isDrilldown ? 17 : 10} stroke={2.2} aria-hidden="true" />
+              </button>
+            )}
+          </div>
+          {hasSearchQuery && (
+            <div style={{ paddingTop: 3 }}>
+              {searchLoading && (
+                <div role="status" style={{ padding: "6px 2px", fontSize: isDrilldown ? 13 : 10, color: "var(--text-dim)" }}>
+                  {t("sidebar.searchingFiles")}
+                </div>
+              )}
+              {!searchLoading && searchError && (
+                <div role="alert" style={{ padding: "6px 2px", fontSize: isDrilldown ? 13 : 10, color: "#f87171" }}>
+                  {t("sidebar.fileSearchFailed")}
+                </div>
+              )}
+              {!searchLoading && !searchError && searchPaths.length === 0 && (
+                <div style={{ padding: "6px 2px", fontSize: isDrilldown ? 13 : 10, color: "var(--text-dim)" }}>
+                  {t("sidebar.noMatchingFiles")}
+                </div>
+              )}
+              {!searchLoading && !searchError && searchPaths.length > 0 && searchRoots.map((node) => (
+                <TreeNode
+                  key={`${searchQuery}:${node.fullPath}`}
+                  node={node}
+                  depth={0}
+                  cwd={cwd}
+                  onOpenFile={onOpenFile}
+                  onAtMention={onAtMention}
+                  expandedPaths={searchExpanded}
+                  onToggleExpanded={(fullPath, open) => {
+                    setSearchExpanded((previous) => {
+                      const next = new Set(previous);
+                      if (open) next.add(fullPath); else next.delete(fullPath);
+                      return next;
+                    });
+                  }}
+                  highlightedPaths={highlightedPaths}
+                  gitStatusByPath={gitStatusByPath}
+                  changedDirectoryPaths={changedDirectoryPaths}
+                  t={t}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {!changesCollapsed && gitFiles.length > 0 && (
+        <div style={{ padding: "0 4px 2px" }}>
+          <div
+            aria-label={t("files.changeStats", {
+              count: gitFiles.length,
+              additions: gitLineStats.additions,
+              deletions: gitLineStats.deletions,
+            })}
+            style={{ display: "flex", alignItems: "center", gap: 6, height: isDrilldown ? 40 : 24, padding: "0 10px", fontSize: isDrilldown ? 13 : 12 }}
+          >
+            <span style={{ color: "var(--text-dim)" }}>
+              {t("files.changedCount", { count: gitFiles.length })}
+            </span>
+            <span style={{ color: GIT_STATUS_COLORS.added, fontFamily: "var(--font-mono)" }}>+{gitLineStats.additions}</span>
+            <span style={{ color: GIT_STATUS_COLORS.deleted, fontFamily: "var(--font-mono)" }}>-{gitLineStats.deletions}</span>
+          </div>
+          {gitFiles.map((status) => (
+            <ChangeRow key={status.filePath} status={status} cwd={cwd} onOpenFile={onOpenFile} t={t} />
+          ))}
+        </div>
+      )}
+
+      {(changesCollapsed || gitFiles.length === 0) && (!fileSearchOpen || !hasSearchQuery) && (
+        <div style={{ padding: isDrilldown ? 0 : "2px 4px" }}>
+          {isDrilldown && (
+            <div className="mobile-file-breadcrumb-bar">
+              <button
+                type="button"
+                className="mobile-file-parent-button"
+                onClick={goToParentDirectory}
+                disabled={normalizeFilePathSlashes(currentDirectory).replace(/\/$/, "") === normalizeFilePathSlashes(cwd).replace(/\/$/, "")}
+                aria-label={t("mobile.goToParent")}
+              >
+                <IconChevronLeft size={21} stroke={1.9} aria-hidden="true" />
+              </button>
+              <div className="mobile-file-breadcrumbs" aria-label={currentDirectory}>
+                {breadcrumbs.map((crumb, index) => (
+                  <button
+                    key={crumb.path}
+                    type="button"
+                    className={index === breadcrumbs.length - 1 ? "is-current" : undefined}
+                    onClick={() => setCurrentDirectory(crumb.path)}
+                  >
+                    {crumb.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {loading ? (
+            <div style={{ padding: isDrilldown ? "18px 16px" : "8px 12px", fontSize: isDrilldown ? 14 : 11, color: "var(--text-dim)" }}>{t("files.loading")}</div>
+          ) : error ? (
+            <div style={{ padding: "8px 12px", fontSize: 11, color: "#f87171" }}>{error}</div>
+          ) : (
+            roots.map((node) => isDrilldown ? (
+              <MobileFileRow
+                key={node.fullPath}
+                node={node}
+                cwd={cwd}
+                onOpenFile={onOpenFile}
+                onOpenDirectory={setCurrentDirectory}
+                onAtMention={onAtMention}
+                highlighted={highlightedPaths.has(node.fullPath)}
+                gitStatus={gitStatusByPath.get(normalizeFilePathSlashes(node.fullPath))}
+                containsGitChanges={node.isDir && changedDirectoryPaths.has(normalizeFilePathSlashes(node.fullPath))}
+                t={t}
+              />
+            ) : (
+              <TreeNode
+                key={node.fullPath}
+                node={node}
+                depth={0}
+                cwd={cwd}
+                onOpenFile={onOpenFile}
+                onAtMention={onAtMention}
+                expandedPaths={expandedPaths}
+                onToggleExpanded={handleToggleExpanded}
+                refreshToken={refreshToken}
+                highlightedPaths={highlightedPaths}
+                gitStatusByPath={gitStatusByPath}
+                changedDirectoryPaths={changedDirectoryPaths}
+                t={t}
+              />
+            ))
+          )}
+          {!loading && !error && roots.length === 0 && (
+            <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--text-dim)" }}>
+              {t("files.noFiles")}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+});
