@@ -18,9 +18,9 @@ import {
   MEMORY_KINDS,
   createMemory,
   deleteMemory,
-  fetchMemoryHealth,
-  listMemories,
-  rebuildMemoryIndex,
+  fetchMemoryTargetsHealth,
+  listMemoryTargets,
+  rebuildMemoryIndexes,
   searchMemories,
   updateMemory,
   type MemoryHealth,
@@ -32,6 +32,7 @@ import { fetchChatProjects, type ChatProjectSummary } from "@/lib/projects-contr
 import styles from "./MemoryManager.module.css";
 
 const PAGE_SIZE = 30;
+const VISIBLE_TARGET_KEY = "visible";
 
 interface MemoryManagerProps {
   currentProjectId: string | null;
@@ -53,6 +54,13 @@ function targetFromKey(key: string): MemoryTarget {
     : { type: "project", projectId: key.slice("project:".length) };
 }
 
+function targetsForView(key: string, currentProjectId: string | null): readonly MemoryTarget[] {
+  if (key !== VISIBLE_TARGET_KEY) return [targetFromKey(key)];
+  return currentProjectId === null
+    ? [{ type: "personal" }]
+    : [{ type: "personal" }, { type: "project", projectId: currentProjectId }];
+}
+
 function targetForMemory(memory: MemoryRecord): MemoryTarget {
   return memory.scope === "personal"
     ? { type: "personal" }
@@ -66,8 +74,8 @@ function draftFor(memory: MemoryRecord | null): MemoryDraft {
 export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps) {
   const { locale, t } = useI18n();
   const [projects, setProjects] = useState<readonly ChatProjectSummary[]>([]);
-  const [targetKey, setTargetKey] = useState(() => currentProjectId ? `project:${currentProjectId}` : "personal");
-  const target = useMemo(() => targetFromKey(targetKey), [targetKey]);
+  const [targetKey, setTargetKey] = useState(VISIBLE_TARGET_KEY);
+  const targets = useMemo(() => targetsForView(targetKey, currentProjectId), [currentProjectId, targetKey]);
   const [items, setItems] = useState<readonly MemoryRecord[]>([]);
   const [scores, setScores] = useState<ReadonlyMap<string, number | null>>(new Map());
   const [health, setHealth] = useState<MemoryHealth | null>(null);
@@ -83,6 +91,7 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
   const [notice, setNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState<MemoryRecord | null | undefined>(undefined);
   const [draft, setDraft] = useState<MemoryDraft>(() => draftFor(null));
+  const [draftTargetKey, setDraftTargetKey] = useState("personal");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -94,21 +103,17 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
     return () => controller.abort();
   }, []);
 
-  useEffect(() => {
-    if (currentProjectId) setTargetKey(`project:${currentProjectId}`);
-  }, [currentProjectId]);
-
   const loadHealth = useCallback(async (signal?: AbortSignal) => {
-    setHealth(await fetchMemoryHealth(target, signal));
-  }, [target]);
+    setHealth(await fetchMemoryTargetsHealth(targets, signal));
+  }, [targets]);
 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     setError(null);
     const request = activeQuery === ""
-      ? listMemories({
-          target,
+      ? listMemoryTargets({
+          targets,
           status: "active",
           limit: PAGE_SIZE,
           offset,
@@ -120,7 +125,7 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
         })
       : searchMemories({
           query: activeQuery,
-          targets: [target],
+          targets,
           topK: 50,
           ...(kind === "all" ? {} : { kind }),
         }, controller.signal).then((hits) => {
@@ -138,11 +143,14 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [activeQuery, kind, loadHealth, offset, refreshKey, target]);
+  }, [activeQuery, kind, loadHealth, offset, refreshKey, targets]);
 
   const refresh = useCallback(() => setRefreshKey((value) => value + 1), []);
   const startCreate = () => {
     setDraft(draftFor(null));
+    setDraftTargetKey(targetKey === VISIBLE_TARGET_KEY
+      ? (currentProjectId === null ? "personal" : `project:${currentProjectId}`)
+      : targetKey);
     setEditing(null);
     setError(null);
   };
@@ -163,7 +171,12 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
     setNotice(null);
     try {
       if (editing === null) {
-        await createMemory({ target, text, kind: draft.kind, metadata: { managedBy: "memory-page" } });
+        await createMemory({
+          target: targetFromKey(draftTargetKey),
+          text,
+          kind: draft.kind,
+          metadata: { managedBy: "memory-page" },
+        });
         setNotice(t("memory.created"));
       } else if (editing !== undefined) {
         await updateMemory(editing.id, { target: targetForMemory(editing), text, kind: draft.kind });
@@ -195,12 +208,18 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
   };
 
   const rebuild = async () => {
-    if (!window.confirm(t("memory.rebuildConfirm"))) return;
+    const scope = targetKey === VISIBLE_TARGET_KEY
+      ? t("memory.allScopes")
+      : targetKey === "personal"
+        ? t("memory.scope.personal")
+        : projects.find((project) => `project:${project.projectId}` === targetKey)?.cachedName
+          ?? targetKey.slice("project:".length);
+    if (!window.confirm(t("memory.rebuildConfirm", { scope }))) return;
     setBusy(true);
     setError(null);
     setNotice(t("memory.rebuilding"));
     try {
-      const result = await rebuildMemoryIndex(target);
+      const result = await rebuildMemoryIndexes(targets);
       setNotice(t("memory.rebuildComplete", { indexed: result.indexed, failed: result.failed }));
       refresh();
     } catch (rebuildError) {
@@ -250,11 +269,13 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
 
         <form className={styles.toolbar} onSubmit={(event) => { event.preventDefault(); setOffset(0); setActiveQuery(query.trim()); }}>
           <div className={styles.searchBox}><IconSearch size={16} stroke={1.8} aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("memory.searchPlaceholder")} /></div>
-          <select className={styles.select} value={targetKey} onChange={(event) => { setTargetKey(event.target.value); setOffset(0); }}>
+          <select className={styles.select} aria-label={t("memory.scope")} value={targetKey} onChange={(event) => { setTargetKey(event.target.value); setOffset(0); }}>
+            <option value={VISIBLE_TARGET_KEY}>{t("memory.allScopes")}</option>
             <option value="personal">{t("memory.scope.personal")}</option>
+            {currentProjectId !== null && !projects.some((project) => project.projectId === currentProjectId) && <option value={`project:${currentProjectId}`}>{currentProjectId}</option>}
             {projects.map((project) => <option key={project.projectId} value={`project:${project.projectId}`}>{project.cachedName}</option>)}
           </select>
-          <select className={styles.select} value={kind} onChange={(event) => { setKind(event.target.value as MemoryKind | "all"); setOffset(0); }}>
+          <select className={styles.select} aria-label={t("memory.kind")} value={kind} onChange={(event) => { setKind(event.target.value as MemoryKind | "all"); setOffset(0); }}>
             <option value="all">{t("memory.allKinds")}</option>
             {MEMORY_KINDS.map((value) => <option key={value} value={value}>{t(`memory.kind.${value}`)}</option>)}
           </select>
@@ -300,7 +321,11 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
             <div className={styles.field}><label htmlFor="memory-text">{t("memory.text")}</label><textarea id="memory-text" className={styles.textarea} value={draft.text} maxLength={50_000} autoFocus onChange={(event) => setDraft((value) => ({ ...value, text: event.target.value }))} /></div>
             <div className={styles.formRow}>
               <div className={styles.field}><label htmlFor="memory-kind">{t("memory.kind")}</label><select id="memory-kind" className={styles.select} value={draft.kind} onChange={(event) => setDraft((value) => ({ ...value, kind: event.target.value as MemoryKind }))}>{MEMORY_KINDS.map((value) => <option key={value} value={value}>{t(`memory.kind.${value}`)}</option>)}</select></div>
-              <div className={styles.field}><label>{t("memory.scope")}</label><div className={styles.input}>{editing === null ? (target.type === "personal" ? t("memory.scope.personal") : target.projectId) : (editing.scope === "personal" ? t("memory.scope.personal") : editing.projectId)}</div></div>
+              <div className={styles.field}><label htmlFor={editing === null ? "memory-target" : undefined}>{t("memory.scope")}</label>{editing === null ? <select id="memory-target" className={styles.select} value={draftTargetKey} onChange={(event) => setDraftTargetKey(event.target.value)}>
+                <option value="personal">{t("memory.scope.personal")}</option>
+                {currentProjectId !== null && !projects.some((project) => project.projectId === currentProjectId) && <option value={`project:${currentProjectId}`}>{currentProjectId}</option>}
+                {projects.map((project) => <option key={project.projectId} value={`project:${project.projectId}`}>{project.cachedName}</option>)}
+              </select> : <div className={styles.input}>{editing.scope === "personal" ? t("memory.scope.personal") : editing.projectId}</div>}</div>
             </div>
             <div className={styles.editorActions}><button type="button" className={styles.button} onClick={() => setEditing(undefined)} disabled={busy}>{t("common.cancel")}</button><button type="button" className={styles.primaryButton} onClick={() => void saveDraft()} disabled={busy}>{busy ? t("common.saving") : t("common.save")}</button></div>
           </div>

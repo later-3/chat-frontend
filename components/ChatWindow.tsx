@@ -38,6 +38,7 @@ interface Props {
   onAgentEnd?: () => void;
   onAttentionNeeded?: (request: BlockingExtensionUiRequest) => void;
   onSessionCreated?: (session: SessionInfo, sourceDraftKey: string) => void;
+  onSessionOpen?: (sessionId: string) => void | Promise<void>;
   onSessionForked?: (newSessionId: string) => void;
   chatInputRef?: React.RefObject<ChatInputHandle | null>;
   onBranchDataChange?: (tree: SessionTreeNode[], activeLeafId: string | null, onLeafChange: (leafId: string | null) => void) => void;
@@ -361,7 +362,7 @@ function PlanReviewCard({
   );
 }
 
-export function ChatWindow({ projectId, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onConnectionFailure, soundEnabled = true, onSoundToggle, playDoneSound = () => {}, unlockAudio }: Props) {
+export function ChatWindow({ projectId, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onConnectionFailure, soundEnabled = true, onSoundToggle, playDoneSound = () => {}, unlockAudio }: Props) {
   const { t, locale } = useI18n();
   const { pushStatus, onPushToggle } = usePushNotifications(locale);
   const isMobile = useIsMobile();
@@ -390,7 +391,7 @@ export function ChatWindow({ projectId, session, sessionRunning, newSessionCwd, 
 
   const {
     loading, error, messages, entryIds, streamState,
-    agentRunning, bashRunning, pendingBash, workflowId, workflowAgentConfigs, promptResourceProposals, toolPreset, thinkingLevel,
+    agentRunning, bashRunning, pendingBash, workflowId, longAgents, longAgentId, workflowAgentConfigs, promptResourceProposals, toolPreset, thinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, sessionStats,
     slashCommands, slashCommandsLoading, queuedMessages,
@@ -406,7 +407,7 @@ export function ChatWindow({ projectId, session, sessionRunning, newSessionCwd, 
     handleToolPresetChange, handleThinkingLevelChange, loadSlashCommands, scrollUserMsgToTop,
     setWorkflowId, setWorkflowAgentConfigs,
   } = useAgentSession({
-    projectId, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd: wrappedOnAgentEnd, onAttentionNeeded, onSessionCreated, onSessionForked,
+    projectId, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd: wrappedOnAgentEnd, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked,
     chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsPanelOpen,
     onConnectionFailure,
   });
@@ -666,6 +667,8 @@ export function ChatWindow({ projectId, session, sessionRunning, newSessionCwd, 
       isStreaming={sessionBusy}
       workflowId={workflowId}
       onWorkflowChange={setWorkflowId}
+      longAgents={longAgents}
+      longAgentId={longAgentId}
       workflowAgentConfigs={workflowAgentConfigs}
       promptResourceProposals={promptResourceProposals}
       onWorkflowAgentConfigsChange={setWorkflowAgentConfigs}

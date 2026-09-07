@@ -61,6 +61,13 @@ import {
 } from "@/lib/workflow-call-browser";
 import type { WorkflowCallStatistics } from "@/lib/workflow-call-statistics";
 import type { WorkflowCallTreeNode } from "@/lib/workflow-call-tree";
+import {
+  fetchLongAgents,
+  sendLongAgentMessage,
+  type LongAgentSummary,
+} from "@/lib/long-agents-browser";
+import { parseSessionInfo } from "@/lib/session-list-browser";
+import { sessionLongAgentId } from "@/lib/session-owner";
 
 export interface SessionData {
   session: SessionInfo;
@@ -162,6 +169,7 @@ interface UseAgentSessionOptions {
   onAgentEnd?: () => void;
   onAttentionNeeded?: (request: BlockingExtensionUiRequest) => void;
   onSessionCreated?: (session: SessionInfo, sourceDraftKey: string) => void;
+  onSessionOpen?: (sessionId: string) => void | Promise<void>;
   onSessionForked?: (newSessionId: string) => void;
   chatInputRef?: React.RefObject<ChatInputHandle | null>;
   onBranchDataChange?: (
@@ -335,7 +343,7 @@ async function fetchSessionData(
   }
   const workflowCallProjection = parseWorkflowCallProjection(body, body.sessionId);
   return {
-    session: body.session as unknown as SessionInfo,
+    session: parseSessionInfo(body.session),
     sessionId: body.sessionId,
     filePath: body.filePath,
     totalActiveMs: typeof body.totalActiveMs === "number" ? body.totalActiveMs : 0,
@@ -364,6 +372,16 @@ function createNoticeId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+function hasLongAgentReply(messages: readonly AgentMessage[], messageId: string, longAgentId: string): boolean {
+  const userIndex = messages.findIndex((message) => message.role === "user"
+    && message.chatLongAgent?.messageId === messageId
+    && message.chatLongAgent.longAgentId === longAgentId);
+  if (userIndex < 0) return false;
+  return messages.slice(userIndex + 1).some((message) => message.role === "assistant"
+    && message.chatLongAgent?.longAgentId === longAgentId
+    && message.chatLongAgent.direction === "out");
+}
+
 /**
  * Pi Web在这个分支中只负责页面与Chat Workflow协议适配。
  * 这里不创建AgentSession，也不连接Pi Web原有的Agent SSE接口。
@@ -376,6 +394,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     newSessionDraftKey,
     onAgentEnd,
     onSessionCreated,
+    onSessionOpen,
     onBranchDataChange,
     onSystemPromptChange,
     onSystemPromptLoaderChange,
@@ -398,6 +417,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [agentPhase, setAgentPhase] = useState<AgentPhase>(null);
   const [notices, setNotices] = useState<NoticeItem[]>([]);
   const [workflowId, setWorkflowIdState] = useState<ChatWorkflowId>(DEFAULT_CHAT_WORKFLOW_ID);
+  const [longAgentCatalog, setLongAgentCatalog] = useState<{
+    readonly projectId: string | null;
+    readonly agents: readonly LongAgentSummary[];
+  }>(() => ({ projectId: null, agents: [] }));
+  const longAgents = longAgentCatalog.projectId === projectId ? longAgentCatalog.agents : [];
+  const longAgentId = sessionLongAgentId(session);
   const [agentConfigsByWorkflow, setAgentConfigsByWorkflow] = useState<
     Record<string, Record<string, AgentConfigSelection>>
   >({});
@@ -445,6 +470,20 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }).catch((error: unknown) => {
       if (!(error instanceof DOMException && error.name === "AbortError")) {
         console.error("Failed to load .chat/config.json", error);
+      }
+    });
+    return () => controller.abort();
+  }, [projectId]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLongAgentCatalog({ projectId, agents: [] });
+    void fetchLongAgents(projectId, controller.signal).then((result) => {
+      if (!mountedRef.current || controller.signal.aborted) return;
+      setLongAgentCatalog({ projectId, agents: [...result.agents] });
+    }).catch((cause: unknown) => {
+      if (!(cause instanceof DOMException && cause.name === "AbortError")) {
+        console.error("Failed to load LongAgents", cause);
       }
     });
     return () => controller.abort();
@@ -709,12 +748,32 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
     if (images?.length) {
       restoreSubmission(message, images);
-      addNotice({ type: "warning", message: "当前Workflow只接受文本Prompt" });
+      addNotice({
+        type: "warning",
+        message: longAgentId === null ? "当前Workflow只接受文本Prompt" : "当前长期 Agent只接受文本消息",
+      });
       return;
     }
     if (prompt.startsWith("/") || prompt.startsWith("!")) {
       restoreSubmission(message, images);
-      addNotice({ type: "warning", message: "当前Workflow只接受普通文本Prompt" });
+      addNotice({
+        type: "warning",
+        message: longAgentId === null ? "当前Workflow只接受普通文本Prompt" : "当前长期 Agent只接受普通文本消息",
+      });
+      return;
+    }
+
+    const selectedLongAgent = longAgentId === null
+      ? undefined
+      : longAgents.find((candidate) => candidate.id === longAgentId);
+    if (longAgentId !== null && selectedLongAgent === undefined) {
+      restoreSubmission(message, images);
+      addNotice({ type: "error", message: `找不到长期 Agent：${longAgentId}` });
+      return;
+    }
+    if (selectedLongAgent !== undefined && !selectedLongAgent.available) {
+      restoreSubmission(message, images);
+      addNotice({ type: "error", message: `长期 Agent ${selectedLongAgent.name}当前不在线，请检查 NanoClaw 服务` });
       return;
     }
 
@@ -733,7 +792,67 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
     const controller = new AbortController();
     workflowAbortRef.current = controller;
+    let longAgentAccepted = false;
     try {
+      if (selectedLongAgent !== undefined) {
+        const activeDedicatedSessionId = selectedLongAgent.project?.primarySessionId;
+        const accepted = await sendLongAgentMessage({
+          longAgentId: selectedLongAgent.id,
+          projectId,
+          ...(activeDedicatedSessionId !== null
+            && activeDedicatedSessionId !== undefined
+            && activeDedicatedSessionId === sessionIdRef.current
+            ? { sessionId: activeDedicatedSessionId }
+            : {}),
+          text: message,
+        }, controller.signal);
+        longAgentAccepted = true;
+        const previousSessionId = sessionIdRef.current;
+        sessionIdRef.current = accepted.sessionId;
+        if (accepted.isNewSession && newSessionDraftKey !== null) {
+          const now = new Date().toISOString();
+          onSessionCreated?.({
+            path: "",
+            id: accepted.sessionId,
+            cwd: targetCwd,
+            created: now,
+            modified: now,
+            messageCount: 1,
+            firstMessage: message,
+            owner: {
+              type: "long-agent",
+              longAgentId: selectedLongAgent.id,
+              projectLongAgentId: accepted.projectLongAgentId,
+            },
+            projectRoot: targetCwd,
+            projectAvailable: true,
+            projectKey: projectId,
+            projectId,
+            transient: false,
+            sessionSource: "chat",
+            readOnly: false,
+          }, newSessionDraftKey);
+        } else if (previousSessionId !== accepted.sessionId) {
+          await onSessionOpen?.(accepted.sessionId);
+          if (composerDraftKey) clearDraft(composerDraftKey);
+          return;
+        }
+
+        const refreshed = await fetchSessionData(accepted.sessionId, projectId, controller.signal);
+        if (!mountedRef.current) return;
+        applySessionData(refreshed);
+        const replied = hasLongAgentReply(refreshed.context.messages, accepted.messageId, selectedLongAgent.id);
+        if (!replied) {
+          addNotice({
+            type: "warning",
+            message: `长期 Agent ${selectedLongAgent.name}已完成，但Session尚未显示对应回复，请刷新重试`,
+          });
+        }
+        onAgentEnd?.();
+        if (composerDraftKey) clearDraft(composerDraftKey);
+        return;
+      }
+
       const workflowDraft = readWorkflowConfigDraft(workflowConfigDraftKey);
       const hasWorkflowAdjustment = workflowDraft?.dirtyWorkflowIds.includes(workflowId) === true;
       const submittedAgentConfigs = hasWorkflowAdjustment
@@ -765,6 +884,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
               modified: now,
               messageCount: 1,
               firstMessage: message,
+              owner: { type: "ordinary" },
               projectRoot: targetCwd,
               projectAvailable: true,
               projectKey: projectId,
@@ -811,13 +931,18 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       onAgentEnd?.();
     } catch (cause) {
       if (!mountedRef.current) return;
-      setMessages((current) => {
-        const index = current.lastIndexOf(userMessage);
-        return index < 0 ? current : [...current.slice(0, index), ...current.slice(index + 1)];
-      });
-      restoreSubmission(message, images);
+      if (!longAgentAccepted) {
+        setMessages((current) => {
+          const index = current.lastIndexOf(userMessage);
+          return index < 0 ? current : [...current.slice(0, index), ...current.slice(index + 1)];
+        });
+        restoreSubmission(message, images);
+      }
       if (cause instanceof DOMException && cause.name === "AbortError") {
-        addNotice({ type: "info", message: "已断开Workflow连接" });
+        addNotice({
+          type: "info",
+          message: longAgentAccepted ? "已停止等待；长期 Agent仍在后台处理，回复会同步到Session" : "已断开Workflow连接",
+        });
       } else {
         const availability = await onConnectionFailure?.().catch(() => null);
         if (availability !== false) {
@@ -835,7 +960,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         dispatch({ type: "end" });
       }
     }
-  }, [addNotice, agentConfigsByWorkflow, agentRunning, applySessionData, composerDraftKey, handleRunEvent, newSessionCwd, newSessionDraftKey, onAgentEnd, onConnectionFailure, onSessionCreated, projectId, restoreSubmission, session?.cwd, workflowConfigDraftKey, workflowId]);
+  }, [addNotice, agentConfigsByWorkflow, agentRunning, applySessionData, composerDraftKey, handleRunEvent, longAgentId, longAgents, newSessionCwd, newSessionDraftKey, onAgentEnd, onConnectionFailure, onSessionCreated, onSessionOpen, projectId, restoreSubmission, session?.cwd, workflowConfigDraftKey, workflowId]);
 
   const handlePlanReviewDecision = useCallback(async (decision: PlanReviewDecisionInput) => {
     const reference = activeWorkflowRunRef.current;
@@ -910,8 +1035,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const handleRecallQueue = useCallback(() => {}, []);
   const handleBuiltinSlashCommand = useCallback(async (): Promise<BuiltinSlashCommandResult> => ({
     handled: true,
-    error: "当前Workflow只接受普通文本Prompt",
-  }), []);
+    error: longAgentId === null ? "当前Workflow只接受普通文本Prompt" : "当前长期 Agent只接受普通文本消息",
+  }), [longAgentId]);
   const handleToolPresetChange = useCallback(() => unsupported("工具权限由Chat Workflow配置决定"), [unsupported]);
   const handleThinkingLevelChange = useCallback(() => unsupported("Thinking Level由Chat Workflow配置决定"), [unsupported]);
   const loadTools = useCallback(async (): Promise<ToolEntry[]> => [], []);
@@ -1023,7 +1148,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   return {
     data, loading, error, activeLeafId, messages, entryIds, streamState,
-    agentRunning, workflowId,
+    agentRunning, workflowId, longAgents, longAgentId,
     workflowAgentConfigs: agentConfigsByWorkflow[workflowId] ?? {}, toolPreset, thinkingLevel,
     promptResourceProposals: data?.promptResourceProposals ?? [],
     retryInfo: null, contextUsage: null as ContextUsage | null, systemPrompt: null, forkingEntryId: null,

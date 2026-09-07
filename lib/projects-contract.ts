@@ -6,6 +6,7 @@ export interface ChatProjectSummary {
   readonly firstOpenedAt: string;
   readonly lastOpenedAt: string;
   readonly available: boolean;
+  readonly kind: "daily" | "directory";
 }
 
 export interface OpenedChatProject {
@@ -26,6 +27,9 @@ function parseProject(value: unknown): ChatProjectSummary {
     if (typeof value[field] !== "string") throw new Error(`Chat返回了无效的Project字段: ${field}`);
   }
   if (typeof value.available !== "boolean") throw new Error("Chat返回了无效的Project字段: available");
+  if (value.kind !== "daily" && value.kind !== "directory") {
+    throw new Error("Chat返回了无效的Project字段: kind");
+  }
   return value as unknown as ChatProjectSummary;
 }
 
@@ -80,5 +84,9 @@ export async function fetchChatProjects(signal?: AbortSignal): Promise<ChatProje
   if (!response.ok) throw new Error(`读取Project失败: HTTP ${response.status}`);
   if (!isRecord(body) || !Array.isArray(body.projects)) throw new Error("Chat返回了无效的Project列表");
   return body.projects.map(parseProject)
-    .sort((left, right) => right.lastOpenedAt.localeCompare(left.lastOpenedAt));
+    .sort((left, right) => {
+      if (left.kind === "daily" && right.kind !== "daily") return -1;
+      if (right.kind === "daily" && left.kind !== "daily") return 1;
+      return right.lastOpenedAt.localeCompare(left.lastOpenedAt);
+    });
 }

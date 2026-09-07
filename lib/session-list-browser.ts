@@ -22,6 +22,25 @@ function dateString(value: unknown, field: string): string {
   return parsed;
 }
 
+function parseSessionOwner(value: unknown): SessionInfo["owner"] {
+  if (!isRecord(value)) throw new Error("Chat返回了无效的Session owner");
+  if (value.type === "ordinary") {
+    if (Object.keys(value).length !== 1) throw new Error("Chat返回了无效的普通Session owner");
+    return { type: "ordinary" };
+  }
+  if (value.type !== "long-agent"
+    || Object.keys(value).length !== 3
+    || typeof value.longAgentId !== "string" || value.longAgentId.trim() === ""
+    || typeof value.projectLongAgentId !== "string" || value.projectLongAgentId.trim() === "") {
+    throw new Error("Chat返回了无效的长期Agent Session owner");
+  }
+  return {
+    type: "long-agent",
+    longAgentId: value.longAgentId,
+    projectLongAgentId: value.projectLongAgentId,
+  };
+}
+
 export function parseSessionInfo(value: unknown): SessionInfo {
   if (!isRecord(value) || !Number.isSafeInteger(value.messageCount) || (value.messageCount as number) < 0
     || typeof value.firstMessage !== "string") {
@@ -54,6 +73,7 @@ export function parseSessionInfo(value: unknown): SessionInfo {
     modified: dateString(value.modified, "Session修改时间"),
     messageCount: value.messageCount as number,
     firstMessage: value.firstMessage,
+    owner: parseSessionOwner(value.owner),
     ...(value.parentSessionId === undefined ? {} : { parentSessionId: requiredString(value.parentSessionId, "父Session ID") }),
     ...(attention === undefined ? {} : { attention }),
     ...(value.projectRoot === undefined ? {} : { projectRoot: requiredString(value.projectRoot, "Project根目录") }),
@@ -65,6 +85,31 @@ export function parseSessionInfo(value: unknown): SessionInfo {
     ...(value.sessionSource === undefined ? {} : { sessionSource: value.sessionSource }),
     ...(value.readOnly === undefined ? {} : { readOnly: value.readOnly }),
   };
+}
+
+/** Loads one existing Session from its owning Project list and preserves the exact server summary. */
+export async function fetchProjectSessionById(
+  projectId: string,
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<SessionInfo> {
+  const query = new URLSearchParams({ projectId });
+  const response = await fetch(`/api/sessions?${query.toString()}`, {
+    cache: "no-store",
+    credentials: "same-origin",
+    signal,
+  });
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = isRecord(body)
+      ? [body.statusMessage, body.message, body.error]
+          .find((item): item is string => typeof item === "string" && item.trim() !== "")
+      : undefined;
+    throw new Error(message ?? `读取Session失败: HTTP ${response.status}`);
+  }
+  const target = parseSessionListPage(body).sessions.find((session) => session.id === sessionId);
+  if (target === undefined) throw new Error(`当前Project中找不到Session: ${sessionId}`);
+  return target;
 }
 
 export function parseSessionListPage(value: unknown): SessionListPage {

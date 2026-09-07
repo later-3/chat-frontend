@@ -55,6 +55,8 @@ export interface UserMessage {
   timestamp?: number;
   /** Chat-only producer identity for a task delegated by a Workflow Agent. */
   chatWorkflow?: ChatWorkflowMessageProvenance;
+  /** Chat projection identity for a message synchronized through a LongAgent. */
+  chatLongAgent?: ChatLongAgentMessageProvenance;
 }
 
 export interface ChatWorkflowMessageProvenance {
@@ -62,6 +64,20 @@ export interface ChatWorkflowMessageProvenance {
   workflowId: string;
   stageId: string;
   agentId: string;
+}
+
+export interface ChatLongAgentMessageProvenance {
+  source: "chat.long_agent";
+  eventId: string;
+  messageId: string;
+  /** Stable Chat execution identity; present for Pi-native Long Agent turns. */
+  turnId?: string;
+  bindingId?: string;
+  longAgentId: string;
+  nanoclawSessionId: string | null;
+  direction: "in" | "out";
+  channelType: string | null;
+  native?: boolean;
 }
 
 export interface AssistantMessage {
@@ -74,6 +90,8 @@ export interface AssistantMessage {
   timestamp?: number;
   /** Chat-only provenance used for Agent messages produced inside a Workflow. */
   chatWorkflow?: ChatWorkflowMessageProvenance;
+  /** Chat projection identity for a message synchronized through a LongAgent. */
+  chatLongAgent?: ChatLongAgentMessageProvenance;
   usage?: {
     input: number;
     output: number;
@@ -315,6 +333,10 @@ export interface SessionInfo {
   modified: string;
   messageCount: number;
   firstMessage: string;
+  /** Durable execution owner; routing must never be inferred from list membership or message content. */
+  owner:
+    | { type: "ordinary" }
+    | { type: "long-agent"; longAgentId: string; projectLongAgentId: string };
   /** Pi parent Session lineage, including forks and Workflow-call Subsessions. */
   parentSessionId?: string;
   /** Durable reviewed Workflow state requiring the user to open this Session. */
