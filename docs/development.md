@@ -19,6 +19,10 @@ Frontend 不负责：
 - 在 React 内存、浏览器存储或构建产物中保存一份独立的服务端事实；
 - 在静态文件或 Vite 环境变量中保存 Credential、真实设备目录等私有数据。
 
+### 1.1 当前Long Agent页面基线
+
+以下描述迁移前的现有界面和合同，不限定下一版设计。已认可目标包含独立Agent配置、各自Daily、多个主题Session、有效资源展示和工具执行Docker；当前尚未实现。联合设计从Chat父仓库`docs/architecture/chat-long-agent-roadmap.md`与`chat-module-contracts.md`进入，不延续旧唯一主Session或身份拆分作为永久约束。
+
 Workflow与长期Agent共享同一个Project和Chat Session模型，但不是输入区中的同一种选择项。Project侧边栏在同一Project上下文中提供互斥的“会话 / 长期同事”导航面板，默认显示“会话”。“会话”面板必须保留旧有普通Session的布局、列表信息和新建入口，不得为Long Agent预留占位；“长期同事”面板展示同事在当前Project中的唯一专属主Session入口和设置。专属主Session不在普通Session列表重复展示。
 
 Daily是用户的个人日常Project，不是一套额外的个人模式。Daily与其他Project必须共用同一套导航面板、Session和Long Agent交互逻辑。
@@ -35,7 +39,7 @@ Session列表与Session详情中的`session.owner`是导航和发送链共用的
 
 Agent Group与Agent Memory通过Backend的安全投影进入浏览器。Frontend不得直接读取NanoClaw目录或数据库，也不得接收宿主机绝对路径、Telegram Credential、服务Credential、事件游标、Nano容器Provider或容器运行状态。Workspace与Memory路径只能是拒绝绝对路径、反斜杠、`.`和`..`段的相对路径。所有保存按内容revision做乐观并发保护；`409`必须保留或明确处理页面草稿，不能自动覆盖新版本。Chat运行策略、Agent Group和Agent Memory配置均从下一轮Long Agent对话开始装配，页面不提供含义模糊的Agent进程操作。
 
-需要新增或改变服务端事实时，先修改父仓库 Backend 的合同，再让 Frontend 使用该合同。
+需要新增或改变服务端事实时，先共同设计父仓库Backend与浏览器合同，再按依赖实施并一起验证。兼容格式的新资源由后端Catalog驱动通用列表；新字段、枚举或语义可能要求修改严格Parser，不能承诺全部变化自动适配。完整资源变更通知尚待实现；现有Workflow Run通过HTTP NDJSON流消费，Long Agent消息完成后重读Session，不是已有统一SSE/WebSocket事件总线。
 
 ## 2. 目录职责
 
