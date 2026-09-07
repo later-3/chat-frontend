@@ -45,6 +45,7 @@ import {
   type ChatWorkflowSummary,
 } from "@/lib/chat-workflows-browser";
 import { WorkflowAgentConfigDialog } from "./WorkflowAgentConfigDialog";
+import type { LongAgentSummary } from "@/lib/long-agents-browser";
 
 export interface AttachedImage {
   data: string;   // base64, no prefix
@@ -62,6 +63,8 @@ interface Props {
   isStreaming: boolean;
   workflowId: ChatWorkflowId;
   onWorkflowChange: (workflowId: ChatWorkflowId) => void;
+  longAgents: readonly LongAgentSummary[];
+  longAgentId: string | null;
   workflowAgentConfigs: Record<string, AgentConfigSelection>;
   promptResourceProposals?: readonly PromptResourceProposal[];
   onWorkflowAgentConfigsChange: (configs: Record<string, AgentConfigSelection>) => void;
@@ -393,6 +396,7 @@ function QueuedMessageRow({ kind, text }: { kind: "steer" | "follow-up"; text: s
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   projectId,
   onSend, onAbort, onSteer, onFollowUp, isStreaming, workflowId, onWorkflowChange, workflowAgentConfigs, promptResourceProposals, onWorkflowAgentConfigsChange,
+  longAgents, longAgentId,
   onCompact, onAbortCompaction, isCompacting, compactError, compactResult, toolPreset, onToolPresetChange,
   thinkingLevel, onThinkingLevelChange, availableThinkingLevels, thinkingLevelMap,
   retryInfo, queuedMessages, inputHistory = [], onRecallQueue,
@@ -461,8 +465,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           agents: [],
         },
         ...workflowSummaries,
-      ];
+  ];
   const selectedWorkflow = visibleWorkflows.find((workflow) => workflow.id === workflowId);
+  const selectedLongAgent = longAgentId === null
+    ? null
+    : longAgents.find((agent) => agent.id === longAgentId) ?? null;
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const toolDropdownRef = useRef<HTMLDivElement>(null);
@@ -2070,15 +2077,17 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           <div style={{ flex: isMobile ? "1 1 auto" : "0 0 auto", minWidth: 0, display: "flex", alignItems: "center", gap: 2 }}>
             <button
               onClick={() => fileInputRef.current?.click()}
-             title={t("chat.attachImage")}
+              disabled={longAgentId !== null}
+              aria-label={longAgentId === null ? t("chat.attachImage") : t("chat.longAgentTextOnly")}
+              title={longAgentId === null ? t("chat.attachImage") : t("chat.longAgentTextOnly")}
               style={{
                 flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
                 width: isMobile ? 44 : 32, height: isMobile ? 44 : 32, padding: 0,
                 background: "none", border: "none",
                 borderRadius: 9,
                 color: attachedImages.length ? "var(--accent)" : "var(--text-muted)",
-                cursor: "pointer",
-                opacity: 1,
+                cursor: longAgentId === null ? "pointer" : "not-allowed",
+                opacity: longAgentId === null ? 1 : 0.5,
                 transition: "background 0.12s, color 0.12s",
               }}
               onMouseEnter={(e) => {
@@ -2096,36 +2105,67 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <polyline points="21 15 16 10 5 21" />
               </svg>
             </button>
-            <select
-              value={workflowId}
-              onChange={(event) => onWorkflowChange(event.target.value as ChatWorkflowId)}
-              disabled={isStreaming}
-              aria-label={t("chat.workflow")}
-              title={t("chat.workflow")}
-              style={{
-                flexShrink: 0,
-                height: isMobile ? 44 : 32,
-                maxWidth: isMobile ? 124 : 170,
-                padding: "0 28px 0 10px",
-                border: "1px solid var(--border)",
-                borderRadius: 9,
-                background: "var(--bg)",
-                color: "var(--text-muted)",
-                fontSize: 12,
-                cursor: isStreaming ? "not-allowed" : "pointer",
-                opacity: isStreaming ? 0.5 : 1,
-              }}
-            >
-              {visibleWorkflows.map((workflow) => (
-                <option key={workflow.id} value={workflow.id} title={workflow.description}>
-                  {workflow.name}
-                </option>
-              ))}
-            </select>
-            {!isMobile && <button
+            {longAgentId === null ? (
+              <select
+                value={workflowId}
+                onChange={(event) => onWorkflowChange(event.target.value as ChatWorkflowId)}
+                disabled={isStreaming}
+                aria-label={t("chat.workflow")}
+                title={t("chat.workflowTitle")}
+                style={{
+                  flexShrink: 0,
+                  height: isMobile ? 44 : 32,
+                  maxWidth: isMobile ? 124 : 170,
+                  padding: "0 28px 0 10px",
+                  border: "1px solid var(--border)",
+                  borderRadius: 9,
+                  background: "var(--bg)",
+                  color: "var(--text-muted)",
+                  fontSize: 12,
+                  cursor: isStreaming ? "not-allowed" : "pointer",
+                  opacity: isStreaming ? 0.5 : 1,
+                }}
+              >
+                {visibleWorkflows.map((workflow) => (
+                  <option key={workflow.id} value={workflow.id} title={workflow.description}>
+                    {workflow.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div
+                role="status"
+                aria-label={t("chat.longAgentIdentity", { name: selectedLongAgent?.name ?? longAgentId })}
+                title={selectedLongAgent?.description ?? t("chat.longAgentSession")}
+                style={{
+                  flexShrink: 1,
+                  minWidth: 0,
+                  height: isMobile ? 44 : 32,
+                  maxWidth: isMobile ? 170 : 210,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 7,
+                  padding: "0 10px",
+                  border: "1px solid color-mix(in srgb, var(--accent) 52%, var(--border))",
+                  borderRadius: 9,
+                  background: "color-mix(in srgb, var(--accent) 8%, var(--bg))",
+                  color: "var(--text)",
+                  fontSize: 12,
+                }}
+              >
+                <span aria-hidden="true" style={{ width: 7, height: 7, flexShrink: 0, borderRadius: 999, background: "var(--accent)" }} />
+                <strong style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 650 }}>
+                  {selectedLongAgent?.name ?? longAgentId}
+                </strong>
+                <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>
+                  {t("chat.longAgentCoworker")}
+                </span>
+              </div>
+            )}
+            {!isMobile && longAgentId === null && <button
               type="button"
               onClick={() => setWorkflowAgentDialogOpen(true)}
-              disabled={isStreaming || !cwd || selectedWorkflow?.agents.length === 0}
+              disabled={isStreaming || longAgentId !== null || !cwd || selectedWorkflow?.agents.length === 0}
               aria-label="配置当前 Workflow 的 Agent"
               title="查看和配置当前 Workflow 的 Agent"
               style={{
@@ -2140,8 +2180,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 borderRadius: 9,
                 background: "transparent",
                 color: "var(--text-muted)",
-                cursor: isStreaming || !cwd ? "not-allowed" : "pointer",
-                opacity: isStreaming || !cwd ? 0.5 : 1,
+                cursor: isStreaming || longAgentId !== null || !cwd ? "not-allowed" : "pointer",
+                opacity: isStreaming || longAgentId !== null || !cwd ? 0.5 : 1,
               }}
             >
               <IconAdjustmentsHorizontal size={16} stroke={1.8} />
@@ -2255,7 +2295,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               <button
                 type="button"
                 className="mobile-settings-tile mobile-settings-workflow-agent"
-                disabled={isStreaming || !cwd || selectedWorkflow?.agents.length === 0}
+                disabled={isStreaming || longAgentId !== null || !cwd || selectedWorkflow?.agents.length === 0}
                 onClick={() => {
                   setControlsMenuOpen(false);
                   setWorkflowAgentDialogOpen(true);
@@ -2281,7 +2321,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <span>Workflow Agents</span>
               </button>
             )}
-            {!isStreaming && onThinkingLevelChange && (
+            {!isStreaming && longAgentId === null && onThinkingLevelChange && (
               <div ref={thinkingDropdownRef} className={isMobile ? "mobile-settings-tile-wrapper" : undefined} style={{ position: "relative" }}>
                 <button
                   onClick={() => !isStreaming && setThinkingDropdownOpen((v) => !v)}
@@ -2369,7 +2409,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 )}
               </div>
             )}
-            {!isStreaming && onToolPresetChange && (
+            {!isStreaming && longAgentId === null && onToolPresetChange && (
               <div ref={toolDropdownRef} className={isMobile ? "mobile-settings-tile-wrapper" : undefined} style={{ position: "relative" }}>
                 <button
                   onClick={() => !isStreaming && setToolDropdownOpen((v) => !v)}
@@ -2453,7 +2493,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               </div>
             )}
 
-            {!isStreaming && onCompact && (
+            {!isStreaming && longAgentId === null && onCompact && (
               <div className={isMobile ? "mobile-settings-tile-wrapper" : undefined} style={{ position: "relative" }}>
                 <button
                   onClick={isCompacting ? onAbortCompaction : onCompact}

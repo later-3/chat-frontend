@@ -18,6 +18,8 @@ import { removeSession, renameSession } from "@/lib/session-removal-browser";
 import { overlaySelectedSession } from "@/lib/session-summary";
 import { buildSidebarSessionTree, type SidebarSessionTreeNode } from "@/lib/session-tree";
 import { parseSessionListPage } from "@/lib/session-list-browser";
+import { ProjectLongAgentSection } from "./ProjectLongAgentSection";
+import modeStyles from "./SessionSidebarModes.module.css";
 
 declare global {
   interface Window {
@@ -91,7 +93,9 @@ function ToolbarIconButton({
 interface Props {
   selectedSession: SessionInfo | null;
   selectedSessionId: string | null;
+  newSessionDraftKey?: string | null;
   onSelectSession: (session: SessionInfo, isRestore?: boolean) => void;
+  onOpenSessionById?: (sessionId: string, projectId: string) => void | Promise<void>;
   onNewSession?: (sessionId: string, cwd: string) => void;
   initialSessionId?: string | null;
   skipInitialProjectSelection?: boolean;
@@ -121,6 +125,7 @@ interface Props {
 }
 
 export type MobileWorkspaceView = "sessions" | "files";
+type SidebarContentPanel = "sessions" | "long-agents";
 
 interface WorktreeEntry {
   path: string;
@@ -360,10 +365,11 @@ function PiWebTitle() {
   );
 }
 
-export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSession, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, onReady, refreshKey, onSessionRemoved, selectedCwd: selectedCwdProp, selectedProjectId, onCwdChange, onOpenFile, explorerRefreshKey, onExplorerRefresh, onAtMention, onAtMentions, mobileView = "sessions", onMobileViewChange, onRequestClose, onBackgroundTaskDone, onRunningSessionIdsChange }: Props) {
+export function SessionSidebar({ selectedSession, selectedSessionId, newSessionDraftKey, onSelectSession, onOpenSessionById, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, onReady, refreshKey, onSessionRemoved, selectedCwd: selectedCwdProp, selectedProjectId, onCwdChange, onOpenFile, explorerRefreshKey, onExplorerRefresh, onAtMention, onAtMentions, mobileView = "sessions", onMobileViewChange, onRequestClose, onBackgroundTaskDone, onRunningSessionIdsChange }: Props) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
+  const [contentPanel, setContentPanel] = useState<SidebarContentPanel>("sessions");
   const [registeredProjects, setRegisteredProjects] = useState<ChatProjectSummary[]>([]);
   const [sessionFilter, setSessionFilter] = useState("");
   const [loading, setLoading] = useState(true);
@@ -813,11 +819,13 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
   // open session after manually switching worktrees.
   const handleSelectSessionFromList = useCallback((s: SessionInfo) => {
     if (s.cwd) setSelectedCwd(s.cwd);
+    setContentPanel("sessions");
     onSelectSession(s);
   }, [onSelectSession]);
 
   const handleNewSession = useCallback(() => {
     if (!selectedCwd) return;
+    setContentPanel("sessions");
     // Generate a temporary UUID client-side — no backend call needed.
     // Pi will be spawned lazily when the user sends the first message.
     const tempId = typeof crypto.randomUUID === "function"
@@ -839,6 +847,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
 
   // Sessions of every worktree in the selected project are shown together
   const selectedProject = projectFor(selectedCwd);
+  const activeProjectId = selectedProject?.key ?? selectedProjectId ?? null;
   const displayedSessions = useMemo(
     () => overlaySelectedSession(allSessions, selectedSession),
     [allSessions, selectedSession],
@@ -861,9 +870,46 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
     [projectActivity, selectedProject],
   );
 
-  const filteredSessions = selectedProject
+  const projectSessions = selectedProject
     ? sessionsForProject(displayedSessions, selectedProject.key)
     : displayedSessions;
+  const filteredSessions = projectSessions.filter((session) => session.owner.type === "ordinary");
+
+  // Automatically choose a panel once for each newly opened/restored Session.
+  // Manual tab changes do not alter the central Session and are not overwritten
+  // until a different Session is opened.
+  const lastClassifiedSessionKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    const ownerKey = selectedSession?.owner.type === "long-agent"
+      ? `${selectedSession.owner.longAgentId}:${selectedSession.owner.projectLongAgentId}`
+      : selectedSession?.owner.type ?? "ordinary";
+    const classificationKey = `${activeProjectId ?? "none"}:${selectedSessionId ?? newSessionDraftKey ?? "empty"}:${ownerKey}`;
+    if (lastClassifiedSessionKeyRef.current === classificationKey) return;
+    if (selectedSessionId === null) {
+      lastClassifiedSessionKeyRef.current = classificationKey;
+      setContentPanel("sessions");
+      return;
+    }
+    lastClassifiedSessionKeyRef.current = classificationKey;
+    setContentPanel(selectedSession?.owner.type === "long-agent" ? "long-agents" : "sessions");
+  }, [activeProjectId, newSessionDraftKey, selectedSession, selectedSessionId]);
+
+  const handleContentPanelKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    const panels: readonly SidebarContentPanel[] = ["sessions", "long-agents"];
+    const currentIndex = panels.indexOf(contentPanel);
+    let nextIndex: number | null = null;
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") nextIndex = (currentIndex + 1) % panels.length;
+    else if (event.key === "ArrowLeft" || event.key === "ArrowUp") nextIndex = (currentIndex - 1 + panels.length) % panels.length;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = panels.length - 1;
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const nextPanel = panels[nextIndex];
+    if (nextPanel === "long-agents" && activeProjectId === null) return;
+    setContentPanel(nextPanel);
+    const tabs = event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+    tabs?.[nextIndex]?.focus();
+  };
   const showWorktreeSwitcher = Boolean(
     worktreeState?.isGit
     && worktreeState.isTopLevel
@@ -1595,10 +1641,50 @@ export function SessionSidebar({ selectedSession, selectedSessionId, onSelectSes
             <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{inactiveWorktreeSelector.label}</span>
           </button>
         )}
+        {(!isMobile || mobileView === "sessions") && (
+          <div className={modeStyles.tabs} role="tablist" aria-label={t("sidebar.contentPanels")}>
+            {(["sessions", "long-agents"] as const).map((panel) => (
+              <button
+                key={panel}
+                type="button"
+                role="tab"
+                className={modeStyles.tab}
+                id={`sidebar-${panel}-tab`}
+                aria-controls={`sidebar-${panel}-panel`}
+                aria-selected={contentPanel === panel}
+                tabIndex={contentPanel === panel ? 0 : -1}
+                disabled={panel === "long-agents" && activeProjectId === null}
+                onClick={() => setContentPanel(panel)}
+                onKeyDown={handleContentPanelKeyDown}
+              >
+                {panel === "sessions" ? t("sidebar.sessionsPanel") : t("sidebar.longAgentsPanel")}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
+      {(!isMobile || mobileView === "sessions") && onOpenSessionById && (
+        <ProjectLongAgentSection
+          projectId={activeProjectId}
+          selectedSessionId={selectedSessionId}
+          visible={contentPanel === "long-agents"}
+          refreshKey={refreshKey}
+          onOpenSession={(sessionId) => {
+            if (activeProjectId === null) return;
+            setContentPanel("long-agents");
+            return onOpenSessionById(sessionId, activeProjectId);
+          }}
+          onRequestClose={onRequestClose}
+          closeAfterOpen={isMobile}
+        />
+      )}
+
       {/* Session list */}
-      {(!isMobile || mobileView === "sessions") && <div
+      {(!isMobile || mobileView === "sessions") && contentPanel === "sessions" && <div
+        id="sidebar-sessions-panel"
+        role="tabpanel"
+        aria-labelledby="sidebar-sessions-tab"
         className={isMobile ? "mobile-workspace-session-list" : undefined}
         style={{ flex: isMobile ? "1 1 auto" : explorerOpen && explorerCwd ? "1 1 0" : "1 1 auto", overflowY: "auto", padding: "0", minHeight: 80 }}
       >

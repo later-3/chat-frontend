@@ -2,6 +2,12 @@
 
 这是 Chat 使用的纯浏览器前端，来源于 Pi Web，当前使用 Vite + React 构建。
 
+## 文档
+
+- [Frontend 开发指南](./docs/development.md)：职责边界、目录、HTTP 合同、状态管理、验证和 Submodule 交付。
+- [Frontend UI/UX 规范](./docs/ui-ux-guidelines.md)：页面设计、Web/PWA 交互、响应式和无障碍要求。
+- [上游同步说明](./UPSTREAM.md)：Pi Web 来源、基线和同步边界。
+
 本仓库只负责界面和浏览器交互：
 
 - 通过 Chat HTTP API 读取 Session、文件、模型和设备信息。

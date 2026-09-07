@@ -72,6 +72,14 @@ export interface MemoryListInput {
   readonly offset?: number;
 }
 
+export interface MemoryTargetsListInput {
+  readonly targets: readonly MemoryTarget[];
+  readonly kind?: MemoryKind;
+  readonly status?: MemoryStatus;
+  readonly limit?: number;
+  readonly offset?: number;
+}
+
 export interface MemorySearchInput {
   readonly query: string;
   readonly targets: readonly MemoryTarget[];
@@ -238,6 +246,67 @@ export async function listMemories(input: MemoryListInput, signal?: AbortSignal)
   return parseListPage(await memoryRequest(`/api/memories?${query.toString()}`, { signal }));
 }
 
+function memoryTargetKey(target: MemoryTarget): string {
+  return target.type === "personal" ? "personal" : `project:${target.projectId}`;
+}
+
+function uniqueMemoryTargets(targets: readonly MemoryTarget[]): readonly MemoryTarget[] {
+  return [...new Map(targets.map((target) => [memoryTargetKey(target), target])).values()];
+}
+
+function memoryRecordTargetKey(memory: MemoryRecord): string {
+  return memory.scope === "personal" ? "personal" : `project:${memory.projectId ?? ""}`;
+}
+
+/**
+ * Lists one or more independent Memory stores as a single, stable page.
+ * Each store is still read through Chat's authenticated HTTP API; the browser
+ * never opens catalog.db or Mem0 directly.
+ */
+export async function listMemoryTargets(
+  input: MemoryTargetsListInput,
+  signal?: AbortSignal,
+): Promise<MemoryListPage> {
+  const targets = uniqueMemoryTargets(input.targets);
+  const limit = Math.min(Math.max(input.limit ?? 50, 1), 200);
+  const offset = Math.max(input.offset ?? 0, 0);
+  const required = offset + limit;
+  if (targets.length === 0) return { items: [], total: 0, limit, offset };
+
+  const pages = await Promise.all(targets.map(async (target) => {
+    const items: MemoryRecord[] = [];
+    let cursor = 0;
+    let total = 0;
+    while (items.length < required) {
+      const page = await listMemories({
+        target,
+        ...(input.kind === undefined ? {} : { kind: input.kind }),
+        ...(input.status === undefined ? {} : { status: input.status }),
+        limit: Math.min(200, required - items.length),
+        offset: cursor,
+      }, signal);
+      total = page.total;
+      items.push(...page.items);
+      cursor += page.items.length;
+      if (page.items.length === 0 || cursor >= total) break;
+    }
+    return { items, total };
+  }));
+
+  const items = pages
+    .flatMap((page) => page.items)
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)
+      || memoryRecordTargetKey(left).localeCompare(memoryRecordTargetKey(right))
+      || left.id.localeCompare(right.id));
+
+  return {
+    items: items.slice(offset, offset + limit),
+    total: pages.reduce((sum, page) => sum + page.total, 0),
+    limit,
+    offset,
+  };
+}
+
 export async function searchMemories(input: MemorySearchInput, signal?: AbortSignal): Promise<MemorySearchHit[]> {
   return parseSearchHits(await memoryRequest("/api/memories/search", {
     method: "POST",
@@ -277,12 +346,38 @@ export async function fetchMemoryHealth(target: MemoryTarget, signal?: AbortSign
   return parseHealth(await memoryRequest(`/api/memories/health?${targetQuery(target)}`, { signal }));
 }
 
+export async function fetchMemoryTargetsHealth(
+  targets: readonly MemoryTarget[],
+  signal?: AbortSignal,
+): Promise<MemoryHealth> {
+  const health = await Promise.all(uniqueMemoryTargets(targets).map((target) => (
+    fetchMemoryHealth(target, signal)
+  )));
+  return health.reduce<MemoryHealth>((summary, value) => ({
+    records: summary.records + value.records,
+    indexed: summary.indexed + value.indexed,
+    pending: summary.pending + value.pending,
+    failed: summary.failed + value.failed,
+    pendingDeletions: summary.pendingDeletions + value.pendingDeletions,
+  }), { records: 0, indexed: 0, pending: 0, failed: 0, pendingDeletions: 0 });
+}
+
 export async function rebuildMemoryIndex(target: MemoryTarget): Promise<MemoryRebuildResult> {
   return parseRebuild(await memoryRequest("/api/memories/rebuild", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ target }),
   }));
+}
+
+export async function rebuildMemoryIndexes(targets: readonly MemoryTarget[]): Promise<MemoryRebuildResult> {
+  const results = await Promise.all(uniqueMemoryTargets(targets).map(rebuildMemoryIndex));
+  return results.reduce<MemoryRebuildResult>((summary, result) => ({
+    total: summary.total + result.total,
+    indexed: summary.indexed + result.indexed,
+    failed: summary.failed + result.failed,
+    failures: [...summary.failures, ...result.failures],
+  }), { total: 0, indexed: 0, failed: 0, failures: [] });
 }
 
 export const memoryContractParsers = {

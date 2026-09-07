@@ -60,7 +60,7 @@ import type { ChatInputHandle } from "./ChatInput";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 import type { FileViewerState } from "@/lib/file-viewer-state";
 import { mergeSessionSummary } from "@/lib/session-summary";
-import { parseSessionListPage } from "@/lib/session-list-browser";
+import { fetchProjectSessionById, parseSessionListPage } from "@/lib/session-list-browser";
 
 type SessionCopyField = "file" | "id";
 type AutoNameStatus =
@@ -849,13 +849,18 @@ export function AppShell({
     setSessionKey((k) => k + 1);
     setNewSessionCwd(null);
     setSelectedSession((prev) => ({
-      ...(prev ?? { path: "", cwd: "", created: "", modified: "", messageCount: 0, firstMessage: "" }),
+      ...(prev ?? { path: "", cwd: "", created: "", modified: "", messageCount: 0, firstMessage: "", owner: { type: "ordinary" as const } }),
       id: newSessionId,
       transient: false,
     }));
     hydrateSelectedSession(newSessionId);
     router.replace(`?session=${encodeURIComponent(newSessionId)}`, { scroll: false });
   }, [invalidateWorkspaceRestore, router, hydrateSelectedSession]);
+
+  const handleOpenExistingSession = useCallback(async (sessionId: string, projectId: string) => {
+    const target = await fetchProjectSessionById(projectId, sessionId);
+    handleSelectSession(target);
+  }, [handleSelectSession]);
 
   const handleInitialRestoreDone = useCallback(() => {
     setInitialSessionRestored(true);
@@ -968,7 +973,9 @@ export function AppShell({
       <SessionSidebar
         selectedSession={selectedSession}
         selectedSessionId={selectedSession?.id ?? null}
+        newSessionDraftKey={newSessionDraftKey}
         onSelectSession={handleSelectSession}
+        onOpenSessionById={handleOpenExistingSession}
         onNewSession={handleNewSession}
         initialSessionId={initialSessionId}
         skipInitialProjectSelection={initialNavigation.requestedCwd !== null}
@@ -2264,6 +2271,7 @@ export function AppShell({
               onAgentEnd={handleAgentEnd}
               onAttentionNeeded={handleAttentionNeeded}
               onSessionCreated={handleSessionCreated}
+              onSessionOpen={(sessionId) => handleOpenExistingSession(sessionId, currentProjectId)}
               onSessionForked={handleSessionForked}
               chatInputRef={chatInputRef}
               onBranchDataChange={handleBranchDataChange}
