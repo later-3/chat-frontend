@@ -128,7 +128,7 @@ async function followChatWorkflowRun(
       const statusBody: unknown = await statusResponse.json().catch(() => null);
       if (!statusResponse.ok) throw responseError(statusResponse.status, statusBody);
       if (!statusBody || typeof statusBody !== "object") throw new Error("Chat返回了无效Workflow状态");
-      const statusRecord = statusBody as { status?: unknown; review?: unknown };
+      const statusRecord = statusBody as { status?: unknown; review?: unknown; error?: unknown };
       if (statusRecord.review !== undefined) {
         const review = parsePlanReview(statusRecord.review);
         if (!seenReviews.has(review.reviewId)) {
@@ -145,7 +145,14 @@ async function followChatWorkflowRun(
         return parseChatWorkflowPromptResult(statusBody);
       }
       if (statusRecord.status === "failed" || statusRecord.status === "cancelled") {
-        throw new Error(`Workflow ${statusRecord.status}`);
+        // The backend exposes the original step failure (e.g. the selected
+        // model rejects image input) so the composer can surface it verbatim.
+        const failure = statusRecord.error;
+        throw new Error(
+          typeof failure === "string" && failure.trim() !== ""
+            ? failure
+            : `Workflow ${statusRecord.status}`,
+        );
       }
       await waitForNextPoll(signal);
     }

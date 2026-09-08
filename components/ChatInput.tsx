@@ -461,12 +461,19 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           description: "",
           agentCallable: false,
           planReview: false,
+          supportsImageInput: workflowId === DEFAULT_CHAT_WORKFLOW_ID,
           nodes: [],
           agents: [],
         },
         ...workflowSummaries,
   ];
   const selectedWorkflow = visibleWorkflows.find((workflow) => workflow.id === workflowId);
+  // Image input is gated per Workflow; the backend re-validates at the HTTP
+  // boundary, this only keeps the composer honest before submitting.
+  const imagesAllowed = longAgentId === null && selectedWorkflow?.supportsImageInput !== false;
+  const attachImageTitle = !imagesAllowed
+    ? longAgentId !== null ? t("chat.longAgentTextOnly") : t("chat.workflowNoImages")
+    : t("chat.attachImage");
   const selectedLongAgent = longAgentId === null
     ? null
     : longAgents.find((agent) => agent.id === longAgentId) ?? null;
@@ -675,6 +682,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   }));
 
   const processImageFiles = useCallback(async (files: File[]) => {
+    if (!imagesAllowed) return;
     const remaining = Math.max(
       0,
       MAX_ATTACHED_IMAGES - attachedImagesRef.current.length - pendingImageCountRef.current,
@@ -701,7 +709,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     } finally {
       pendingImageCountRef.current -= imageFiles.length;
     }
-  }, []);
+  }, [imagesAllowed]);
 
   const removeImage = useCallback((index: number) => {
     setAttachedImages((prev) => {
@@ -2077,17 +2085,17 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           <div style={{ flex: isMobile ? "1 1 auto" : "0 0 auto", minWidth: 0, display: "flex", alignItems: "center", gap: 2 }}>
             <button
               onClick={() => fileInputRef.current?.click()}
-              disabled={longAgentId !== null}
-              aria-label={longAgentId === null ? t("chat.attachImage") : t("chat.longAgentTextOnly")}
-              title={longAgentId === null ? t("chat.attachImage") : t("chat.longAgentTextOnly")}
+              disabled={!imagesAllowed}
+              aria-label={attachImageTitle}
+              title={attachImageTitle}
               style={{
                 flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
                 width: isMobile ? 44 : 32, height: isMobile ? 44 : 32, padding: 0,
                 background: "none", border: "none",
                 borderRadius: 9,
                 color: attachedImages.length ? "var(--accent)" : "var(--text-muted)",
-                cursor: longAgentId === null ? "pointer" : "not-allowed",
-                opacity: longAgentId === null ? 1 : 0.5,
+                cursor: imagesAllowed ? "pointer" : "not-allowed",
+                opacity: imagesAllowed ? 1 : 0.5,
                 transition: "background 0.12s, color 0.12s",
               }}
               onMouseEnter={(e) => {

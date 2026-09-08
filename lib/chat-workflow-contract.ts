@@ -1,8 +1,17 @@
+import { validateAgentImages } from "./image-attachments.ts";
+
 export const CHAT_WORKFLOW_ADAPTER_ENABLED = true;
 
 export type ChatWorkflowId = string;
 
 export const DEFAULT_CHAT_WORKFLOW_ID: ChatWorkflowId = "minimal-pi-coding-agent";
+
+/** One image attachment in the Workflow prompt wire format (matches Pi ImageContent). */
+export interface ChatWorkflowImageInput {
+  readonly type: "image";
+  readonly data: string;
+  readonly mimeType: string;
+}
 
 export type WorkflowAgentToolPolicy =
   | { readonly mode: "pi-default"; readonly addresses?: readonly string[] }
@@ -55,6 +64,7 @@ export interface ChatWorkflowPromptInput {
   readonly projectId: string;
   readonly cwd: string;
   readonly prompt: string;
+  readonly images?: readonly ChatWorkflowImageInput[];
   readonly sessionId?: string;
   readonly workflow: ChatWorkflowId;
   readonly agentConfigs?: Readonly<Record<string, AgentConfigSelection>>;
@@ -219,7 +229,20 @@ export function parseChatWorkflowPromptInput(value: unknown): ChatWorkflowPrompt
   if (typeof value.cwd !== "string" || value.cwd.trim() === "") {
     throw new Error("cwd必须是非空字符串");
   }
-  if (typeof value.prompt !== "string" || value.prompt.trim() === "") {
+  if (typeof value.prompt !== "string") {
+    throw new Error("prompt必须是字符串");
+  }
+  let images: ChatWorkflowImageInput[] | undefined;
+  if (value.images !== undefined) {
+    const imagesError = validateAgentImages(value.images);
+    if (imagesError !== null) throw new Error(imagesError);
+    images = (value.images as Array<{ type: "image"; data: string; mimeType: string }>).map((image) => ({
+      type: "image",
+      data: image.data,
+      mimeType: image.mimeType,
+    }));
+  }
+  if (value.prompt.trim() === "" && (images?.length ?? 0) === 0) {
     throw new Error("prompt必须是非空字符串");
   }
   if (value.sessionId !== undefined && (typeof value.sessionId !== "string" || value.sessionId.trim() === "")) {
@@ -241,6 +264,7 @@ export function parseChatWorkflowPromptInput(value: unknown): ChatWorkflowPrompt
     cwd: value.cwd,
     prompt: value.prompt,
     workflow: value.workflow,
+    ...(images === undefined ? {} : { images }),
     ...(value.sessionId === undefined ? {} : { sessionId: value.sessionId }),
     ...(value.agentConfigs === undefined ? {} : { agentConfigs }),
   };

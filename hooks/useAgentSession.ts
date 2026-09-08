@@ -746,12 +746,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       addNotice({ type: "warning", message: "请先选择工作目录" });
       return;
     }
-    if (images?.length) {
+    if (images?.length && longAgentId !== null) {
       restoreSubmission(message, images);
-      addNotice({
-        type: "warning",
-        message: longAgentId === null ? "当前Workflow只接受文本Prompt" : "当前长期 Agent只接受文本消息",
-      });
+      addNotice({ type: "warning", message: "当前长期 Agent只接受文本消息" });
       return;
     }
     if (prompt.startsWith("/") || prompt.startsWith("!")) {
@@ -777,7 +774,21 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       return;
     }
 
-    const userMessage: AgentMessage = { role: "user", content: message, timestamp: Date.now() };
+    const userMessage: AgentMessage = {
+      role: "user",
+      // Keep image blocks in the optimistic message so the transcript renders
+      // the attachments before the durable Session read replaces them.
+      content: images?.length
+        ? [
+            { type: "text", text: message },
+            ...images.map((image) => ({
+              type: "image" as const,
+              source: { type: "base64" as const, media_type: image.mimeType, data: image.data },
+            })),
+          ]
+        : message,
+      timestamp: Date.now(),
+    };
     setMessages((current) => [...current, userMessage]);
     setAgentRunning(true);
     setAgentPhase({ kind: "waiting_model" });
@@ -863,6 +874,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           projectId,
           cwd: targetCwd,
           prompt: message,
+          ...(images?.length
+            ? {
+                images: images.map((image) => ({
+                  type: "image" as const,
+                  data: image.data,
+                  mimeType: image.mimeType,
+                })),
+              }
+            : {}),
           workflow: workflowId,
           ...(!hasWorkflowAdjustment
             ? {}

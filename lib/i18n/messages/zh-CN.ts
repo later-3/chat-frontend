@@ -384,6 +384,7 @@ export const zhCNLocale: LocalePlugin = {
     "chat.followUp": "后续消息",
     "chat.send": "发送",
     "chat.attachImage": "附加图片",
+    "chat.workflowNoImages": "当前 Workflow 不支持图片输入",
     "chat.executionTarget": "执行方式",
     "chat.executionTargetTitle": "选择 Workflow",
     "chat.longAgents": "长期 Agent",

@@ -384,6 +384,7 @@ export const enLocale: LocalePlugin = {
     "chat.followUp": "Follow-up",
     "chat.send": "Send",
     "chat.attachImage": "Attach image",
+    "chat.workflowNoImages": "This workflow does not accept image input",
     "chat.executionTarget": "Execution target",
     "chat.executionTargetTitle": "Choose a Workflow",
     "chat.longAgents": "Long-running Agents",

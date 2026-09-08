@@ -55,6 +55,7 @@ export interface ChatWorkflowSummary {
   readonly description: string;
   readonly agentCallable: boolean;
   readonly planReview: boolean;
+  readonly supportsImageInput: boolean;
   readonly nodes: readonly ChatWorkflowNodeSummary[];
   readonly agents: readonly ChatWorkflowAgentSummary[];
 }
@@ -214,6 +215,7 @@ export function parseChatWorkflowSummaries(value: unknown): ChatWorkflowSummary[
       description: workflow.description,
       agentCallable: workflow.agentCallable,
       planReview: workflow.planReview,
+      supportsImageInput: workflow.supportsImageInput === true,
       nodes,
       agents,
     };
