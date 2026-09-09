@@ -3,27 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useI18n } from "@/hooks/useI18n";
-
-interface DirectoryEntry {
-  name: string;
-  path: string;
-}
-
-interface BrowseResponse {
-  path?: string;
-  parentPath?: string | null;
-  directories?: DirectoryEntry[];
-  drives?: DirectoryEntry[];
-  error?: string;
-}
-
-async function loadDirectories(directory?: string): Promise<BrowseResponse> {
-  const query = directory ? `?path=${encodeURIComponent(directory)}` : "";
-  const response = await fetch(`/api/cwd/browse${query}`);
-  const data = await response.json() as BrowseResponse;
-  if (!response.ok || data.error) throw new Error(data.error ?? `HTTP ${response.status}`);
-  return data;
-}
+import { browseDirectories, type DirectoryBrowseEntry } from "@/lib/directory-browser";
 
 function FolderIcon() {
   return (
@@ -60,8 +40,8 @@ export function DirectoryPicker({ onCancel, onSelect, busy = false, error }: Pro
   const [currentPath, setCurrentPath] = useState("");
   const [parentDirectory, setParentDirectory] = useState<string | null>(null);
   const [pathInput, setPathInput] = useState("");
-  const [directories, setDirectories] = useState<DirectoryEntry[]>([]);
-  const [drives, setDrives] = useState<DirectoryEntry[] | null>(null);
+  const [directories, setDirectories] = useState<DirectoryBrowseEntry[]>([]);
+  const [drives, setDrives] = useState<DirectoryBrowseEntry[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -69,13 +49,13 @@ export function DirectoryPicker({ onCancel, onSelect, busy = false, error }: Pro
     setLoading(true);
     setLoadError(null);
     try {
-      const data = await loadDirectories(directory);
-      const nextPath = data.path ?? directory ?? "/";
+      const data = await browseDirectories(directory);
+      const nextPath = data.path || directory || "/";
       setCurrentPath(nextPath);
-      setParentDirectory(data.parentPath ?? null);
+      setParentDirectory(data.parentPath);
       setPathInput(nextPath);
-      setDirectories(data.directories ?? []);
-      setDrives(data.drives ?? null);
+      setDirectories([...data.directories]);
+      setDrives(data.drives === null ? null : [...data.drives]);
     } catch (cause) {
       setLoadError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -205,7 +185,9 @@ export function DirectoryPicker({ onCancel, onSelect, busy = false, error }: Pro
           ) : (
             <div style={{ padding: 8, color: "var(--text-dim)", fontSize: 11 }}>{t("directoryPicker.noSubdirectories")}</div>
           )}
-          {(loadError || error) && <div style={{ padding: "8px", color: "#dc2626", fontSize: 11 }}>{loadError ?? error}</div>}
+          {(loadError ?? error) !== null && (loadError ?? error) !== undefined && (
+            <div style={{ padding: "8px", color: "#dc2626", fontSize: 11 }} role="alert">{loadError ?? error}</div>
+          )}
         </div>
 
         <div className="directory-picker-footer" style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10, flexShrink: 0, padding: "10px 18px", borderTop: "1px solid var(--border)" }}>

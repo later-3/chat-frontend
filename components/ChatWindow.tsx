@@ -391,7 +391,7 @@ export function ChatWindow({ projectId, session, sessionRunning, newSessionCwd, 
 
   const {
     loading, error, messages, entryIds, streamState,
-    agentRunning, bashRunning, pendingBash, workflowId, longAgents, longAgentId, workflowAgentConfigs, promptResourceProposals, toolPreset, thinkingLevel,
+    agentRunning, bashRunning, pendingBash, workflowId, longAgentId, workflowAgentConfigs, promptResourceProposals, toolPreset, thinkingLevel,
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, sessionStats,
     slashCommands, slashCommandsLoading, queuedMessages,
@@ -667,7 +667,6 @@ export function ChatWindow({ projectId, session, sessionRunning, newSessionCwd, 
       isStreaming={sessionBusy}
       workflowId={workflowId}
       onWorkflowChange={setWorkflowId}
-      longAgents={longAgents}
       longAgentId={longAgentId}
       workflowAgentConfigs={workflowAgentConfigs}
       promptResourceProposals={promptResourceProposals}

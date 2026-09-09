@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { IconMessageCircle, IconRefresh, IconSettings } from "@tabler/icons-react";
+import { IconRefresh, IconSettings } from "@tabler/icons-react";
 import { useI18n } from "@/hooks/useI18n";
 import {
   fetchLongAgents,
@@ -9,6 +9,7 @@ import {
   type LongAgentSummary,
 } from "@/lib/long-agents-browser";
 import styles from "./ProjectLongAgentSection.module.css";
+import { LongAgentAvatarView } from "./LongAgentAvatar";
 import { LongAgentSettingsPanel } from "./LongAgentSettingsPanel";
 
 interface Props {
@@ -19,12 +20,6 @@ interface Props {
   onOpenSession: (sessionId: string) => void | Promise<void>;
   onRequestClose?: () => void;
   closeAfterOpen?: boolean;
-}
-
-function initials(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length > 1) return words.slice(0, 2).map((word) => word[0]).join("").toUpperCase();
-  return Array.from(words[0] ?? "A").slice(0, 2).join("").toUpperCase();
 }
 
 export function ProjectLongAgentSection({
@@ -149,9 +144,11 @@ export function ProjectLongAgentSection({
             <IconRefresh size={14} stroke={1.8} aria-hidden="true" />
           </button>
         </div>
+      ) : agents.length === 0 ? (
+        <div className={styles.loading} role="status">{t("sidebar.longAgentEmpty")}</div>
       ) : (
         <nav aria-label={t("sidebar.longAgentCoworkers")}>
-          <ul className={styles.grid}>
+          <ul className={styles.list}>
             {agents.map((agent) => {
               const primarySessionId = agent.project?.primarySessionId ?? null;
               const selected = primarySessionId !== null && primarySessionId === selectedSessionId;
@@ -171,14 +168,23 @@ export function ProjectLongAgentSection({
                     disabled={openingAgentId !== null || !agent.available}
                     aria-current={selected ? "page" : undefined}
                     aria-label={t("sidebar.longAgentChatWith", { name: agent.name })}
-                    title={`${agent.name} · ${agent.description}`}
+                    title={agent.available
+                      ? `${agent.name} · ${agent.description}`
+                      : t("sidebar.longAgentUnavailable", { name: agent.name })}
                   >
-                    <span className={styles.avatar} aria-hidden="true">{initials(agent.name)}</span>
+                    <span className={styles.avatarWrap} aria-hidden="true">
+                      <LongAgentAvatarView agentId={agent.id} name={agent.name} avatar={agent.avatar} />
+                      <span className={agent.available && agent.channelHostAvailable
+                        ? styles.presenceOnline
+                        : styles.presenceOffline} />
+                    </span>
                     <span className={styles.agentText}>
                       <strong>{agent.name}</strong>
-                      <span>{opening ? t("sidebar.longAgentOpening") : action}</span>
+                      <span>{agent.description}</span>
                     </span>
-                    <IconMessageCircle className={styles.chatIcon} size={15} stroke={1.7} aria-hidden="true" />
+                    <span className={`${styles.status}${selected ? ` ${styles.statusActive}` : ""}`}>
+                      {opening ? t("sidebar.longAgentOpening") : action}
+                    </span>
                   </button>
                 </li>
               );

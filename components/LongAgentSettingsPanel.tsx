@@ -20,6 +20,7 @@ import {
   parseLongAgentInstructions,
 } from "@/lib/long-agent-settings";
 import styles from "./LongAgentSettingsPanel.module.css";
+import { LongAgentAvatarEditor } from "./LongAgentAvatarEditor";
 import { LongAgentGroupSettings } from "./LongAgentGroupSettings";
 import { LongAgentMemorySettings } from "./LongAgentMemorySettings";
 
@@ -449,6 +450,14 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
 
                     <fieldset className={styles.section}>
                       <legend>{t("longAgentSettings.identity")}</legend>
+                      <LongAgentAvatarEditor
+                        document={document}
+                        onUpdated={(next) => {
+                          setDocument(next);
+                          setNotice(t("longAgentSettings.avatarUpdated"));
+                          onSaved();
+                        }}
+                      />
                       <div className={styles.twoColumns}>
                         <label>{t("longAgentSettings.name")}<input value={draft.name} maxLength={80} onChange={(event) => set("name", event.target.value)} /></label>
                         <label>{t("longAgentSettings.defaultProject")}<select value={draft.defaultProjectId} onChange={(event) => set("defaultProjectId", event.target.value)}>{!projects.some((project) => project.projectId === draft.defaultProjectId) && <option value={draft.defaultProjectId}>{draft.defaultProjectId}</option>}{projects.map((project) => <option key={project.projectId} value={project.projectId} disabled={!project.available}>{project.cachedName} · {project.projectId}</option>)}</select></label>

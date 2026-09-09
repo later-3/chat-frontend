@@ -916,6 +916,18 @@ pre, code {
 .prompt-resource-detail section > p { margin: 0; color: var(--text-muted); line-height: 1.65; }
 
 .workflow-agent-dialog-shell > main { min-height: 0; overflow-y: auto; padding: 20px; }
+.workflow-agent-tabs {
+  display: flex; gap: 4px; margin: 12px 0 0; padding: 3px;
+  border: 1px solid var(--border); border-radius: 9px; background: var(--bg-secondary);
+}
+.workflow-agent-tabs button {
+  flex: 1; padding: 7px 10px; border: 0; border-radius: 7px;
+  background: transparent; color: var(--text-muted); font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.workflow-agent-tabs button:hover { background: var(--bg-hover); color: var(--text); }
+.workflow-agent-tabs button.active { background: var(--bg-selected); color: var(--text); }
+.workflow-agent-tab-panel { display: grid; gap: 12px; margin-top: 12px; }
+.workflow-agent-tab-note { margin: 0; color: var(--text-muted); font-size: 12px; }
 .workflow-agent-config-fields { display: grid; gap: 12px; }
 .workflow-agent-config-fields h2,
 .workflow-agent-config-fields p { margin: 0; }
@@ -988,6 +1000,8 @@ pre, code {
   .workflow-agent-dialog-shell > main { min-width: 0; }
   .workflow-agent-dialog-shell > nav { display: flex; gap: 6px; padding: 8px; border-right: 0; border-bottom: 1px solid var(--border); overflow-x: auto; }
   .workflow-agent-dialog-shell > nav button { flex: 0 0 180px; }
+  .workflow-agent-tabs { overflow-x: auto; }
+  .workflow-agent-tabs button { flex: 1 0 auto; min-height: 44px; }
   .prompt-resource-library > nav {
     display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px;
     max-width: 100vw; max-height: 180px; overflow-x: hidden; overflow-y: auto;

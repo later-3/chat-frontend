@@ -1,0 +1,31 @@
+.avatar {
+  width: var(--avatar-size, 38px);
+  height: var(--avatar-size, 38px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, hsl(var(--agent-hue, 210) 62% 52%) 18%, var(--bg));
+  color: hsl(var(--agent-hue, 210) 55% 40%);
+  border: 1px solid color-mix(in srgb, hsl(var(--agent-hue, 210) 55% 50%) 32%, var(--border));
+  font-size: calc(var(--avatar-size, 38px) * 0.34);
+  font-weight: 700;
+  object-fit: cover;
+}
+
+:global(html.dark) .avatar {
+  background: color-mix(in srgb, hsl(var(--agent-hue, 210) 62% 52%) 24%, var(--bg));
+  color: hsl(var(--agent-hue, 210) 75% 74%);
+}
+
+.image {
+  /* Image avatars carry their own artwork; the hue frame is only a placeholder backdrop. */
+  color: transparent;
+}
+
+.emoji {
+  font-size: calc(var(--avatar-size, 38px) * 0.52);
+  line-height: 1;
+}

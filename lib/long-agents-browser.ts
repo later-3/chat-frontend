@@ -1,7 +1,13 @@
+export type LongAgentAvatar =
+  | { readonly kind: "auto" }
+  | { readonly kind: "emoji"; readonly emoji: string }
+  | { readonly kind: "image"; readonly revision: number };
+
 export interface LongAgentSummary {
   readonly id: string;
   readonly name: string;
   readonly description: string;
+  readonly avatar: LongAgentAvatar;
   readonly defaultProjectId: string;
   readonly runtime: "pi";
   readonly configuration: {
@@ -65,6 +71,7 @@ export interface LongAgentConfigurationDocument {
     readonly id: string;
     readonly name: string;
     readonly description: string;
+    readonly avatar: LongAgentAvatar;
     readonly enabled: boolean;
     readonly defaultProjectId: string;
     readonly definition: {
@@ -94,9 +101,25 @@ export interface LongAgentConfigurationDocument {
 export interface LongAgentConfigurationUpdate {
   readonly name: string;
   readonly description: string;
+  /** Display avatar; `undefined` keeps the current value, `image` avatars change only via the upload endpoint. */
+  readonly avatar?: { readonly kind: "auto" } | { readonly kind: "emoji"; readonly emoji: string };
   readonly enabled: boolean;
   readonly defaultProjectId: string;
   readonly definition: LongAgentConfigurationDocument["agent"]["definition"];
+}
+
+function parseAvatar(value: unknown): LongAgentAvatar {
+  if (!isRecord(value)) throw new Error("Chat返回了无效LongAgent头像");
+  if (value.kind === "auto") return { kind: "auto" };
+  if (value.kind === "emoji" && nonEmpty(value.emoji)) return { kind: "emoji", emoji: value.emoji };
+  if (value.kind === "image" && Number.isSafeInteger(value.revision) && (value.revision as number) >= 1) {
+    return { kind: "image", revision: value.revision as number };
+  }
+  throw new Error("Chat返回了无效LongAgent头像");
+}
+
+export function longAgentAvatarImageUrl(longAgentId: string, revision: number): string {
+  return `/api/long-agents/${encodeURIComponent(longAgentId)}/avatar?v=${revision}`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -118,6 +141,7 @@ function parseModel(value: unknown): LongAgentMessageAccepted["model"] {
 function parseAgent(value: unknown): LongAgentSummary {
   if (!isRecord(value) || !nonEmpty(value.id) || !nonEmpty(value.name)
     || typeof value.description !== "string" || !nonEmpty(value.defaultProjectId) || value.runtime !== "pi"
+    || !isRecord(value.avatar)
     || !isRecord(value.configuration)
     || (value.configuration.model !== null && !isRecord(value.configuration.model))
     || (isRecord(value.configuration.model)
@@ -150,6 +174,7 @@ function parseAgent(value: unknown): LongAgentSummary {
     id: value.id,
     name: value.name,
     description: value.description,
+    avatar: parseAvatar(value.avatar),
     defaultProjectId: value.defaultProjectId,
     runtime: "pi",
     configuration: {
@@ -229,6 +254,7 @@ function parseLongAgentConfiguration(value: unknown): LongAgentConfigurationDocu
   if (!isRecord(value) || value.schemaVersion !== 1 || !nonEmpty(value.revision)
     || !/^[a-f0-9]{64}$/.test(value.revision) || !isRecord(value.agent)
     || !nonEmpty(value.agent.id) || !nonEmpty(value.agent.name) || !nonEmpty(value.agent.description)
+    || !isRecord(value.agent.avatar)
     || typeof value.agent.enabled !== "boolean" || !nonEmpty(value.agent.defaultProjectId)
     || !isRecord(value.agent.definition) || value.agent.definition.schemaVersion !== 1
     || value.agent.definition.id !== value.agent.id || value.agent.definition.name !== value.agent.name
@@ -276,6 +302,7 @@ function parseLongAgentConfiguration(value: unknown): LongAgentConfigurationDocu
       id: value.agent.id,
       name: value.agent.name,
       description: value.agent.description,
+      avatar: parseAvatar(value.agent.avatar),
       enabled: value.agent.enabled,
       defaultProjectId: value.agent.defaultProjectId,
       definition: {
@@ -415,6 +442,7 @@ export async function saveLongAgentConfiguration(
       expectedRevision,
       name: update.name,
       description: update.description,
+      ...(update.avatar === undefined ? {} : { avatar: update.avatar }),
       enabled: update.enabled,
       defaultProjectId: update.defaultProjectId,
       definition,
@@ -424,6 +452,39 @@ export async function saveLongAgentConfiguration(
   });
   return parseLongAgentConfiguration(await responseBody(response));
 }
+
+/** Uploads a new image avatar as raw bytes; returns the updated configuration with its new revision. */
+export async function uploadLongAgentAvatar(input: {
+  readonly longAgentId: string;
+  readonly bytes: Blob;
+  readonly expectedRevision: string;
+}): Promise<LongAgentConfigurationDocument> {
+  const query = new URLSearchParams({ expectedRevision: input.expectedRevision });
+  const response = await fetch(
+    `/api/long-agents/${encodeURIComponent(input.longAgentId)}/avatar?${query.toString()}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": input.bytes.type || "application/octet-stream" },
+      body: input.bytes,
+      credentials: "same-origin",
+    },
+  );
+  return parseLongAgentConfiguration(await responseBody(response));
+}
+
+/** Removes the image avatar and restores the derived display identity. */
+export async function deleteLongAgentAvatar(input: {
+  readonly longAgentId: string;
+  readonly expectedRevision: string;
+}): Promise<LongAgentConfigurationDocument> {
+  const query = new URLSearchParams({ expectedRevision: input.expectedRevision });
+  const response = await fetch(
+    `/api/long-agents/${encodeURIComponent(input.longAgentId)}/avatar?${query.toString()}`,
+    { method: "DELETE", credentials: "same-origin" },
+  );
+  return parseLongAgentConfiguration(await responseBody(response));
+}
+
 import {
   parseWorkflowAgentToolPolicy,
   type WorkflowAgentResources,

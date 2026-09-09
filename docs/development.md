@@ -27,7 +27,7 @@ Workflow与长期Agent共享同一个Project和Chat Session模型，但不是输
 
 Daily是用户的个人日常Project，不是一套额外的个人模式。Daily与其他Project必须共用同一套导航面板、Session和Long Agent交互逻辑。
 
-手动切换侧边栏导航面板不改变中央区已打开的会话。打开普通Session或使用“新建会话”时必须切回“会话”面板；打开Long Agent或页面刷新后当前`session.owner.type === "long-agent"`时，必须切到“长期同事”面板。普通Session在输入区选择Workflow；长期Agent专属Session在输入区显示当前同事身份，不允许把普通Session原地切换为Long Agent Session。Frontend通过`GET /api/long-agents`恢复可用Agent和Project状态，通过`POST /api/long-agents/:id/start`完成单击启动/打开，通过`POST /api/long-agents/:id/messages`提交文本并等待Chat Pi完成本轮，再重新读取原生Session事实。
+手动切换侧边栏导航面板不改变中央区已打开的会话。打开普通Session或使用“新建会话”时必须切回“会话”面板；打开Long Agent或页面刷新后当前`session.owner.type === "long-agent"`时，必须切到“长期同事”面板。普通Session在输入区选择Workflow；长期Agent专属Session的同事身份只由侧边栏“长期同事”面板展示，输入区不再重复显示身份徽标，也不渲染Workflow选择器。不允许把普通Session原地切换为Long Agent Session。Frontend通过`GET /api/long-agents`恢复可用Agent和Project状态，通过`POST /api/long-agents/:id/start`完成单击启动/打开，通过`POST /api/long-agents/:id/messages`提交文本并等待Chat Pi完成本轮，再重新读取原生Session事实。
 
 Session列表与Session详情中的`session.owner`是导航和发送链共用的唯一归属事实。Frontend运行时合同必须接受且严格校验`{ type: "ordinary" }`或`{ type: "long-agent", longAgentId, projectLongAgentId }`，并直接用该值选择面板与发送API。Long Agent列表只用于展示同事和配置/运行状态，不得异步用`primarySessionId`反推Session归属；也不得根据消息内容猜测，或在Hook/组件中维护第二份映射。`owner`缺失、非法或无法解析时必须停止发送并告警/重新加载，不得默认当成Workflow Session继续执行。
 
@@ -80,7 +80,11 @@ pnpm dev
 
 Backend 合同变化时，Frontend 类型、运行时解析和测试必须在同一任务中同步更新。
 
-Long Agent配置使用`GET /api/long-agents/:id/config`和`PUT /api/long-agents/:id/config`。GET响应包含`schemaVersion`、`revision`、可编辑Agent Definition和只读Channel/Host摘要；PUT提交完整表单与`expectedRevision`。后端用revision做乐观并发控制并原子保存；`409`表示基线已过期，前端应保留用户可见的草稿或告知差异，重新加载服务端事实，不得不带条件重试覆盖。保存成功后必须使用响应中的新revision和正规化配置替换本地基线。
+Long Agent配置使用`GET /api/long-agents/:id/config`和`PUT /api/long-agents/:id/config`。GET响应包含`schemaVersion`、`revision`、可编辑Agent Definition、展示头像投影和只读Channel/Host摘要；PUT提交完整表单与`expectedRevision`。后端用revision做乐观并发控制并原子保存；`409`表示基线已过期，前端应保留用户可见的草稿或告知差异，重新加载服务端事实，不得不带条件重试覆盖。保存成功后必须使用响应中的新revision和正规化配置替换本地基线。
+
+展示头像属于同一身份配置域：`avatar`投影为`{kind:"auto"}`、`{kind:"emoji",emoji}`或`{kind:"image",revision}`；auto/emoji随配置PUT保存，图片只能通过`PUT /api/long-agents/:id/avatar?expectedRevision=…`（raw bytes，PNG/JPEG/WebP不超过2MB）和同名`DELETE`修改，两者返回更新后的完整配置文档以刷新revision基线；图片内容经`GET /api/long-agents/:id/avatar?v=<revision>`读取，revision作缓存键。前端不得请求或拼资产文件路径。
+
+侧边栏“长期同事”面板是社交式联系人列表：每个同事一行，头像（图片/Emoji/ID派生色）、名称、描述与在线状态点；同事身份只在该面板展示，输入区不重复显示。
 
 NanoClaw Agent Group与Agent Memory集中由`lib/long-agent-group-browser.ts`封装，组件不得自行拼URL或解析未验证JSON。当前精确合同为：
 

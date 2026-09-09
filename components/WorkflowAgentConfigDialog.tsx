@@ -201,6 +201,11 @@ function RuntimeCapabilities({ inspection }: { inspection: WorkflowAgentInspecti
 
 const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 
+/**
+ * Project-scoped durable model configuration. The selects bind to the persisted
+ * override (`durableConfig`), never to the merged definition, so choosing the
+ * Workflow default clears only that one field and keeps the other override.
+ */
 function ModelConfigSection({
   workflow,
   agentId,
@@ -218,13 +223,19 @@ function ModelConfigSection({
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const hasDurableConfig = inspection.agent.durableConfig?.model !== undefined
-    || inspection.agent.durableConfig?.thinkingLevel !== undefined;
-  const configuredModel = inspection.agent.model ?? null;
-  const configuredThinking = inspection.agent.thinkingLevel ?? "";
+  const durableModel = inspection.agent.durableConfig?.model ?? null;
+  const durableThinking = inspection.agent.durableConfig?.thinkingLevel ?? "";
+  const hasDurableConfig = durableModel !== null || durableThinking !== "";
+  const catalogModels = modelCatalog?.models ?? [];
+  const durableModelKey = durableModel === null ? "" : `${durableModel.provider}/${durableModel.modelId}`;
+  const durableModelInCatalog = durableModel === null
+    || catalogModels.some((model) => `${model.provider}/${model.modelId}` === durableModelKey);
 
   const apply = async (
-    input: { model?: { provider: string; modelId: string }; thinkingLevel?: string } | "clear",
+    input: {
+      model?: { provider: string; modelId: string } | null;
+      thinkingLevel?: string | null;
+    } | "clear",
   ) => {
     setBusy(true);
     setError(null);
@@ -240,26 +251,18 @@ function ModelConfigSection({
   };
   const applyModel = (key: string) => {
     if (key === "") {
-      void apply(configuredThinking ? { thinkingLevel: configuredThinking } : "clear");
+      if (durableModel !== null) void apply({ model: null });
       return;
     }
-    const model = modelCatalog?.models.find((item) => `${item.provider}/${item.modelId}` === key);
-    if (model !== undefined) {
-      void apply({
-        model: { provider: model.provider, modelId: model.modelId },
-        ...(configuredThinking === "" ? {} : { thinkingLevel: configuredThinking }),
-      });
-    }
+    const model = catalogModels.find((item) => `${item.provider}/${item.modelId}` === key);
+    if (model !== undefined) void apply({ model: { provider: model.provider, modelId: model.modelId } });
   };
   const applyThinking = (level: string) => {
     if (level === "") {
-      void apply(configuredModel === null ? "clear" : { model: configuredModel });
+      if (durableThinking !== "") void apply({ thinkingLevel: null });
       return;
     }
-    void apply({
-      ...(configuredModel === null ? {} : { model: configuredModel }),
-      thinkingLevel: level,
-    });
+    void apply({ thinkingLevel: level });
   };
 
   return (
@@ -267,8 +270,9 @@ function ModelConfigSection({
       <div>
         <strong>模型配置</strong>
         <small>
-          保存到 Chat 的 Project 数据目录，之后每次运行这个Workflow Agent都会生效。
-          {hasDurableConfig ? " 当前为持久化配置。" : " 当前使用Workflow默认。"}
+          {hasDurableConfig
+            ? "当前存在本项目覆盖；选择“使用Workflow默认”只移除对应字段的覆盖。"
+            : "当前使用Workflow默认；选择模型或思考等级后会保存为本项目覆盖。"}
         </small>
       </div>
       <dl className="workflow-agent-facts">
@@ -282,12 +286,12 @@ function ModelConfigSection({
       <label>
         模型
         <select
-          value={configuredModel === null ? "" : `${configuredModel.provider}/${configuredModel.modelId}`}
+          value={durableModelKey}
           disabled={busy || modelCatalog === null}
           onChange={(event) => applyModel(event.target.value)}
         >
           <option value="">使用Workflow默认</option>
-          {(modelCatalog?.models ?? []).map((model) => (
+          {catalogModels.map((model) => (
             <option
               key={`${model.provider}/${model.modelId}`}
               value={`${model.provider}/${model.modelId}`}
@@ -296,12 +300,15 @@ function ModelConfigSection({
               {model.provider}/{model.modelId}（{model.name}）{model.authConfigured ? "" : " · 未认证"}
             </option>
           ))}
+          {!durableModelInCatalog && (
+            <option value={durableModelKey}>{durableModelKey} · 不在当前模型目录</option>
+          )}
         </select>
       </label>
       <label>
         思考等级
         <select
-          value={configuredThinking}
+          value={durableThinking}
           disabled={busy}
           onChange={(event) => applyThinking(event.target.value)}
         >
@@ -312,9 +319,9 @@ function ModelConfigSection({
         </select>
       </label>
       <button type="button" disabled={busy || !hasDurableConfig} onClick={() => void apply("clear")}>
-        恢复Workflow默认模型
+        恢复Workflow默认模型与思考等级
       </button>
-      {error && <small className="workflow-agent-model-error">{error}</small>}
+      {error && <small className="workflow-agent-model-error" role="alert">{error}</small>}
     </section>
   );
 }
@@ -444,14 +451,23 @@ function ToolConfigSection({
         )}
       </div>
       <button type="button" disabled={busy || durableTools === undefined} onClick={() => void apply("clear")}>恢复Workflow默认Tool</button>
-      {error && <small className="workflow-agent-model-error">{error}</small>}
+      {error && <small className="workflow-agent-model-error" role="alert">{error}</small>}
     </section>
   );
 }
 
+type ConfigTab = "runtime" | "session" | "inspect";
+
+const CONFIG_TABS: readonly { readonly id: ConfigTab; readonly label: string }[] = [
+  { id: "runtime", label: "模型与工具" },
+  { id: "session", label: "本轮覆盖" },
+  { id: "inspect", label: "解析检查" },
+];
+
 export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, proposals, onConfigsChange, onClose }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [agentId, setAgentId] = useState(workflow.agents[0]?.id ?? "");
+  const [tab, setTab] = useState<ConfigTab>("runtime");
   const [inspection, setInspection] = useState<WorkflowAgentInspection | null>(null);
   const [catalog, setCatalog] = useState<WorkflowAgentInspection | null>(null);
   const [promptResources, setPromptResources] = useState<PromptResource[]>([]);
@@ -610,114 +626,149 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
             <h2>{agent.name}</h2>
             <p>{agent.description}</p>
             <p>{workflow.nodes.map((node) => `${node.name}（${node.kind === "agent" ? node.agentId : "普通节点"}）`).join(" → ")}</p>
-            <div className="workflow-agent-config-actions">
-              <small>修改只作用于当前Session中的这个Workflow Agent，并在下一次发送时提交。</small>
-              <button type="button" onClick={() => onConfigsChange({ ...configs, [agent.id]: {} })}>
-                恢复Workflow默认
-              </button>
-            </div>
-            {inspection && <RuntimeCapabilities inspection={inspection} />}
-            {inspection && (
-              <ModelConfigSection
-                workflow={workflow}
-                agentId={agent.id}
-                projectId={projectId}
-                inspection={inspection}
-                modelCatalog={modelCatalog}
-                onConfigChanged={() => setModelConfigVersion((version) => version + 1)}
-              />
-            )}
-            {inspection && catalog && (
-              <ToolConfigSection
-                workflow={workflow}
-                agentId={agent.id}
-                projectId={projectId}
-                inspection={inspection}
-                catalog={catalog}
-                onConfigChanged={() => setModelConfigVersion((version) => version + 1)}
-              />
-            )}
-            <label>主配置文件<input value={selection?.primary ?? ""} placeholder="/path/to/agent.json" onChange={(event) => updateSelection({ primary: event.target.value.trim() || undefined })} /></label>
-            <label>追加配置文件（每行一个）<textarea value={lines(selection?.append)} onChange={(event) => updateSelection({ append: parseLines(event.target.value) })} /></label>
-            <label>追加 Prompt 文件（每行一个）<textarea value={lines(selection?.promptFiles)} onChange={(event) => updateSelection({ promptFiles: parseLines(event.target.value) })} /></label>
-
-            <fieldset>
-              <legend>规则与经验 Prompt资源</legend>
-              <div className="workflow-agent-resource-groups">
-                {proposals.filter((proposal) => (
-                  proposal.targetWorkflowId === workflow.id
-                  && proposal.targetAgentId === agent.id
-                  && proposal.resolution === undefined
-                )).map((proposal) => (
-                  <article key={proposal.id} className="workflow-agent-prompt-proposal">
-                    <strong>Agent待确认建议</strong>
-                    <p>{proposal.summary}</p>
-                    <small>{proposal.promptResources.map((resource) => resource.reason ?? resource.id).join("；")}</small>
-                  </article>
-                ))}
-                {promptResources.map((resource) => {
-                  const address = promptResourceAddress(resource.target, resource.id);
-                  const selected = selection?.promptResources?.find((item) => (
-                    promptResourceAddress(item.target, item.id) === address
-                  ));
-                  return (
-                    <ResourceCheckbox
-                      key={address}
-                      label={`${resource.title}${selected?.selectedBy === "agent" ? "（Agent选择）" : ""}`}
-                      detail={`${address} · ${resource.kind === "rule" ? "规则" : "经验"} · v${resource.revision}${resource.status === "archived" ? " · 已归档" : ""} · ${selected?.reason ?? resource.purpose}`}
-                      checked={selected !== undefined}
-                      disabled={resource.status === "archived" && selected === undefined}
-                      onChange={(checked) => updatePromptResource(resource, checked)}
-                    />
-                  );
-                })}
-                {(selection?.promptResources ?? []).filter((selected) => (
-                  !promptResources.some((resource) => (
-                    promptResourceAddress(resource.target, resource.id)
-                    === promptResourceAddress(selected.target, selected.id)
-                  ))
-                )).map((selected) => {
-                  const address = promptResourceAddress(selected.target, selected.id);
-                  return (
-                    <ResourceCheckbox
-                      key={address}
-                      label={`${selected.id}${selected.selectedBy === "agent" ? "（Agent选择）" : ""}`}
-                      detail={`${address} · 当前不可读取 · ${selected.reason ?? "可取消选择后重新配置"}`}
-                      checked
-                      onChange={() => removePromptResource(selected.target, selected.id)}
-                    />
-                  );
-                })}
-                {promptResources.length === 0 && <small>规则库中还没有启用的资源。可切换到“规则与经验”Workflow，通过对话创建。</small>}
-              </div>
-            </fieldset>
-
-            <fieldset>
-              <legend>Skill、Extension 与 Plugin</legend>
-              <label className="workflow-agent-resource-mode">
-                <input type="radio" checked={effectiveResources.mode === "inherit"} onChange={() => updateSelection({ resources: { mode: "inherit" } })} />
-                使用 Pi 默认资源
-              </label>
-              <label className="workflow-agent-resource-mode">
-                <input type="radio" checked={effectiveResources.mode === "explicit"} onChange={() => updateSelection({ resources: { mode: "explicit", skillPaths: [], extensionPaths: [], pluginSources: [] } })} />
-                为这个 Agent 明确选择
-              </label>
-              {effectiveResources.mode === "explicit" && catalog && (
-                <div className="workflow-agent-resource-groups">
-                  <h3>Skills</h3>
-                  {catalog.skills.map((skill) => <ResourceCheckbox key={skill.filePath} label={skill.name} detail={skill.filePath} checked={effectiveResources.skillPaths.includes(skill.filePath)} onChange={(checked) => updateExplicitResources("skillPaths", skill.filePath, checked)} />)}
-                  <h3>Extensions</h3>
-                  {catalog.extensions.map((extension) => <ResourceCheckbox key={extension.resolvedPath} label={extension.resolvedPath.split("/").pop() ?? extension.resolvedPath} detail={extension.resolvedPath} checked={effectiveResources.extensionPaths.includes(extension.resolvedPath)} onChange={(checked) => updateExplicitResources("extensionPaths", extension.resolvedPath, checked)} />)}
-                  <h3>Plugins</h3>
-                  {catalog.plugins.map((plugin) => <ResourceCheckbox key={`${plugin.scope}:${plugin.source}`} label={plugin.source} detail={`${plugin.skills.length} Skills · ${plugin.extensions.length} Extensions · ${plugin.prompts.length} Prompts`} checked={effectiveResources.pluginSources.includes(plugin.source)} onChange={(checked) => updateExplicitResources("pluginSources", plugin.source, checked)} />)}
-                </div>
-              )}
-            </fieldset>
           </section>
 
+          <div className="workflow-agent-tabs" role="tablist" aria-label="Agent配置分区">
+            {CONFIG_TABS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={tab === item.id}
+                className={tab === item.id ? "active" : ""}
+                onClick={() => setTab(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
           {loading && <div className="workflow-agent-loading">正在按 Pi 的实际运行方式解析 Agent…</div>}
-          {error && <div className="workflow-agent-error">{error}</div>}
-          {inspection && <InspectionDetails inspection={inspection} />}
+          {error && <div className="workflow-agent-error" role="alert">{error}</div>}
+
+          {tab === "runtime" && (
+            <div className="workflow-agent-tab-panel" role="tabpanel" aria-label="模型与工具">
+              <p className="workflow-agent-tab-note">
+                这里的修改保存到当前 Project 的持久配置并立即生效，之后每次运行这个 Workflow Agent 都会使用。
+              </p>
+              {inspection && (
+                <ModelConfigSection
+                  workflow={workflow}
+                  agentId={agent.id}
+                  projectId={projectId}
+                  inspection={inspection}
+                  modelCatalog={modelCatalog}
+                  onConfigChanged={() => setModelConfigVersion((version) => version + 1)}
+                />
+              )}
+              {inspection && catalog && (
+                <ToolConfigSection
+                  workflow={workflow}
+                  agentId={agent.id}
+                  projectId={projectId}
+                  inspection={inspection}
+                  catalog={catalog}
+                  onConfigChanged={() => setModelConfigVersion((version) => version + 1)}
+                />
+              )}
+            </div>
+          )}
+
+          {tab === "session" && (
+            <div className="workflow-agent-tab-panel" role="tabpanel" aria-label="本轮覆盖">
+              <section className="workflow-agent-config-fields">
+                <div className="workflow-agent-config-actions">
+                  <small>这里的修改只作用于当前 Session 中的这个 Workflow Agent，并在下一次发送时提交。</small>
+                  <button type="button" onClick={() => onConfigsChange({ ...configs, [agent.id]: {} })}>
+                    恢复Workflow默认
+                  </button>
+                </div>
+                <label>主配置文件<input value={selection?.primary ?? ""} placeholder="/path/to/agent.json" onChange={(event) => updateSelection({ primary: event.target.value.trim() || undefined })} /></label>
+                <label>追加配置文件（每行一个）<textarea value={lines(selection?.append)} onChange={(event) => updateSelection({ append: parseLines(event.target.value) })} /></label>
+                <label>追加 Prompt 文件（每行一个）<textarea value={lines(selection?.promptFiles)} onChange={(event) => updateSelection({ promptFiles: parseLines(event.target.value) })} /></label>
+
+                <fieldset>
+                  <legend>规则与经验 Prompt资源</legend>
+                  <div className="workflow-agent-resource-groups">
+                    {proposals.filter((proposal) => (
+                      proposal.targetWorkflowId === workflow.id
+                      && proposal.targetAgentId === agent.id
+                      && proposal.resolution === undefined
+                    )).map((proposal) => (
+                      <article key={proposal.id} className="workflow-agent-prompt-proposal">
+                        <strong>Agent待确认建议</strong>
+                        <p>{proposal.summary}</p>
+                        <small>{proposal.promptResources.map((resource) => resource.reason ?? resource.id).join("；")}</small>
+                      </article>
+                    ))}
+                    {promptResources.map((resource) => {
+                      const address = promptResourceAddress(resource.target, resource.id);
+                      const selected = selection?.promptResources?.find((item) => (
+                        promptResourceAddress(item.target, item.id) === address
+                      ));
+                      return (
+                        <ResourceCheckbox
+                          key={address}
+                          label={`${resource.title}${selected?.selectedBy === "agent" ? "（Agent选择）" : ""}`}
+                          detail={`${address} · ${resource.kind === "rule" ? "规则" : "经验"} · v${resource.revision}${resource.status === "archived" ? " · 已归档" : ""} · ${selected?.reason ?? resource.purpose}`}
+                          checked={selected !== undefined}
+                          disabled={resource.status === "archived" && selected === undefined}
+                          onChange={(checked) => updatePromptResource(resource, checked)}
+                        />
+                      );
+                    })}
+                    {(selection?.promptResources ?? []).filter((selected) => (
+                      !promptResources.some((resource) => (
+                        promptResourceAddress(resource.target, resource.id)
+                        === promptResourceAddress(selected.target, selected.id)
+                      ))
+                    )).map((selected) => {
+                      const address = promptResourceAddress(selected.target, selected.id);
+                      return (
+                        <ResourceCheckbox
+                          key={address}
+                          label={`${selected.id}${selected.selectedBy === "agent" ? "（Agent选择）" : ""}`}
+                          detail={`${address} · 当前不可读取 · ${selected.reason ?? "可取消选择后重新配置"}`}
+                          checked
+                          onChange={() => removePromptResource(selected.target, selected.id)}
+                        />
+                      );
+                    })}
+                    {promptResources.length === 0 && <small>规则库中还没有启用的资源。可切换到“规则与经验”Workflow，通过对话创建。</small>}
+                  </div>
+                </fieldset>
+
+                <fieldset>
+                  <legend>Skill、Extension 与 Plugin</legend>
+                  <label className="workflow-agent-resource-mode">
+                    <input type="radio" checked={effectiveResources.mode === "inherit"} onChange={() => updateSelection({ resources: { mode: "inherit" } })} />
+                    使用 Pi 默认资源
+                  </label>
+                  <label className="workflow-agent-resource-mode">
+                    <input type="radio" checked={effectiveResources.mode === "explicit"} onChange={() => updateSelection({ resources: { mode: "explicit", skillPaths: [], extensionPaths: [], pluginSources: [] } })} />
+                    为这个 Agent 明确选择
+                  </label>
+                  {effectiveResources.mode === "explicit" && catalog && (
+                    <div className="workflow-agent-resource-groups">
+                      <h3>Skills</h3>
+                      {catalog.skills.map((skill) => <ResourceCheckbox key={skill.filePath} label={skill.name} detail={skill.filePath} checked={effectiveResources.skillPaths.includes(skill.filePath)} onChange={(checked) => updateExplicitResources("skillPaths", skill.filePath, checked)} />)}
+                      <h3>Extensions</h3>
+                      {catalog.extensions.map((extension) => <ResourceCheckbox key={extension.resolvedPath} label={extension.resolvedPath.split("/").pop() ?? extension.resolvedPath} detail={extension.resolvedPath} checked={effectiveResources.extensionPaths.includes(extension.resolvedPath)} onChange={(checked) => updateExplicitResources("extensionPaths", extension.resolvedPath, checked)} />)}
+                      <h3>Plugins</h3>
+                      {catalog.plugins.map((plugin) => <ResourceCheckbox key={`${plugin.scope}:${plugin.source}`} label={plugin.source} detail={`${plugin.skills.length} Skills · ${plugin.extensions.length} Extensions · ${plugin.prompts.length} Prompts`} checked={effectiveResources.pluginSources.includes(plugin.source)} onChange={(checked) => updateExplicitResources("pluginSources", plugin.source, checked)} />)}
+                    </div>
+                  )}
+                </fieldset>
+              </section>
+            </div>
+          )}
+
+          {tab === "inspect" && (
+            <div className="workflow-agent-tab-panel" role="tabpanel" aria-label="解析检查">
+              {inspection && <RuntimeCapabilities inspection={inspection} />}
+              {inspection && <InspectionDetails inspection={inspection} />}
+            </div>
+          )}
         </main>
       </div>
     </dialog>

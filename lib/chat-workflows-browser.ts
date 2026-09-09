@@ -645,12 +645,15 @@ function readApiError(body: unknown, response: Response): Error {
   return new Error(errorMessage ?? `HTTP ${response.status}`);
 }
 
-/** Persists one Workflow Agent's durable model configuration; read by every later Workflow run. */
+/** Persists one Workflow Agent's durable model configuration; a `null` field clears only that value. */
 export async function saveChatAgentModelConfig(
   workflowId: ChatWorkflowId,
   agentId: string,
   projectId: string,
-  config: { readonly model?: { readonly provider: string; readonly modelId: string }; readonly thinkingLevel?: string },
+  config: {
+    readonly model?: { readonly provider: string; readonly modelId: string } | null;
+    readonly thinkingLevel?: string | null;
+  },
   signal?: AbortSignal,
 ): Promise<void> {
   const response = await fetch(
