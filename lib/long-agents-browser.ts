@@ -64,6 +64,13 @@ export interface ProjectLongAgentStarted {
   readonly isNewSession: boolean;
 }
 
+export interface LongAgentEffectiveConfig {
+  readonly model: { readonly provider: string; readonly modelId: string } | null;
+  readonly thinkingLevel: string | null;
+  readonly modelSource: "explicit" | "chat-default" | null;
+  readonly thinkingSource: "explicit" | "chat-default" | null;
+}
+
 export interface LongAgentConfigurationDocument {
   readonly schemaVersion: 1;
   readonly revision: string;
@@ -74,6 +81,7 @@ export interface LongAgentConfigurationDocument {
     readonly avatar: LongAgentAvatar;
     readonly enabled: boolean;
     readonly defaultProjectId: string;
+    readonly effective: LongAgentEffectiveConfig;
     readonly definition: {
       readonly schemaVersion: 1;
       readonly id: string;
@@ -250,11 +258,34 @@ function parseResources(value: unknown): WorkflowAgentResources {
   };
 }
 
+function parseEffective(value: unknown): LongAgentEffectiveConfig {
+  if (!isRecord(value)
+    || (value.model !== null && (!isRecord(value.model) || !nonEmpty(value.model.provider) || !nonEmpty(value.model.modelId)))
+    || (value.thinkingLevel !== null && !nonEmpty(value.thinkingLevel))
+    || (value.modelSource !== null && value.modelSource !== "explicit" && value.modelSource !== "chat-default")
+    || (value.thinkingSource !== null
+      && value.thinkingSource !== "explicit" && value.thinkingSource !== "chat-default")) {
+    throw new Error("Chat返回了无效Long Agent生效配置");
+  }
+  return {
+    model: value.model === null
+      ? null
+      : {
+          provider: (value.model as Record<string, unknown>).provider as string,
+          modelId: (value.model as Record<string, unknown>).modelId as string,
+        },
+    thinkingLevel: value.thinkingLevel as string | null,
+    modelSource: value.modelSource as LongAgentEffectiveConfig["modelSource"],
+    thinkingSource: value.thinkingSource as LongAgentEffectiveConfig["thinkingSource"],
+  };
+}
+
 function parseLongAgentConfiguration(value: unknown): LongAgentConfigurationDocument {
   if (!isRecord(value) || value.schemaVersion !== 1 || !nonEmpty(value.revision)
     || !/^[a-f0-9]{64}$/.test(value.revision) || !isRecord(value.agent)
     || !nonEmpty(value.agent.id) || !nonEmpty(value.agent.name) || !nonEmpty(value.agent.description)
     || !isRecord(value.agent.avatar)
+    || !isRecord(value.agent.effective)
     || typeof value.agent.enabled !== "boolean" || !nonEmpty(value.agent.defaultProjectId)
     || !isRecord(value.agent.definition) || value.agent.definition.schemaVersion !== 1
     || value.agent.definition.id !== value.agent.id || value.agent.definition.name !== value.agent.name
@@ -305,6 +336,7 @@ function parseLongAgentConfiguration(value: unknown): LongAgentConfigurationDocu
       avatar: parseAvatar(value.agent.avatar),
       enabled: value.agent.enabled,
       defaultProjectId: value.agent.defaultProjectId,
+      effective: parseEffective(value.agent.effective),
       definition: {
         schemaVersion: 1,
         id: rawDefinition.id as string,

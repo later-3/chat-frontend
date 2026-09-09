@@ -84,6 +84,8 @@ Long Agent配置使用`GET /api/long-agents/:id/config`和`PUT /api/long-agents/
 
 展示头像属于同一身份配置域：`avatar`投影为`{kind:"auto"}`、`{kind:"emoji",emoji}`或`{kind:"image",revision}`；auto/emoji随配置PUT保存，图片只能通过`PUT /api/long-agents/:id/avatar?expectedRevision=…`（raw bytes，PNG/JPEG/WebP不超过2MB）和同名`DELETE`修改，两者返回更新后的完整配置文档以刷新revision基线；图片内容经`GET /api/long-agents/:id/avatar?v=<revision>`读取，revision作缓存键。前端不得请求或拼资产文件路径。
 
+“运行策略”的模型区显示生效模型/生效思考等级与来源（`agent.effective`，`explicit`/`chat-default`），选项来自`/api/models`（只含用户在Chat Home `models.json`配置的模型）；资源区在“明确配置资源路径”模式下，通过`/api/skills`、`/api/extensions`、`/api/plugins`（按Agent默认Project）提供Skills/Extensions/Plugins目录勾选，同时保留手填路径面板。
+
 侧边栏“长期同事”面板是社交式联系人列表：每个同事一行，头像（图片/Emoji/ID派生色）、名称、描述与在线状态点；同事身份只在该面板展示，输入区不重复显示。
 
 NanoClaw Agent Group与Agent Memory集中由`lib/long-agent-group-browser.ts`封装，组件不得自行拼URL或解析未验证JSON。当前精确合同为：

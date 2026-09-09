@@ -201,6 +201,13 @@ function RuntimeCapabilities({ inspection }: { inspection: WorkflowAgentInspecti
 
 const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 
+const MODEL_SOURCE_LABELS: Record<string, string> = {
+  durable: "本项目持久化",
+  "config-file": "配置文件",
+  "workflow-default": "Workflow 默认",
+  "chat-default": "Chat 默认",
+};
+
 /**
  * Project-scoped durable model configuration. The selects bind to the persisted
  * override (`durableConfig`), never to the merged definition, so choosing the
@@ -279,9 +286,11 @@ function ModelConfigSection({
         <dt>生效模型</dt>
         <dd>{inspection.agent.effectiveModel
           ? `${inspection.agent.effectiveModel.provider}/${inspection.agent.effectiveModel.modelId}`
-          : "未解析"}</dd>
+          : "未解析"}
+          {inspection.agent.modelSource !== null && ` · ${MODEL_SOURCE_LABELS[inspection.agent.modelSource] ?? inspection.agent.modelSource}`}</dd>
         <dt>生效思考等级</dt>
-        <dd>{inspection.agent.effectiveThinkingLevel}</dd>
+        <dd>{inspection.agent.effectiveThinkingLevel}
+          {inspection.agent.thinkingSource !== null && ` · ${MODEL_SOURCE_LABELS[inspection.agent.thinkingSource] ?? inspection.agent.thinkingSource}`}</dd>
       </dl>
       <label>
         模型
@@ -290,7 +299,9 @@ function ModelConfigSection({
           disabled={busy || modelCatalog === null}
           onChange={(event) => applyModel(event.target.value)}
         >
-          <option value="">使用Workflow默认</option>
+          <option value="">使用Workflow默认{durableModelKey === "" && inspection.agent.effectiveModel !== null
+            ? `（当前：${inspection.agent.effectiveModel.provider}/${inspection.agent.effectiveModel.modelId}）`
+            : ""}</option>
           {catalogModels.map((model) => (
             <option
               key={`${model.provider}/${model.modelId}`}
@@ -312,7 +323,9 @@ function ModelConfigSection({
           disabled={busy}
           onChange={(event) => applyThinking(event.target.value)}
         >
-          <option value="">使用Workflow默认</option>
+          <option value="">使用Workflow默认{durableThinking === "" && inspection.agent.effectiveThinkingLevel !== ""
+            ? `（当前：${inspection.agent.effectiveThinkingLevel}）`
+            : ""}</option>
           {THINKING_LEVELS.map((level) => (
             <option key={level} value={level}>{level}</option>
           ))}

@@ -75,6 +75,14 @@ function readOptionalString(value: unknown, field: string): string | undefined {
   return value === undefined ? undefined : readString(value, field);
 }
 
+function readModelSource(value: unknown, field: string): WorkflowAgentInspection["agent"]["modelSource"] {
+  if (value === undefined || value === null) return null;
+  if (value !== "workflow-default" && value !== "config-file" && value !== "durable" && value !== "chat-default") {
+    throw new Error(`Chat返回了无效的${field}`);
+  }
+  return value;
+}
+
 function readStringList(value: unknown, field: string): string[] {
   if (!Array.isArray(value)) throw new Error(`Chat返回了无效的${field}`);
   return value.map((item, index) => readString(item, `${field}[${index}]`));
@@ -227,6 +235,8 @@ export interface WorkflowAgentInspection {
     readonly sources: readonly { readonly kind: string; readonly path?: string }[];
     readonly effectiveModel: { readonly provider: string; readonly modelId: string } | null;
     readonly effectiveThinkingLevel: string;
+    readonly modelSource: "workflow-default" | "config-file" | "durable" | "chat-default" | null;
+    readonly thinkingSource: "workflow-default" | "config-file" | "durable" | "chat-default" | null;
     readonly durableConfig: {
       readonly model?: { readonly provider: string; readonly modelId: string };
       readonly thinkingLevel?: string;
@@ -380,6 +390,8 @@ function parseWorkflowAgentInspection(value: unknown, field: string): WorkflowAg
     sources,
     effectiveModel,
     effectiveThinkingLevel: readString(rawAgent.effectiveThinkingLevel, `${field}.agent.effectiveThinkingLevel`),
+    modelSource: readModelSource(rawAgent.modelSource, `${field}.agent.modelSource`),
+    thinkingSource: readModelSource(rawAgent.thinkingSource, `${field}.agent.thinkingSource`),
     durableConfig,
   };
 

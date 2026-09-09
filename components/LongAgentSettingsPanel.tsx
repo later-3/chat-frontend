@@ -13,6 +13,10 @@ import {
   type LongAgentSummary,
 } from "@/lib/long-agents-browser";
 import { fetchChatProjects, type ChatProjectSummary } from "@/lib/projects-contract";
+import {
+  fetchProjectResourceCatalog,
+  type ProjectResourceCatalog,
+} from "@/lib/project-resources";
 import type { WorkflowAgentResources, WorkflowAgentToolPolicy } from "@/lib/chat-workflow-contract";
 import {
   formatLongAgentInstructions,
@@ -153,6 +157,8 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
   const [initialDraft, setInitialDraft] = useState<Draft | null>(null);
   const [projects, setProjects] = useState<readonly ChatProjectSummary[]>([]);
   const [modelCatalog, setModelCatalog] = useState<ChatModelCatalog | null>(null);
+  const [resourceCatalog, setResourceCatalog] = useState<ProjectResourceCatalog | null>(null);
+  const [resourceCatalogError, setResourceCatalogError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -187,6 +193,22 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
     });
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    const defaultProjectId = document?.agent.defaultProjectId;
+    if (!defaultProjectId) return;
+    const controller = new AbortController();
+    setResourceCatalog(null);
+    setResourceCatalogError(null);
+    void fetchProjectResourceCatalog(defaultProjectId, controller.signal)
+      .then(setResourceCatalog)
+      .catch((cause: unknown) => {
+        if (!(cause instanceof DOMException && cause.name === "AbortError")) {
+          setResourceCatalogError(cause instanceof Error ? cause.message : String(cause));
+        }
+      });
+    return () => controller.abort();
+  }, [document?.agent.defaultProjectId]);
 
   const load = useCallback(async (selectedAgentId: string, signal?: AbortSignal) => {
     if (!selectedAgentId) return;
@@ -306,6 +328,17 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
     if (checked) addresses.add(address);
     else addresses.delete(address);
     set("toolAddresses", [...addresses]);
+  };
+  const toggleResourcePath = (
+    key: "skillPathsText" | "extensionPathsText" | "pluginSourcesText",
+    value: string,
+    checked: boolean,
+  ) => {
+    if (!draft) return;
+    const current = new Set(lines(draft[key]));
+    if (checked) current.add(value);
+    else current.delete(value);
+    set(key, [...current].join("\n"));
   };
   const tabs = [
     { id: "runtime", label: t("longAgentSettings.runtimeTab"), icon: IconSettings },
@@ -467,9 +500,31 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
 
                     <fieldset className={styles.section}>
                       <legend>{t("longAgentSettings.runtime")}</legend>
+                      <dl className={styles.facts}>
+                        <dt>{t("longAgentSettings.effectiveModel")}</dt>
+                        <dd>
+                          {document.agent.effective.model
+                            ? `${document.agent.effective.model.provider}/${document.agent.effective.model.modelId}`
+                            : t("longAgentSettings.modelSourceUnresolved")}
+                          {document.agent.effective.modelSource && ` · ${document.agent.effective.modelSource === "explicit"
+                            ? t("longAgentSettings.modelSourceExplicit")
+                            : t("longAgentSettings.modelSourceChatDefault")}`}
+                        </dd>
+                        <dt>{t("longAgentSettings.effectiveThinking")}</dt>
+                        <dd>
+                          {document.agent.effective.thinkingLevel ?? t("longAgentSettings.modelSourceUnresolved")}
+                          {document.agent.effective.thinkingSource && ` · ${document.agent.effective.thinkingSource === "explicit"
+                            ? t("longAgentSettings.modelSourceExplicit")
+                            : t("longAgentSettings.modelSourceChatDefault")}`}
+                        </dd>
+                      </dl>
                       <div className={styles.twoColumns}>
-                        <label>{t("longAgentSettings.model")}<select value={draft.modelKey} onChange={(event) => set("modelKey", event.target.value)}><option value="">{t("longAgentSettings.projectDefaultModel")}</option>{draft.modelKey && !modelOptions.some((model) => `${model.provider}/${model.modelId}` === draft.modelKey) && <option value={draft.modelKey}>{draft.modelKey} · {t("longAgentSettings.unavailable")}</option>}{modelOptions.map((model) => <option key={`${model.provider}/${model.modelId}`} value={`${model.provider}/${model.modelId}`} disabled={!model.authConfigured}>{model.name} · {model.modelId}{model.authConfigured ? "" : ` · ${t("longAgentSettings.notAuthenticated")}`}</option>)}</select></label>
-                        <label>{t("longAgentSettings.thinking")}<select value={draft.thinkingLevel} onChange={(event) => set("thinkingLevel", event.target.value)}><option value="">{t("longAgentSettings.modelDefault")}</option>{THINKING_LEVELS.map((level) => <option key={level} value={level}>{level}</option>)}</select></label>
+                        <label>{t("longAgentSettings.model")}<select value={draft.modelKey} onChange={(event) => set("modelKey", event.target.value)}><option value="">{t("longAgentSettings.projectDefaultModel")}{document.agent.effective.model && document.agent.effective.modelSource === "chat-default"
+                          ? `（${document.agent.effective.model.provider}/${document.agent.effective.model.modelId}）`
+                          : ""}</option>{draft.modelKey && !modelOptions.some((model) => `${model.provider}/${model.modelId}` === draft.modelKey) && <option value={draft.modelKey}>{draft.modelKey} · {t("longAgentSettings.unavailable")}</option>}{modelOptions.map((model) => <option key={`${model.provider}/${model.modelId}`} value={`${model.provider}/${model.modelId}`} disabled={!model.authConfigured}>{model.name} · {model.modelId}{model.authConfigured ? "" : ` · ${t("longAgentSettings.notAuthenticated")}`}</option>)}</select></label>
+                        <label>{t("longAgentSettings.thinking")}<select value={draft.thinkingLevel} onChange={(event) => set("thinkingLevel", event.target.value)}><option value="">{t("longAgentSettings.modelDefault")}{document.agent.effective.thinkingLevel && document.agent.effective.thinkingSource === "chat-default"
+                          ? `（${document.agent.effective.thinkingLevel}）`
+                          : ""}</option>{THINKING_LEVELS.map((level) => <option key={level} value={level}>{level}</option>)}</select></label>
                       </div>
                       <label>{t("longAgentSettings.systemPrompt")}<select value={draft.systemPromptMode} onChange={(event) => set("systemPromptMode", event.target.value as Draft["systemPromptMode"])}><option value="pi-default">{t("longAgentSettings.piDefaultPrompt")}</option><option value="replace">{t("longAgentSettings.replacePrompt")}</option></select></label>
                       {draft.systemPromptMode === "replace" && <label>{t("longAgentSettings.systemPromptText")}<textarea value={draft.systemPromptText} rows={8} onChange={(event) => set("systemPromptText", event.target.value)} /></label>}
@@ -489,7 +544,64 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                     <fieldset className={styles.section}>
                       <legend>{t("longAgentSettings.resources")}</legend>
                       <label>{t("longAgentSettings.resourceMode")}<select value={draft.resourceMode} onChange={(event) => set("resourceMode", event.target.value as Draft["resourceMode"])}><option value="inherit">{t("longAgentSettings.inheritResources")}</option><option value="explicit">{t("longAgentSettings.explicitResources")}</option></select></label>
-                      {draft.resourceMode === "explicit" && <div className={styles.resourceGrid}><label>Skills<textarea rows={5} value={draft.skillPathsText} placeholder={t("longAgentSettings.onePerLine")} onChange={(event) => set("skillPathsText", event.target.value)} /></label><label>Extensions<textarea rows={5} value={draft.extensionPathsText} placeholder={t("longAgentSettings.onePerLine")} onChange={(event) => set("extensionPathsText", event.target.value)} /></label><label>Plugins<textarea rows={5} value={draft.pluginSourcesText} placeholder={t("longAgentSettings.onePerLine")} onChange={(event) => set("pluginSourcesText", event.target.value)} /></label></div>}
+                      {draft.resourceMode === "explicit" && (
+                        <div className={styles.resourcePicker}>
+                          <p className={styles.help}>{t("longAgentSettings.resourceCatalogHint")}</p>
+                          {resourceCatalogError && <div className={styles.error} role="alert">{resourceCatalogError}</div>}
+                          <h4>Skills</h4>
+                          {resourceCatalog !== null && resourceCatalog.skills.length > 0 ? (
+                            <div className={styles.checkGrid}>
+                              {resourceCatalog.skills.map((skill) => (
+                                <label key={skill.filePath} className={styles.checkCard}>
+                                  <input
+                                    type="checkbox"
+                                    checked={lines(draft.skillPathsText).includes(skill.filePath)}
+                                    onChange={(event) => toggleResourcePath("skillPathsText", skill.filePath, event.target.checked)}
+                                  />
+                                  <span><strong>{skill.name}</strong><code>{skill.description || skill.filePath}</code></span>
+                                </label>
+                              ))}
+                            </div>
+                          ) : (
+                            <small>{t("longAgentSettings.resourceCatalogEmpty")}</small>
+                          )}
+                          <h4>Extensions</h4>
+                          {resourceCatalog !== null && resourceCatalog.extensions.length > 0 ? (
+                            <div className={styles.checkGrid}>
+                              {resourceCatalog.extensions.map((extension) => (
+                                <label key={extension.path} className={styles.checkCard}>
+                                  <input
+                                    type="checkbox"
+                                    checked={lines(draft.extensionPathsText).includes(extension.path)}
+                                    onChange={(event) => toggleResourcePath("extensionPathsText", extension.path, event.target.checked)}
+                                  />
+                                  <span><strong>{extension.name}</strong><code>{extension.path}</code></span>
+                                </label>
+                              ))}
+                            </div>
+                          ) : (
+                            <small>{t("longAgentSettings.resourceCatalogEmpty")}</small>
+                          )}
+                          <h4>Plugins</h4>
+                          {resourceCatalog !== null && resourceCatalog.plugins.length > 0 ? (
+                            <div className={styles.checkGrid}>
+                              {resourceCatalog.plugins.map((plugin) => (
+                                <label key={`${plugin.scope}:${plugin.source}`} className={styles.checkCard}>
+                                  <input
+                                    type="checkbox"
+                                    checked={lines(draft.pluginSourcesText).includes(plugin.source)}
+                                    onChange={(event) => toggleResourcePath("pluginSourcesText", plugin.source, event.target.checked)}
+                                  />
+                                  <span><strong>{plugin.source}</strong><code>{plugin.scope} · {plugin.status} · {plugin.skills} Skills · {plugin.extensions} Extensions</code></span>
+                                </label>
+                              ))}
+                            </div>
+                          ) : (
+                            <small>{t("longAgentSettings.resourceCatalogEmpty")}</small>
+                          )}
+                          <div className={styles.resourceGrid}><label>Skills<textarea rows={4} value={draft.skillPathsText} placeholder={t("longAgentSettings.onePerLine")} onChange={(event) => set("skillPathsText", event.target.value)} /></label><label>Extensions<textarea rows={4} value={draft.extensionPathsText} placeholder={t("longAgentSettings.onePerLine")} onChange={(event) => set("extensionPathsText", event.target.value)} /></label><label>Plugins<textarea rows={4} value={draft.pluginSourcesText} placeholder={t("longAgentSettings.onePerLine")} onChange={(event) => set("pluginSourcesText", event.target.value)} /></label></div>
+                        </div>
+                      )}
                     </fieldset>
 
                     <fieldset className={styles.section}>
