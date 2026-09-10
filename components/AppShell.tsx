@@ -1102,7 +1102,7 @@ export function AppShell({
               ref={agentConfigTriggerRef}
               type="button"
               onClick={() => setAgentConfigMenuOpen((open) => !open)}
-              title={translate("common.agentConfig")}
+              title={translate("configCenter.title")}
               aria-haspopup="menu"
               aria-expanded={agentConfigMenuOpen}
               aria-controls="agent-config-menu"
@@ -1127,7 +1127,7 @@ export function AppShell({
                 <line x1="4" y1="18" x2="15" y2="18" /><line x1="19" y1="18" x2="20" y2="18" />
               </svg>
               <span style={{ flex: 1, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {translate("common.agentConfig")}
+                {translate("configCenter.title")}
               </span>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, transform: agentConfigMenuOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
                 <polyline points="18 15 12 9 6 15" />
@@ -1137,15 +1137,23 @@ export function AppShell({
               <div
                 id="agent-config-menu"
                 role="menu"
-                aria-label={translate("common.agentConfig")}
+                aria-label={translate("configCenter.title")}
                 style={{
                   position: "absolute", left: 8, right: 8, bottom: "100%", marginBottom: 2,
                   background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 10,
                   boxShadow: "0 -6px 24px rgba(0,0,0,0.12)", padding: 4,
                   display: "flex", flexDirection: "column", gap: 2,
-                  maxHeight: "min(320px, 70dvh)", overflowY: "auto",
+                  maxHeight: "min(360px, 70dvh)", overflowY: "auto",
                 }}
               >
+                <div
+                  style={{
+                    padding: "5px 10px 3px", fontSize: 10, fontWeight: 600,
+                    color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.06em",
+                  }}
+                >
+                  {translate("configCenter.systemGroup")}
+                </div>
                 {agentConfigItems.map(({ label, onOpen, disabled, disabledReason, icon }) => (
                   <button
                     key={label}
@@ -1170,6 +1178,14 @@ export function AppShell({
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
                   </button>
                 ))}
+                <div
+                  style={{
+                    marginTop: 4, padding: "6px 10px 4px", borderTop: "1px solid var(--border)",
+                    fontSize: 10, color: "var(--text-dim)", lineHeight: 1.5,
+                  }}
+                >
+                  {translate("configCenter.otherLayersHint")}
+                </div>
               </div>
             )}
           </div>

@@ -248,6 +248,57 @@
   }
 }
 
+
+.createForm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 4px 0 8px;
+}
+
+.createForm input {
+  font-size: 12px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.createHelp {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin: 0;
+}
+
+.createForm > div {
+  display: flex;
+  gap: 6px;
+}
+
+.createForm button {
+  font-size: 12px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.archivedBadge {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 4px;
+  margin-left: 6px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .agentButton {
     transition: none;

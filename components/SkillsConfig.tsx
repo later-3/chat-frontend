@@ -16,6 +16,16 @@ function shortenPath(p: string): string {
   return p.replace(/^\/(?:Users|home)\/[^/]+/, "~");
 }
 
+import {
+  parseSkillTree,
+  type SkillTreeEntry,
+  type SkillTreeResponse,
+} from "@/lib/skill-tree-browser";
+
+function isRecordValue(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function sourceLabel(skill: Skill): string {
   const src = skill.sourceInfo?.source;
   const scope = skill.sourceInfo?.scope;
@@ -723,6 +733,31 @@ export function SkillsConfig({
   const [updatingSkill, setUpdatingSkill] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [dormantGroupsOpen, setDormantGroupsOpen] = useState<Record<string, boolean>>({});
+  const [skillTree, setSkillTree] = useState<SkillTreeResponse | null>(null);
+  const [treeError, setTreeError] = useState<string | null>(null);
+  const [treeGroupsOpen, setTreeGroupsOpen] = useState<Record<string, boolean>>({});
+
+  const loadSkillTree = useCallback(async () => {
+    setTreeError(null);
+    try {
+      const res = await fetch(`/api/skills/tree?projectId=${encodeURIComponent(projectId)}&cwd=${encodeURIComponent(cwd)}`);
+      const body: unknown = await res.json().catch(() => null);
+      if (!res.ok) {
+        const message = isRecordValue(body) && typeof body.message === "string" ? body.message : `HTTP ${res.status}`;
+        throw new Error(message);
+      }
+      const tree = parseSkillTree(body);
+      setSkillTree(tree);
+      setTreeGroupsOpen((current) => ({
+        personal: true,
+        [`project:${projectId}`]: true,
+        ...current,
+      }));
+    } catch (cause) {
+      setSkillTree(null);
+      setTreeError(cause instanceof Error ? cause.message : String(cause));
+    }
+  }, [cwd, projectId]);
 
   const loadSkills = useCallback(async () => {
     setLoading(true);
@@ -756,6 +791,7 @@ export function SkillsConfig({
     setUpdateStatuses({});
     setUpdateError(null);
     void loadSkills();
+    void loadSkillTree();
   }, [cwd]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const checkForUpdates = useCallback(async (skill?: Skill) => {
@@ -894,6 +930,193 @@ export function SkillsConfig({
 
   const selectedSkill = skills.find((s) => s.filePath === selected) ?? null;
 
+  const findTreeEntry = (filePath: string): { entry: SkillTreeEntry; owner: string } | null => {
+    if (skillTree === null) return null;
+    const personalHit = skillTree.personal.skills.find((skill) => skill.filePath === filePath);
+    if (personalHit) return { entry: personalHit, owner: t("skillsTree.system") };
+    for (const project of skillTree.projects) {
+      const hit = project.skills.find((skill) => skill.filePath === filePath);
+      if (hit) return { entry: hit, owner: `${t("skillsTree.project")} · ${project.name}` };
+    }
+    for (const workflow of skillTree.workflows) {
+      for (const agent of workflow.agents) {
+        const hit = agent.skills.find((skill) => skill.filePath === filePath);
+        if (hit) return { entry: hit, owner: `${t("skillsTree.workflow")} · ${workflow.name} / ${agent.name}` };
+      }
+    }
+    for (const agent of skillTree.longAgents) {
+      const hit = agent.skills.find((skill) => skill.filePath === filePath);
+      if (hit) return { entry: hit, owner: `${t("skillsTree.longAgent")} · ${agent.name}` };
+    }
+    return null;
+  };
+  const selectedTreeEntry = selectedSkill === null && selected !== null ? findTreeEntry(selected) : null;
+
+  const renderTreeSkillRow = (entry: SkillTreeEntry) => {
+    const inScope = skills.some((skill) => skill.filePath === entry.filePath);
+    const isSelected = !addMode && selected === entry.filePath;
+    const disabled = entry.disableModelInvocation;
+    return (
+      <div
+        key={entry.filePath}
+        onClick={() => {
+          setSelected(entry.filePath);
+          setAddMode(false);
+        }}
+        title={entry.filePath}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 7,
+          padding: "6px 8px",
+          borderRadius: 5,
+          cursor: "pointer",
+          background: isSelected ? "var(--bg-selected)" : "none",
+        }}
+        onMouseEnter={(e) => {
+          if (!isSelected) e.currentTarget.style.background = "var(--bg-hover)";
+        }}
+        onMouseLeave={(e) => {
+          if (!isSelected) e.currentTarget.style.background = "none";
+        }}
+      >
+        <span
+          style={{
+            flexShrink: 0,
+            width: 7,
+            height: 7,
+            borderRadius: "50%",
+            background: disabled ? "var(--border)" : "var(--accent)",
+            boxShadow: disabled ? "none" : "0 0 4px var(--accent)",
+          }}
+        />
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: isSelected ? 600 : 400,
+            color: disabled ? "var(--text-dim)" : "var(--text)",
+            fontFamily: "var(--font-mono)",
+            flex: 1,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {entry.name}
+        </span>
+        {!inScope && (
+          <span style={{ fontSize: 9, color: "var(--text-dim)", flexShrink: 0 }}>{t("skillsTree.readOnlyBadge")}</span>
+        )}
+      </div>
+    );
+  };
+
+  const renderTreeSection = (
+    key: string,
+    label: string,
+    entries: readonly SkillTreeEntry[],
+    options: { readonly badge?: string; readonly error?: string } = {},
+  ) => {
+    const open = treeGroupsOpen[key] ?? false;
+    return (
+      <div key={key} style={{ marginBottom: 4 }}>
+        <div
+          onClick={() => setTreeGroupsOpen((current) => ({ ...current, [key]: !open }))}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            padding: "5px 8px 4px",
+            fontSize: 10,
+            fontWeight: 600,
+            color: "var(--text-dim)",
+            textTransform: "uppercase",
+            letterSpacing: "0.06em",
+            cursor: "pointer",
+            userSelect: "none",
+          }}
+        >
+          <span style={{ fontSize: 8 }}>{open ? "▾" : "▸"}</span>
+          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+          {options.badge && <span style={{ color: "var(--accent)", textTransform: "none" }}>{options.badge}</span>}
+          <span>({entries.length})</span>
+        </div>
+        {open && options.error && (
+          <div style={{ padding: "2px 8px 4px 21px", fontSize: 10, color: "#f87171" }}>{options.error}</div>
+        )}
+        {open && entries.length === 0 && options.error === undefined && (
+          <div style={{ padding: "2px 8px 4px 21px", fontSize: 10, color: "var(--text-dim)" }}>{t("skillsTree.empty")}</div>
+        )}
+        {open && entries.map(renderTreeSkillRow)}
+      </div>
+    );
+  };
+
+  const renderSkillTreeView = () => {
+    if (skillTree === null) return null;
+    return (
+      <>
+        {renderTreeSection("personal", t("skillsTree.system"), skillTree.personal.skills, {
+          ...(skillTree.personal.error === undefined ? {} : { error: skillTree.personal.error }),
+        })}
+        {skillTree.projects.map((project) =>
+          renderTreeSection(`project:${project.projectId}`, `${t("skillsTree.project")} · ${project.name}`, project.skills, {
+            ...(project.projectId === projectId ? { badge: t("skillsTree.currentBadge") } : {}),
+            ...(project.error === undefined ? {} : { error: project.error }),
+          }),
+        )}
+        {skillTree.workflows.map((workflow) => {
+          const key = `workflow:${workflow.workflowId}`;
+          const open = treeGroupsOpen[key] ?? false;
+          const total = workflow.agents.reduce((count, agent) => count + agent.skills.length, 0);
+          return (
+            <div key={key} style={{ marginBottom: 4 }}>
+              <div
+                onClick={() => setTreeGroupsOpen((current) => ({ ...current, [key]: !open }))}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "5px 8px 4px",
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: "var(--text-dim)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                  cursor: "pointer",
+                  userSelect: "none",
+                }}
+              >
+                <span style={{ fontSize: 8 }}>{open ? "▾" : "▸"}</span>
+                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {t("skillsTree.workflow")} · {workflow.name}
+                </span>
+                <span>({total})</span>
+              </div>
+              {open && workflow.agents.map((agent) => (
+                <div key={agent.agentId}>
+                  <div style={{ padding: "2px 8px 2px 21px", fontSize: 10, color: "var(--text-muted)" }}>{agent.name}</div>
+                  {agent.error !== undefined && (
+                    <div style={{ padding: "2px 8px 4px 29px", fontSize: 10, color: "#f87171" }}>{agent.error}</div>
+                  )}
+                  {agent.error === undefined && agent.skills.length === 0 && (
+                    <div style={{ padding: "2px 8px 4px 29px", fontSize: 10, color: "var(--text-dim)" }}>{t("skillsTree.empty")}</div>
+                  )}
+                  <div style={{ paddingLeft: 13 }}>{agent.skills.map(renderTreeSkillRow)}</div>
+                </div>
+              ))}
+            </div>
+          );
+        })}
+        {skillTree.longAgents.map((agent) =>
+          renderTreeSection(`long-agent:${agent.longAgentId}`, `${t("skillsTree.longAgent")} · ${agent.name}`, agent.skills, {
+            ...(agent.error === undefined ? {} : { error: agent.error }),
+          }),
+        )}
+      </>
+    );
+  };
+
   return (
     <div
       style={{
@@ -987,7 +1210,10 @@ export function SkillsConfig({
             }}
           >
             <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
-              {loading ? (
+              {treeError !== null && (
+                <div style={{ padding: "4px 8px", fontSize: 10, color: "#f87171" }}>{treeError}</div>
+              )}
+              {skillTree !== null ? renderSkillTreeView() : loading ? (
                 <div
                   style={{
                     padding: "10px 8px",
@@ -1293,6 +1519,26 @@ export function SkillsConfig({
                 onCheckUpdate={() => void checkForUpdates(selectedSkill)}
                 onUpdate={() => void updateInstalledSkill(selectedSkill)}
               />
+            ) : selectedTreeEntry !== null ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  {selectedTreeEntry.owner}
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", fontFamily: "var(--font-mono)" }}>
+                  {selectedTreeEntry.entry.name}
+                </div>
+                {selectedTreeEntry.entry.description !== "" && (
+                  <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>
+                    {selectedTreeEntry.entry.description}
+                  </div>
+                )}
+                <code style={{ fontSize: 11, color: "var(--text-dim)", fontFamily: "var(--font-mono)", wordBreak: "break-all" }}>
+                  {shortenPath(selectedTreeEntry.entry.filePath)}
+                </code>
+                <div style={{ fontSize: 11, color: "var(--text-dim)", borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+                  {t("skillsTree.readOnlyHint")}
+                </div>
+              </div>
             ) : (
               <div
                 style={{

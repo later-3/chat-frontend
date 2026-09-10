@@ -7,12 +7,14 @@ import type {
   WorkflowAgentResources,
 } from "@/lib/chat-workflow-contract";
 import {
+  clearChatAgentResourceConfig,
   clearChatAgentToolConfig,
   clearChatAgentModelConfig,
   fetchChatModelCatalog,
   inspectChatWorkflowAgent,
   inspectChatWorkflowAgentCatalog,
   saveChatAgentModelConfig,
+  saveChatAgentResourceConfig,
   saveChatAgentToolConfig,
   type ChatModelCatalog,
   type ChatWorkflowSummary,
@@ -25,6 +27,7 @@ import {
   type PromptResource,
 } from "@/lib/prompt-resources-browser";
 import type { PromptResourceProposal } from "@/hooks/useAgentSession";
+import { EffectiveSkillsList } from "./EffectiveSkillsList";
 
 interface Props {
   readonly workflow: ChatWorkflowSummary;
@@ -190,16 +193,20 @@ function RuntimeCapabilities({ inspection }: { inspection: WorkflowAgentInspecti
         <small>后端按本次执行的同一路径解析；无需在浏览器重复注册。</small>
       </div>
       <dl className="workflow-agent-facts">
-        <dt>Skills</dt>
-        <dd>{inspection.skills.map((skill) => skill.name).join("、") || "无"}</dd>
         <dt>Tools</dt>
         <dd>{activeTools.map((tool) => tool.name).join("、") || "无"}</dd>
       </dl>
+      <EffectiveSkillsList
+        skills={inspection.skills}
+        labels={{
+          title: "当前生效 Skill（按归属分组）",
+          empty: "当前没有生效的 Skill。",
+          owners: { agent: "Agent 自有", personal: "Chat 系统", project: "当前 Project", plugin: "插件", injected: "Workflow/运行时注入" },
+        }}
+      />
     </section>
   );
 }
-
-const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 
 const MODEL_SOURCE_LABELS: Record<string, string> = {
   durable: "本项目持久化",
@@ -320,13 +327,13 @@ function ModelConfigSection({
         思考等级
         <select
           value={durableThinking}
-          disabled={busy}
+          disabled={busy || modelCatalog === null}
           onChange={(event) => applyThinking(event.target.value)}
         >
           <option value="">使用Workflow默认{durableThinking === "" && inspection.agent.effectiveThinkingLevel !== ""
             ? `（当前：${inspection.agent.effectiveThinkingLevel}）`
             : ""}</option>
-          {THINKING_LEVELS.map((level) => (
+          {(modelCatalog?.thinkingLevels ?? []).map((level) => (
             <option key={level} value={level}>{level}</option>
           ))}
         </select>
@@ -464,6 +471,132 @@ function ToolConfigSection({
         )}
       </div>
       <button type="button" disabled={busy || durableTools === undefined} onClick={() => void apply("clear")}>恢复Workflow默认Tool</button>
+      {error && <small className="workflow-agent-model-error" role="alert">{error}</small>}
+    </section>
+  );
+}
+
+function ResourceConfigSection({
+  workflow,
+  agentId,
+  projectId,
+  inspection,
+  catalog,
+  onConfigChanged,
+}: {
+  workflow: ChatWorkflowSummary;
+  agentId: string;
+  projectId: string;
+  inspection: WorkflowAgentInspection;
+  catalog: WorkflowAgentInspection;
+  onConfigChanged: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const durableResources = inspection.agent.durableConfig?.resources;
+  const effectiveResources = durableResources ?? inspection.agent.resources;
+
+  const apply = async (resources: WorkflowAgentResources | "clear") => {
+    setBusy(true);
+    setError(null);
+    try {
+      if (resources === "clear") await clearChatAgentResourceConfig(workflow.id, agentId, projectId);
+      else await saveChatAgentResourceConfig(workflow.id, agentId, projectId, resources);
+      onConfigChanged();
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const setMode = (mode: WorkflowAgentResources["mode"]) => {
+    if (mode === "inherit") {
+      void apply({ mode: "inherit" });
+      return;
+    }
+    // 切换到明确选择时冻结当前生效装配，避免隐式丢掉 Extension 或 Plugin。
+    void apply({
+      mode: "explicit",
+      skillPaths: inspection.skills.map((skill) => skill.filePath),
+      extensionPaths: inspection.extensions.map((extension) => extension.resolvedPath),
+      pluginSources: inspection.plugins.map((plugin) => plugin.source),
+    });
+  };
+
+  const toggle = (
+    key: "skillPaths" | "extensionPaths" | "pluginSources",
+    value: string,
+    checked: boolean,
+  ) => {
+    if (effectiveResources.mode !== "explicit") return;
+    const values = new Set(effectiveResources[key]);
+    if (checked) values.add(value);
+    else values.delete(value);
+    void apply({ ...effectiveResources, [key]: [...values] });
+  };
+
+  return (
+    <section className="workflow-agent-runtime-capabilities">
+      <div>
+        <strong>Skill 与资源配置</strong>
+        <small>
+          保存到当前 Project 的持久配置并立即生效。
+          {durableResources === undefined ? " 当前使用Workflow默认。" : " 当前存在Project覆盖。"}
+          {effectiveResources.mode === "inherit" && " 继承模式下勾选会先冻结当前生效装配，再切换为明确选择。"}
+        </small>
+      </div>
+      <label>
+        资源策略
+        <select
+          value={effectiveResources.mode}
+          disabled={busy}
+          onChange={(event) => setMode(event.target.value as WorkflowAgentResources["mode"])}
+        >
+          <option value="inherit">继承 Pi 与 Project 资源</option>
+          <option value="explicit">明确选择</option>
+        </select>
+      </label>
+      {effectiveResources.mode === "explicit" && (
+        <div className="workflow-agent-resource-groups">
+          <h3>Skills</h3>
+          {catalog.skills.map((skill) => (
+            <ResourceCheckbox
+              key={skill.filePath}
+              label={skill.name}
+              detail={skill.filePath}
+              checked={effectiveResources.skillPaths.includes(skill.filePath)}
+              disabled={busy}
+              onChange={(checked) => toggle("skillPaths", skill.filePath, checked)}
+            />
+          ))}
+          <h3>Extensions</h3>
+          {catalog.extensions.map((extension) => (
+            <ResourceCheckbox
+              key={extension.resolvedPath}
+              label={extension.resolvedPath.split("/").pop() ?? extension.resolvedPath}
+              detail={extension.resolvedPath}
+              checked={effectiveResources.extensionPaths.includes(extension.resolvedPath)}
+              disabled={busy}
+              onChange={(checked) => toggle("extensionPaths", extension.resolvedPath, checked)}
+            />
+          ))}
+          <h3>Plugins</h3>
+          {catalog.plugins.map((plugin) => (
+            <ResourceCheckbox
+              key={`${plugin.scope}:${plugin.source}`}
+              label={plugin.source}
+              detail={`${plugin.skills.length} Skills · ${plugin.extensions.length} Extensions · ${plugin.prompts.length} Prompts`}
+              checked={effectiveResources.pluginSources.includes(plugin.source)}
+              disabled={busy}
+              onChange={(checked) => toggle("pluginSources", plugin.source, checked)}
+            />
+          ))}
+        </div>
+      )}
+      <button type="button" disabled={busy || durableResources === undefined} onClick={() => void apply("clear")}>
+        恢复Workflow默认资源
+      </button>
       {error && <small className="workflow-agent-model-error" role="alert">{error}</small>}
     </section>
   );
@@ -684,6 +817,17 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
                   onConfigChanged={() => setModelConfigVersion((version) => version + 1)}
                 />
               )}
+              {inspection && catalog && (
+                <ResourceConfigSection
+                  workflow={workflow}
+                  agentId={agent.id}
+                  projectId={projectId}
+                  inspection={inspection}
+                  catalog={catalog}
+                  onConfigChanged={() => setModelConfigVersion((version) => version + 1)}
+                />
+              )}
+              {inspection && <RuntimeCapabilities inspection={inspection} />}
             </div>
           )}
 

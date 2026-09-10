@@ -1143,6 +1143,22 @@
   }
 }
 
+
+.skillTreeGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  grid-column: 1 / -1;
+}
+
+.skillTreeOwner {
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 10px;
+  font-weight: 600;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .page * {
     scroll-behavior: auto !important;

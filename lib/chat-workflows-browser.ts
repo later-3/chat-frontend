@@ -241,6 +241,7 @@ export interface WorkflowAgentInspection {
       readonly model?: { readonly provider: string; readonly modelId: string };
       readonly thinkingLevel?: string;
       readonly tools?: WorkflowAgentToolPolicy;
+      readonly resources?: WorkflowAgentResources;
     } | null;
   };
   readonly prompt: {
@@ -272,6 +273,8 @@ export interface WorkflowAgentInspection {
     readonly baseDir: string;
     readonly disableModelInvocation: boolean;
     readonly sourceInfo: BrowserSourceInfo;
+    /** Backend 按真实路径分类的归属：personal/project/plugin/agent/injected。 */
+    readonly owner: "personal" | "project" | "plugin" | "agent" | "injected";
     readonly address?: string;
     readonly version: BrowserResourceVersion | null;
   }[];
@@ -347,7 +350,7 @@ function parseAddress(value: unknown, field: string): string | undefined {
   return readOptionalString(value, field);
 }
 
-function parseWorkflowAgentInspection(value: unknown, field: string): WorkflowAgentInspection {
+export function parseWorkflowAgentInspection(value: unknown, field: string): WorkflowAgentInspection {
   if (!isRecord(value)) throw new Error(`Chat返回了无效的${field}`);
   const rawAgent = value.agent;
   if (!isRecord(rawAgent)) throw new Error(`Chat返回了无效的${field}.agent`);
@@ -383,6 +386,9 @@ function parseWorkflowAgentInspection(value: unknown, field: string): WorkflowAg
       ...(rawAgent.durableConfig.tools === undefined
         ? {}
         : { tools: parseWorkflowAgentToolPolicy(rawAgent.durableConfig.tools) }),
+      ...(rawAgent.durableConfig.resources === undefined
+        ? {}
+        : { resources: parseBrowserResources(rawAgent.durableConfig.resources) }),
     };
   }
   const agent: WorkflowAgentInspection["agent"] = {
@@ -469,12 +475,17 @@ function parseWorkflowAgentInspection(value: unknown, field: string): WorkflowAg
     const content = readOptionalString(skill.content, `${field}.skills[${index}].content`);
     const error = readOptionalString(skill.error, `${field}.skills[${index}].error`);
     const address = parseAddress(skill.address, `${field}.skills[${index}].address`);
+    const owner = readString(skill.owner, `${field}.skills[${index}].owner`);
+    if (owner !== "personal" && owner !== "project" && owner !== "plugin" && owner !== "agent" && owner !== "injected") {
+      throw new Error(`Chat返回了无效的${field}.skills[${index}].owner`);
+    }
     return {
       name: readString(skill.name, `${field}.skills[${index}].name`),
       description: readString(skill.description, `${field}.skills[${index}].description`, true),
       filePath: readString(skill.filePath, `${field}.skills[${index}].filePath`),
       baseDir: readString(skill.baseDir, `${field}.skills[${index}].baseDir`),
       disableModelInvocation: skill.disableModelInvocation,
+      owner,
       ...(content === undefined ? {} : { content }),
       ...(error === undefined ? {} : { error }),
       sourceInfo: parseSourceInfo(skill.sourceInfo, `${field}.skills[${index}].sourceInfo`),
@@ -609,12 +620,17 @@ export interface ChatModelCatalogModel {
 export interface ChatModelCatalog {
   readonly providers: readonly { readonly id: string; readonly name: string; readonly authConfigured: boolean }[];
   readonly models: readonly ChatModelCatalogModel[];
+  /** Backend 统一定义的 Thinking Level 清单；Frontend 不维护第二份。 */
+  readonly thinkingLevels: readonly string[];
 }
 
 function parseModelCatalog(value: unknown, field: string): ChatModelCatalog {
-  if (!isRecord(value) || value.schemaVersion !== 1 || !Array.isArray(value.providers) || !Array.isArray(value.models)) {
+  if (!isRecord(value) || value.schemaVersion !== 1 || !Array.isArray(value.providers) || !Array.isArray(value.models)
+    || !Array.isArray(value.thinkingLevels)
+    || value.thinkingLevels.some((level) => typeof level !== "string" || level === "")) {
     throw new Error(`Chat返回了无效的${field}`);
   }
+  const thinkingLevels = value.thinkingLevels as string[];
   const providers = value.providers.map((provider, index): ChatModelCatalog["providers"][number] => {
     if (!isRecord(provider) || typeof provider.authConfigured !== "boolean") {
       throw new Error(`Chat返回了无效的${field}.providers[${index}]`);
@@ -641,7 +657,7 @@ function parseModelCatalog(value: unknown, field: string): ChatModelCatalog {
       authConfigured: model.authConfigured,
     };
   });
-  return { providers, models };
+  return { providers, models, thinkingLevels };
 }
 
 export async function fetchChatModelCatalog(signal?: AbortSignal): Promise<ChatModelCatalog> {
@@ -718,6 +734,43 @@ export async function saveChatAgentToolConfig(
       credentials: "same-origin",
       signal,
     },
+  );
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) throw readApiError(body, response);
+}
+
+/** Persists one Workflow Agent's Project-scoped resource (Skill/Extension/Plugin) policy. */
+export async function saveChatAgentResourceConfig(
+  workflowId: ChatWorkflowId,
+  agentId: string,
+  projectId: string,
+  resources: WorkflowAgentResources,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(
+    `/api/workflows/${encodeURIComponent(workflowId)}/agents/${encodeURIComponent(agentId)}/resource-config`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId, resources }),
+      credentials: "same-origin",
+      signal,
+    },
+  );
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) throw readApiError(body, response);
+}
+
+/** Removes only the Project-scoped resource policy and restores the Workflow default. */
+export async function clearChatAgentResourceConfig(
+  workflowId: ChatWorkflowId,
+  agentId: string,
+  projectId: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(
+    `/api/workflows/${encodeURIComponent(workflowId)}/agents/${encodeURIComponent(agentId)}/resource-config?projectId=${encodeURIComponent(projectId)}`,
+    { method: "DELETE", credentials: "same-origin", signal },
   );
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) throw readApiError(body, response);

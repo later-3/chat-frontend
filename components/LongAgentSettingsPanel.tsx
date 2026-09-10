@@ -18,6 +18,15 @@ import {
   type ProjectResourceCatalog,
 } from "@/lib/project-resources";
 import type { WorkflowAgentResources, WorkflowAgentToolPolicy } from "@/lib/chat-workflow-contract";
+import { fetchChatTools, type ChatToolCatalogEntry } from "@/lib/tools-browser";
+import {
+  deleteChatLongAgent,
+  fetchLongAgentInspection,
+  setChatLongAgentArchived,
+} from "@/lib/long-agents-browser";
+import { fetchChatSkillTree, type SkillTreeEntry, type SkillTreeResponse } from "@/lib/skill-tree-browser";
+import type { WorkflowAgentInspection } from "@/lib/chat-workflows-browser";
+import { EffectiveSkillsList } from "./EffectiveSkillsList";
 import {
   formatLongAgentInstructions,
   LONG_AGENT_INSTRUCTION_SEPARATOR,
@@ -28,15 +37,25 @@ import { LongAgentAvatarEditor } from "./LongAgentAvatarEditor";
 import { LongAgentGroupSettings } from "./LongAgentGroupSettings";
 import { LongAgentMemorySettings } from "./LongAgentMemorySettings";
 
-const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
-const CHAT_TOOL_ADDRESSES = [
-  { address: "system:tool/memory_search", labelKey: "longAgentSettings.memorySearch" },
-  { address: "system:tool/memory_record", labelKey: "longAgentSettings.memoryRecord" },
-  { address: "system:tool/workflow_call", labelKey: "longAgentSettings.workflowCall" },
-  { address: "system:tool/agent_memory_search", labelKey: "longAgentSettings.agentMemorySearch" },
-  { address: "system:tool/agent_memory_read", labelKey: "longAgentSettings.agentMemoryRead" },
-  { address: "system:tool/agent_memory_write", labelKey: "longAgentSettings.agentMemoryWrite" },
-] as const;
+/**
+ * 可选系统Tool清单只来自Backend `/api/tools`；这里只提供已知地址的本地化标签，
+ * 新增系统Tool不需要修改Frontend。
+ */
+const CHAT_TOOL_LABEL_KEYS: Record<string, string> = {
+  "system:tool/memory_search": "longAgentSettings.memorySearch",
+  "system:tool/memory_record": "longAgentSettings.memoryRecord",
+  "system:tool/workflow_call": "longAgentSettings.workflowCall",
+  "system:tool/agent_memory_search": "longAgentSettings.agentMemorySearch",
+  "system:tool/agent_memory_read": "longAgentSettings.agentMemoryRead",
+  "system:tool/agent_memory_write": "longAgentSettings.agentMemoryWrite",
+  "system:tool/project_search": "longAgentSettings.projectSearch",
+  "system:tool/project_read": "longAgentSettings.projectRead",
+  "system:tool/project_create": "longAgentSettings.projectCreate",
+  "system:tool/project_open": "longAgentSettings.projectOpen",
+  "system:tool/project_update": "longAgentSettings.projectUpdate",
+  "system:tool/project_configure": "longAgentSettings.projectConfigure",
+  "system:tool/long_agent_manage": "longAgentSettings.longAgentManage",
+};
 
 interface Props {
   agents: readonly LongAgentSummary[];
@@ -159,6 +178,13 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
   const [modelCatalog, setModelCatalog] = useState<ChatModelCatalog | null>(null);
   const [resourceCatalog, setResourceCatalog] = useState<ProjectResourceCatalog | null>(null);
   const [resourceCatalogError, setResourceCatalogError] = useState<string | null>(null);
+  const [toolCatalog, setToolCatalog] = useState<readonly ChatToolCatalogEntry[] | null>(null);
+  const [toolCatalogError, setToolCatalogError] = useState<string | null>(null);
+  const [inspection, setInspection] = useState<WorkflowAgentInspection | null>(null);
+  const [inspectionError, setInspectionError] = useState<string | null>(null);
+  const [skillTree, setSkillTree] = useState<SkillTreeResponse | null>(null);
+  const [skillTreeError, setSkillTreeError] = useState<string | null>(null);
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -200,11 +226,31 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
     const controller = new AbortController();
     setResourceCatalog(null);
     setResourceCatalogError(null);
+    setToolCatalog(null);
+    setToolCatalogError(null);
+    setSkillTree(null);
+    setSkillTreeError(null);
+    void fetchChatSkillTree(defaultProjectId, controller.signal)
+      .then(setSkillTree)
+      .catch((cause: unknown) => {
+        if (!(cause instanceof DOMException && cause.name === "AbortError")) {
+          setSkillTreeError(cause instanceof Error ? cause.message : String(cause));
+        }
+      });
     void fetchProjectResourceCatalog(defaultProjectId, controller.signal)
       .then(setResourceCatalog)
       .catch((cause: unknown) => {
         if (!(cause instanceof DOMException && cause.name === "AbortError")) {
           setResourceCatalogError(cause instanceof Error ? cause.message : String(cause));
+        }
+      });
+    void fetchChatTools(defaultProjectId, controller.signal)
+      .then((response) => setToolCatalog(
+        response.tools.filter((tool) => tool.address.startsWith("system:tool/")),
+      ))
+      .catch((cause: unknown) => {
+        if (!(cause instanceof DOMException && cause.name === "AbortError")) {
+          setToolCatalogError(cause instanceof Error ? cause.message : String(cause));
         }
       });
     return () => controller.abort();
@@ -215,12 +261,22 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
     setLoading(true);
     setError(null);
     setNotice(null);
+    setInspection(null);
+    setInspectionError(null);
     try {
       const next = await fetchLongAgentConfiguration(selectedAgentId, signal);
       const nextDraft = draftFrom(next);
       setDocument(next);
       setDraft(nextDraft);
       setInitialDraft(nextDraft);
+      // 生效装配与配置同源读取：失败只影响只读展示区，不影响配置编辑。
+      void fetchLongAgentInspection(selectedAgentId, next.agent.defaultProjectId, signal)
+        .then(setInspection)
+        .catch((cause: unknown) => {
+          if (!(cause instanceof DOMException && cause.name === "AbortError")) {
+            setInspectionError(cause instanceof Error ? cause.message : String(cause));
+          }
+        });
     } catch (cause) {
       if (!(cause instanceof DOMException && cause.name === "AbortError")) {
         setDocument(null);
@@ -232,6 +288,28 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
       if (!signal?.aborted) setLoading(false);
     }
   }, []);
+
+  const runLifecycle = useCallback(async (action: "archive" | "restore" | "delete") => {
+    if (action === "archive" && !window.confirm(t("longAgent.archiveConfirm"))) return;
+    if (action === "delete" && !window.confirm(t("longAgent.deleteConfirm"))) return;
+    setLifecycleBusy(true);
+    setError(null);
+    try {
+      if (action === "delete") {
+        await deleteChatLongAgent(agentId);
+        onSaved();
+        onBack();
+        return;
+      }
+      await setChatLongAgentArchived(agentId, action === "archive");
+      onSaved();
+      await load(agentId);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setLifecycleBusy(false);
+    }
+  }, [agentId, load, onBack, onSaved, t]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -329,6 +407,38 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
     else addresses.delete(address);
     set("toolAddresses", [...addresses]);
   };
+  /**
+   * Skill 树勾选：勾中 = 写入该 Agent 配置并默认生效，未勾 = 仅存在的实体。
+   * 继承模式下首次改动会切换为“明确选择”，并按当前生效装配冻结 Skills、
+   * Extensions 和 Plugins，避免隐式丢掉其他资源。
+   */
+  const toggleSkillPath = (filePath: string, checked: boolean) => {
+    if (!draft) return;
+    const currentPaths = draft.resourceMode === "explicit"
+      ? lines(draft.skillPathsText)
+      : (inspection?.skills.map((skill) => skill.filePath) ?? []);
+    const next = new Set(currentPaths);
+    if (checked) next.add(filePath);
+    else next.delete(filePath);
+    if (draft.resourceMode === "explicit") {
+      set("skillPathsText", [...next].join("\n"));
+      return;
+    }
+    setDraft({
+      ...draft,
+      resourceMode: "explicit",
+      skillPathsText: [...next].join("\n"),
+      extensionPathsText: (inspection?.extensions.map((extension) => extension.resolvedPath) ?? []).join("\n"),
+      pluginSourcesText: (inspection?.plugins.map((plugin) => plugin.source) ?? []).join("\n"),
+    });
+  };
+  const isSkillChecked = (filePath: string): boolean => {
+    if (!draft) return false;
+    if (draft.resourceMode === "explicit") return lines(draft.skillPathsText).includes(filePath);
+    return inspection?.skills.some((skill) => skill.filePath === filePath) ?? false;
+  };
+  const skillSelectionDisabled = saving || (draft?.resourceMode === "inherit" && inspection === null);
+
   const toggleResourcePath = (
     key: "skillPathsText" | "extensionPathsText" | "pluginSourcesText",
     value: string,
@@ -383,6 +493,28 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
           <h1 id="long-agent-settings-title">{t("longAgentSettings.title")}</h1>
           <p>{t("longAgentSettings.subtitle")}</p>
         </div>
+        {selectedSummary !== null && (
+          <>
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              disabled={saving || lifecycleBusy}
+              onClick={() => void runLifecycle(selectedSummary.status === "archived" ? "restore" : "archive")}
+            >
+              {selectedSummary.status === "archived" ? t("longAgent.restore") : t("longAgent.archive")}
+            </button>
+            {selectedSummary.status === "archived" && (
+              <button
+                type="button"
+                className={styles.secondaryButton}
+                disabled={saving || lifecycleBusy}
+                onClick={() => void runLifecycle("delete")}
+              >
+                {t("longAgent.delete")}
+              </button>
+            )}
+          </>
+        )}
         <button
           type="button"
           className={styles.secondaryButton}
@@ -524,7 +656,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                           : ""}</option>{draft.modelKey && !modelOptions.some((model) => `${model.provider}/${model.modelId}` === draft.modelKey) && <option value={draft.modelKey}>{draft.modelKey} · {t("longAgentSettings.unavailable")}</option>}{modelOptions.map((model) => <option key={`${model.provider}/${model.modelId}`} value={`${model.provider}/${model.modelId}`} disabled={!model.authConfigured}>{model.name} · {model.modelId}{model.authConfigured ? "" : ` · ${t("longAgentSettings.notAuthenticated")}`}</option>)}</select></label>
                         <label>{t("longAgentSettings.thinking")}<select value={draft.thinkingLevel} onChange={(event) => set("thinkingLevel", event.target.value)}><option value="">{t("longAgentSettings.modelDefault")}{document.agent.effective.thinkingLevel && document.agent.effective.thinkingSource === "chat-default"
                           ? `（${document.agent.effective.thinkingLevel}）`
-                          : ""}</option>{THINKING_LEVELS.map((level) => <option key={level} value={level}>{level}</option>)}</select></label>
+                          : ""}</option>{(modelCatalog?.thinkingLevels ?? []).map((level) => <option key={level} value={level}>{level}</option>)}</select></label>
                       </div>
                       <label>{t("longAgentSettings.systemPrompt")}<select value={draft.systemPromptMode} onChange={(event) => set("systemPromptMode", event.target.value as Draft["systemPromptMode"])}><option value="pi-default">{t("longAgentSettings.piDefaultPrompt")}</option><option value="replace">{t("longAgentSettings.replacePrompt")}</option></select></label>
                       {draft.systemPromptMode === "replace" && <label>{t("longAgentSettings.systemPromptText")}<textarea value={draft.systemPromptText} rows={8} onChange={(event) => set("systemPromptText", event.target.value)} /></label>}
@@ -535,10 +667,73 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                       <legend>{t("longAgentSettings.chatTools")}</legend>
                       <label>{t("longAgentSettings.toolMode")}<select value={draft.toolMode} onChange={(event) => set("toolMode", event.target.value as Draft["toolMode"])}><option value="pi-default">{t("longAgentSettings.piDefaultTools")}</option><option value="explicit">{t("longAgentSettings.explicitTools")}</option><option value="none">{t("longAgentSettings.noTools")}</option></select></label>
                       <p className={styles.help}>{t("longAgentSettings.chatToolsHelp")}</p>
+                      {toolCatalogError && <div className={styles.error} role="alert">{toolCatalogError}</div>}
                       <div className={styles.checkGrid}>
-                        {CHAT_TOOL_ADDRESSES.map((tool) => <label key={tool.address} className={styles.checkCard}><input type="checkbox" checked={draft.toolAddresses.includes(tool.address)} disabled={draft.toolMode === "none"} onChange={(event) => toggleToolAddress(tool.address, event.target.checked)} /><span><strong>{t(tool.labelKey)}</strong><code>{tool.address}</code></span></label>)}
+                        {(toolCatalog ?? []).map((tool) => {
+                          const labelKey = CHAT_TOOL_LABEL_KEYS[tool.address];
+                          return (
+                            <label key={tool.address} className={styles.checkCard}>
+                              <input type="checkbox" checked={draft.toolAddresses.includes(tool.address)} disabled={draft.toolMode === "none"} onChange={(event) => toggleToolAddress(tool.address, event.target.checked)} />
+                              <span><strong>{labelKey === undefined ? tool.label || tool.name : t(labelKey)}</strong><code>{tool.address}</code></span>
+                            </label>
+                          );
+                        })}
+                        {draft.toolAddresses
+                          .filter((address) => !(toolCatalog ?? []).some((tool) => tool.address === address))
+                          .map((address) => (
+                            <label key={address} className={styles.checkCard}>
+                              <input type="checkbox" checked disabled={draft.toolMode === "none"} onChange={(event) => toggleToolAddress(address, event.target.checked)} />
+                              <span><strong>{address}</strong><code>{t("longAgentSettings.toolUnavailable")}</code></span>
+                            </label>
+                          ))}
                       </div>
                       {draft.toolMode === "explicit" && <div className={styles.twoColumns}><label>{t("longAgentSettings.toolNames")}<textarea rows={4} value={draft.toolNamesText} placeholder={t("longAgentSettings.onePerLine")} onChange={(event) => set("toolNamesText", event.target.value)} /></label><label>{t("longAgentSettings.excludedToolNames")}<textarea rows={4} value={draft.excludedToolNamesText} placeholder={t("longAgentSettings.onePerLine")} onChange={(event) => set("excludedToolNamesText", event.target.value)} /></label></div>}
+                    </fieldset>
+
+                    <fieldset className={styles.section}>
+                      <legend>{t("longAgentSettings.skillSelection")}</legend>
+                      <p className={styles.help}>{t("longAgentSettings.skillSelectionHint")}</p>
+                      {skillTreeError && <div className={styles.error} role="alert">{skillTreeError}</div>}
+                      {skillTree === null && skillTreeError === null && <small>{t("longAgentSettings.inspectionLoading")}</small>}
+                      {skillTree !== null && (
+                        <div className={styles.checkGrid}>
+                          {([
+                            { key: "personal", label: t("longAgentSettings.skillOwnerPersonal"), entries: skillTree.personal.skills },
+                            ...skillTree.projects.map((project) => ({
+                              key: `project:${project.projectId}`,
+                              label: `${t("longAgentSettings.skillOwnerProject")} · ${project.name}${project.projectId === document.agent.defaultProjectId ? ` · ${t("skillsTree.currentBadge")}` : ""}`,
+                              entries: project.skills,
+                            })),
+                            ...skillTree.workflows.flatMap((workflow) => workflow.agents.map((agent) => ({
+                              key: `workflow:${workflow.workflowId}/${agent.agentId}`,
+                              label: `${t("longAgentSettings.skillOwnerWorkflow")} · ${workflow.name} / ${agent.name}`,
+                              entries: agent.skills,
+                            }))),
+                            ...skillTree.longAgents.map((agent) => ({
+                              key: `long-agent:${agent.longAgentId}`,
+                              label: `${t("longAgentSettings.skillOwnerLongAgent")} · ${agent.name}${agent.longAgentId === document.agent.id ? ` · ${t("skillsTree.currentBadge")}` : ""}`,
+                              entries: agent.skills,
+                            })),
+                          ] as const).map((group) => (
+                            <div key={group.key} className={styles.skillTreeGroup}>
+                              <small className={styles.skillTreeOwner}>{group.label}</small>
+                              {group.entries.length === 0
+                                ? <small className={styles.skillTreeOwner}>{t("skillsTree.empty")}</small>
+                                : group.entries.map((entry: SkillTreeEntry) => (
+                                    <label key={entry.filePath} className={styles.checkCard} title={entry.filePath}>
+                                      <input
+                                        type="checkbox"
+                                        checked={isSkillChecked(entry.filePath)}
+                                        disabled={skillSelectionDisabled}
+                                        onChange={(event) => toggleSkillPath(entry.filePath, event.target.checked)}
+                                      />
+                                      <span><strong>{entry.name}</strong><code>{entry.description || entry.filePath}</code></span>
+                                    </label>
+                                  ))}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </fieldset>
 
                     <fieldset className={styles.section}>
@@ -548,23 +743,6 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                         <div className={styles.resourcePicker}>
                           <p className={styles.help}>{t("longAgentSettings.resourceCatalogHint")}</p>
                           {resourceCatalogError && <div className={styles.error} role="alert">{resourceCatalogError}</div>}
-                          <h4>Skills</h4>
-                          {resourceCatalog !== null && resourceCatalog.skills.length > 0 ? (
-                            <div className={styles.checkGrid}>
-                              {resourceCatalog.skills.map((skill) => (
-                                <label key={skill.filePath} className={styles.checkCard}>
-                                  <input
-                                    type="checkbox"
-                                    checked={lines(draft.skillPathsText).includes(skill.filePath)}
-                                    onChange={(event) => toggleResourcePath("skillPathsText", skill.filePath, event.target.checked)}
-                                  />
-                                  <span><strong>{skill.name}</strong><code>{skill.description || skill.filePath}</code></span>
-                                </label>
-                              ))}
-                            </div>
-                          ) : (
-                            <small>{t("longAgentSettings.resourceCatalogEmpty")}</small>
-                          )}
                           <h4>Extensions</h4>
                           {resourceCatalog !== null && resourceCatalog.extensions.length > 0 ? (
                             <div className={styles.checkGrid}>
@@ -606,12 +784,18 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
 
                     <fieldset className={styles.section}>
                       <legend>{t("longAgentSettings.channel")}</legend>
-                      <dl className={styles.facts}>
-                        <dt>{t("longAgentSettings.adapter")}</dt><dd>{document.channel.type}</dd>
-                        <dt>{t("longAgentSettings.instance")}</dt><dd>{document.channel.instance}</dd>
-                        <dt>{t("longAgentSettings.host")}</dt><dd>{document.channel.host.name} · {document.channel.host.id}</dd>
-                      </dl>
-                      <p className={styles.securityNote}>{t("longAgentSettings.channelCredentialBoundary")}</p>
+                      {document.channel === null ? (
+                        <p className={styles.help}>{t("longAgentSettings.channelUnbound")}</p>
+                      ) : (
+                        <>
+                          <dl className={styles.facts}>
+                            <dt>{t("longAgentSettings.adapter")}</dt><dd>{document.channel.type}</dd>
+                            <dt>{t("longAgentSettings.instance")}</dt><dd>{document.channel.instance}</dd>
+                            <dt>{t("longAgentSettings.host")}</dt><dd>{document.channel.host.name} · {document.channel.host.id}</dd>
+                          </dl>
+                          <p className={styles.securityNote}>{t("longAgentSettings.channelCredentialBoundary")}</p>
+                        </>
+                      )}
                     </fieldset>
 
                     <div className={styles.actions}>
@@ -620,6 +804,29 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                       <button type="submit" className={styles.primaryButton} disabled={!dirty || saving}>{saving ? t("common.saving") : t("common.save")}</button>
                     </div>
                   </form>
+                )}
+                {activeTab === "runtime" && (
+                  <section className={styles.section} aria-label={t("longAgentSettings.effectiveAssembly")}>
+                    <h3>{t("longAgentSettings.effectiveAssembly")}</h3>
+                    {inspectionError && <div className={styles.error} role="alert">{inspectionError}</div>}
+                    {inspection === null && inspectionError === null && <small>{t("longAgentSettings.inspectionLoading")}</small>}
+                    {inspection !== null && (
+                      <EffectiveSkillsList
+                        skills={inspection.skills}
+                        labels={{
+                          title: t("longAgentSettings.effectiveSkills"),
+                          empty: t("longAgentSettings.effectiveSkillsEmpty"),
+                          owners: {
+                            agent: t("longAgentSettings.skillOwnerLongAgent"),
+                            personal: t("longAgentSettings.skillOwnerPersonal"),
+                            project: t("longAgentSettings.skillOwnerProject"),
+                            plugin: t("longAgentSettings.skillOwnerPlugin"),
+                            injected: t("longAgentSettings.skillOwnerInjected"),
+                          },
+                        }}
+                      />
+                    )}
+                  </section>
                 )}
                 {activeTab === "agent-group" && <LongAgentGroupSettings longAgentId={document.agent.id} onDirtyChange={setTabDirty} />}
                 {activeTab === "agent-memory" && <LongAgentMemorySettings longAgentId={document.agent.id} onDirtyChange={setTabDirty} />}

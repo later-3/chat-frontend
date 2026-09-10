@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { IconRefresh, IconSettings } from "@tabler/icons-react";
 import { useI18n } from "@/hooks/useI18n";
 import {
+  createChatLongAgent,
   fetchLongAgents,
   startProjectLongAgent,
   type LongAgentSummary,
@@ -37,6 +38,11 @@ export function ProjectLongAgentSection({
   const [error, setError] = useState<string | null>(null);
   const [openingAgentId, setOpeningAgentId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createDraft, setCreateDraft] = useState({ id: "", name: "", description: "", nanoclawAgentGroupId: "" });
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
 
   const load = useCallback(async (signal?: AbortSignal) => {
     if (!projectId) {
@@ -56,6 +62,27 @@ export function ProjectLongAgentSection({
       if (!signal?.aborted) setLoading(false);
     }
   }, [projectId]);
+
+  const submitCreate = useCallback(async () => {
+    setCreating(true);
+    setCreateError(null);
+    try {
+      await createChatLongAgent({
+        id: createDraft.id.trim(),
+        name: createDraft.name.trim(),
+        description: createDraft.description.trim(),
+        instanceId: "local",
+        nanoclawAgentGroupId: createDraft.nanoclawAgentGroupId.trim(),
+      });
+      setCreateOpen(false);
+      setCreateDraft({ id: "", name: "", description: "", nanoclawAgentGroupId: "" });
+      await load();
+    } catch (cause) {
+      setCreateError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setCreating(false);
+    }
+  }, [createDraft, load]);
 
   useEffect(() => {
     setAgents([]);
@@ -125,6 +152,15 @@ export function ProjectLongAgentSection({
         <button
           type="button"
           className={styles.settingsButton}
+          onClick={() => setCreateOpen((open) => !open)}
+          title={t("longAgent.create")}
+          aria-label={t("longAgent.create")}
+        >
+          <span aria-hidden="true" style={{ fontSize: 14, lineHeight: 1 }}>＋</span>
+        </button>
+        <button
+          type="button"
+          className={styles.settingsButton}
           onClick={() => setSettingsOpen(true)}
           disabled={agents.length === 0}
           title={t("longAgentSettings.open")}
@@ -134,6 +170,41 @@ export function ProjectLongAgentSection({
         </button>
         </div>
       </div>
+
+      {createOpen && (
+        <div className={styles.createForm}>
+          <p className={styles.createHelp}>{t("longAgent.createHint")}</p>
+          <input
+            value={createDraft.id}
+            placeholder={t("longAgent.createId")}
+            onChange={(event) => setCreateDraft((draft) => ({ ...draft, id: event.target.value }))}
+          />
+          <input
+            value={createDraft.name}
+            placeholder={t("longAgent.createName")}
+            onChange={(event) => setCreateDraft((draft) => ({ ...draft, name: event.target.value }))}
+          />
+          <input
+            value={createDraft.description}
+            placeholder={t("longAgent.createDescription")}
+            onChange={(event) => setCreateDraft((draft) => ({ ...draft, description: event.target.value }))}
+          />
+          <input
+            value={createDraft.nanoclawAgentGroupId}
+            placeholder={t("longAgent.createGroupId")}
+            onChange={(event) => setCreateDraft((draft) => ({ ...draft, nanoclawAgentGroupId: event.target.value }))}
+          />
+          {createError && <p className={styles.inlineError} role="alert">{createError}</p>}
+          <div>
+            <button type="button" disabled={creating} onClick={() => void submitCreate()}>
+              {creating ? t("common.saving") : t("longAgent.createSubmit")}
+            </button>
+            <button type="button" disabled={creating} onClick={() => setCreateOpen(false)}>
+              {t("common.close")}
+            </button>
+          </div>
+        </div>
+      )}
 
       {loading && agents.length === 0 ? (
         <div className={styles.loading} role="status">{t("sidebar.longAgentLoading")}</div>
@@ -179,7 +250,10 @@ export function ProjectLongAgentSection({
                         : styles.presenceOffline} />
                     </span>
                     <span className={styles.agentText}>
-                      <strong>{agent.name}</strong>
+                      <strong>
+                        {agent.name}
+                        {agent.status === "archived" && <em className={styles.archivedBadge}>{t("longAgent.archivedBadge")}</em>}
+                      </strong>
                       <span>{agent.description}</span>
                     </span>
                     <span className={`${styles.status}${selected ? ` ${styles.statusActive}` : ""}`}>

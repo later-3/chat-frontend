@@ -2477,3 +2477,13 @@ span.token.table {
     font-size: 16px !important;
   }
 }
+
+/* 当前生效 Skill 只读区（Workflow Agent 弹窗与 Long Agent 配置页共用） */
+.effective-skills-list { display: flex; flex-direction: column; gap: 6px; }
+.effective-skills-list > strong { font-size: 13px; }
+.effective-skills-group { display: flex; flex-direction: column; gap: 2px; }
+.effective-skills-owner { color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; }
+.effective-skills-group ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.effective-skills-group li { display: flex; flex-direction: column; gap: 1px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; }
+.effective-skills-group li strong { font-size: 12px; }
+.effective-skills-group li small { color: var(--text-muted); font-size: 11px; }

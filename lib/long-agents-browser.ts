@@ -9,12 +9,13 @@ export interface LongAgentSummary {
   readonly description: string;
   readonly avatar: LongAgentAvatar;
   readonly defaultProjectId: string;
+  readonly status: "active" | "archived";
   readonly runtime: "pi";
   readonly configuration: {
     readonly model: { readonly provider: string; readonly modelId: string } | null;
     readonly thinkingLevel: string | null;
     readonly toolMode: "pi-default" | "none" | "explicit";
-    readonly channelType: string;
+    readonly channelType: string | null;
   };
   readonly project: {
     readonly started: boolean;
@@ -103,7 +104,7 @@ export interface LongAgentConfigurationDocument {
       readonly name: string;
       readonly executionMode: "chat-pi";
     };
-  };
+  } | null;
 }
 
 export interface LongAgentConfigurationUpdate {
@@ -155,9 +156,10 @@ function parseAgent(value: unknown): LongAgentSummary {
     || (isRecord(value.configuration.model)
       && (!nonEmpty(value.configuration.model.provider) || !nonEmpty(value.configuration.model.modelId)))
     || (value.configuration.thinkingLevel !== null && !nonEmpty(value.configuration.thinkingLevel))
+    || (value.status !== "active" && value.status !== "archived")
     || (value.configuration.toolMode !== "pi-default"
       && value.configuration.toolMode !== "none" && value.configuration.toolMode !== "explicit")
-    || !nonEmpty(value.configuration.channelType)
+    || (value.configuration.channelType !== null && !nonEmpty(value.configuration.channelType))
     || typeof value.available !== "boolean" || typeof value.channelHostAvailable !== "boolean"
     || (value.syncStatus !== "ok" && value.syncStatus !== "unavailable")
     || (value.syncError !== undefined && typeof value.syncError !== "string")) {
@@ -184,6 +186,7 @@ function parseAgent(value: unknown): LongAgentSummary {
     description: value.description,
     avatar: parseAvatar(value.avatar),
     defaultProjectId: value.defaultProjectId,
+    status: value.status,
     runtime: "pi",
     configuration: {
       model: value.configuration.model === null
@@ -292,9 +295,10 @@ function parseLongAgentConfiguration(value: unknown): LongAgentConfigurationDocu
     || value.agent.definition.description !== value.agent.description
     || !isRecord(value.agent.definition.systemPrompt)
     || !Array.isArray(value.agent.definition.customInstructions)
-    || !isRecord(value.channel) || !nonEmpty(value.channel.type) || !nonEmpty(value.channel.instance)
-    || !isRecord(value.channel.host) || !nonEmpty(value.channel.host.id) || !nonEmpty(value.channel.host.name)
-    || value.channel.host.executionMode !== "chat-pi") {
+    || (value.channel !== null
+      && (!isRecord(value.channel) || !nonEmpty(value.channel.type) || !nonEmpty(value.channel.instance)
+        || !isRecord(value.channel.host) || !nonEmpty(value.channel.host.id) || !nonEmpty(value.channel.host.name)
+        || value.channel.host.executionMode !== "chat-pi"))) {
     throw new Error("Chat返回了无效Long Agent配置");
   }
   const rawDefinition = value.agent.definition;
@@ -350,15 +354,17 @@ function parseLongAgentConfiguration(value: unknown): LongAgentConfigurationDocu
         resources: parseResources(rawDefinition.resources),
       },
     },
-    channel: {
-      type: value.channel.type,
-      instance: value.channel.instance,
-      host: {
-        id: value.channel.host.id,
-        name: value.channel.host.name,
-        executionMode: "chat-pi",
-      },
-    },
+    channel: value.channel === null
+      ? null
+      : {
+          type: (value.channel as Record<string, unknown>).type as string,
+          instance: (value.channel as Record<string, unknown>).instance as string,
+          host: {
+            id: ((value.channel as Record<string, unknown>).host as Record<string, unknown>).id as string,
+            name: ((value.channel as Record<string, unknown>).host as Record<string, unknown>).name as string,
+            executionMode: "chat-pi",
+          },
+        },
   };
 }
 
@@ -436,6 +442,53 @@ export async function startProjectLongAgent(input: {
   return parseProjectLongAgentStarted(await responseBody(response));
 }
 
+/** Creates one Long Agent with full Backend provisioning (S2 lifecycle). */
+export async function createChatLongAgent(input: {
+  readonly id: string;
+  readonly name: string;
+  readonly description?: string;
+  readonly instanceId: string;
+  readonly nanoclawAgentGroupId: string;
+}): Promise<void> {
+  const response = await fetch("/api/long-agents", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+    credentials: "same-origin",
+  });
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = isRecord(body) && typeof body.message === "string" ? body.message : `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+}
+
+/** Archives or restores one Long Agent (S2 lifecycle). */
+export async function setChatLongAgentArchived(longAgentId: string, archived: boolean): Promise<void> {
+  const response = await fetch(
+    `/api/long-agents/${encodeURIComponent(longAgentId)}/archive${archived ? "" : "?restore=true"}`,
+    { method: "POST", credentials: "same-origin" },
+  );
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = isRecord(body) && typeof body.message === "string" ? body.message : `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+}
+
+/** Deletes one archived Long Agent (two-phase contract). */
+export async function deleteChatLongAgent(longAgentId: string): Promise<void> {
+  const response = await fetch(`/api/long-agents/${encodeURIComponent(longAgentId)}`, {
+    method: "DELETE",
+    credentials: "same-origin",
+  });
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = isRecord(body) && typeof body.message === "string" ? body.message : `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+}
+
 export async function fetchLongAgentConfiguration(
   longAgentId: string,
   signal?: AbortSignal,
@@ -446,6 +499,21 @@ export async function fetchLongAgentConfiguration(
     ...(signal === undefined ? {} : { signal }),
   });
   return parseLongAgentConfiguration(await responseBody(response));
+}
+
+/** Fetches the Long Agent's effective assembly resolved by the Backend through the same path as execution. */
+export async function fetchLongAgentInspection(
+  longAgentId: string,
+  projectId?: string,
+  signal?: AbortSignal,
+): Promise<WorkflowAgentInspection> {
+  const query = projectId === undefined ? "" : `?projectId=${encodeURIComponent(projectId)}`;
+  const response = await fetch(`/api/long-agents/${encodeURIComponent(longAgentId)}/inspection${query}`, {
+    cache: "no-store",
+    credentials: "same-origin",
+    ...(signal === undefined ? {} : { signal }),
+  });
+  return parseWorkflowAgentInspection(await responseBody(response), "Long Agent解析检查");
 }
 
 export async function saveLongAgentConfiguration(
@@ -517,6 +585,10 @@ export async function deleteLongAgentAvatar(input: {
   return parseLongAgentConfiguration(await responseBody(response));
 }
 
+import {
+  parseWorkflowAgentInspection,
+  type WorkflowAgentInspection,
+} from "./chat-workflows-browser.ts";
 import {
   parseWorkflowAgentToolPolicy,
   type WorkflowAgentResources,
