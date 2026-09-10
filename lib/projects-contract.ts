@@ -6,7 +6,7 @@ export interface ChatProjectSummary {
   readonly firstOpenedAt: string;
   readonly lastOpenedAt: string;
   readonly available: boolean;
-  readonly kind: "daily" | "directory";
+  readonly kind: "project" | "agent" | "share";
 }
 
 export interface OpenedChatProject {
@@ -27,7 +27,7 @@ function parseProject(value: unknown): ChatProjectSummary {
     if (typeof value[field] !== "string") throw new Error(`Chat返回了无效的Project字段: ${field}`);
   }
   if (typeof value.available !== "boolean") throw new Error("Chat返回了无效的Project字段: available");
-  if (value.kind !== "daily" && value.kind !== "directory") {
+  if (value.kind !== "project" && value.kind !== "agent" && value.kind !== "share") {
     throw new Error("Chat返回了无效的Project字段: kind");
   }
   return value as unknown as ChatProjectSummary;
@@ -83,10 +83,8 @@ export async function fetchChatProjects(signal?: AbortSignal): Promise<ChatProje
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) throw new Error(`读取Project失败: HTTP ${response.status}`);
   if (!isRecord(body) || !Array.isArray(body.projects)) throw new Error("Chat返回了无效的Project列表");
+  // 保留全部项目（含系统容器）：侧栏需要它们来解析会话的真实身份。
+  // 哪些项目进入“项目选择器”由使用方按 kind 过滤。
   return body.projects.map(parseProject)
-    .sort((left, right) => {
-      if (left.kind === "daily" && right.kind !== "daily") return -1;
-      if (right.kind === "daily" && left.kind !== "daily") return 1;
-      return right.lastOpenedAt.localeCompare(left.lastOpenedAt);
-    });
+    .sort((left, right) => right.lastOpenedAt.localeCompare(left.lastOpenedAt));
 }

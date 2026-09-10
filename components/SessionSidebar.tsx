@@ -558,6 +558,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, newSessionD
   }, []);
 
   const restoredRef = useRef(false);
+  const defaultLongAgentTriedRef = useRef(false);
 
   const projectSelection = useCallback((root: string, key: string): ProjectSelection => ({
     root,
@@ -677,7 +678,33 @@ export function SessionSidebar({ selectedSession, selectedSessionId, newSessionD
         // Session not found — notify parent so it can show the placeholder
         onInitialRestoreDone?.();
       }
-      const project = registeredProjects.find((candidate) => candidate.available);
+      // 归一后没有“默认 daily 项目”：默认落点是 Long Agent 的会话（优先 nexus）。
+      // 用户明确选择项目时仍走项目路径；这里只在首屏无任何恢复目标时触发一次。
+      if (!defaultLongAgentTriedRef.current) {
+        defaultLongAgentTriedRef.current = true;
+        void (async () => {
+          try {
+            const { fetchLongAgents, startProjectLongAgent } = await import("@/lib/long-agents-browser");
+            const { agents } = await fetchLongAgents(undefined);
+            const preferred = agents.find((agent) => agent.id === "nexus" && agent.available)
+              ?? agents.find((agent) => agent.available);
+            if (preferred === undefined) return;
+            const started = await startProjectLongAgent({
+              longAgentId: preferred.id,
+              projectId: preferred.defaultProjectId,
+            });
+            if (!started.primarySessionId) return;
+            setContentPanel("long-agents");
+            if (onOpenSessionById !== undefined) {
+              await onOpenSessionById(started.primarySessionId, started.projectId ?? preferred.defaultProjectId);
+            }
+          } catch {
+            // 默认落点失败不阻塞：用户仍可手动选择项目或长期同事。
+          }
+        })();
+        return;
+      }
+      const project = registeredProjects.find((candidate) => candidate.kind === "project" && candidate.available);
       if (project) setSelectedCwd(project.path);
     }
   }, [loading, allSessions, registeredProjects, selectedCwd, initialSessionId, skipInitialProjectSelection, onSelectSession, onInitialRestoreDone]);
@@ -834,12 +861,15 @@ export function SessionSidebar({ selectedSession, selectedSessionId, newSessionD
     onNewSession?.(tempId, selectedCwd);
   }, [selectedCwd, onNewSession]);
 
-  const recentProjects = registeredProjects.map((project) => ({
+  // 项目选择器只列用户自己的项目；Long Agent home 与共享空间是系统容器，
+  // 它们通过“长期同事”入口访问，但仍在 registeredProjects 中用于会话身份解析。
+  const userProjects = registeredProjects.filter((project) => project.kind === "project");
+  const recentProjects = userProjects.map((project) => ({
     key: project.projectId,
     root: project.path,
     name: project.cachedName,
   }));
-  const projectAvailability = new Map(registeredProjects.map((project) => [project.projectId, project.available]));
+  const projectAvailability = new Map(userProjects.map((project) => [project.projectId, project.available]));
   const showProjectFilter = recentProjects.length > 8;
   const visibleProjects = projectFilter.trim()
     ? recentProjects.filter((project) => `${project.name}\n${project.root}`.toLowerCase().includes(projectFilter.trim().toLowerCase()))
@@ -955,7 +985,7 @@ export function SessionSidebar({ selectedSession, selectedSessionId, newSessionD
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       {removedSessionsOpen && (
         <RemovedSessionsPanel
-          projects={registeredProjects}
+          projects={registeredProjects.filter((project) => project.kind === "project")}
           initialProjectId={selectedProject?.key}
           onClose={() => setRemovedSessionsOpen(false)}
           onChanged={() => void loadSessions()}

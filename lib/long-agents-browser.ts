@@ -380,9 +380,10 @@ async function responseBody(response: Response): Promise<unknown> {
   return body;
 }
 
-export async function fetchLongAgents(projectId: string, signal?: AbortSignal): Promise<LongAgentsResponse> {
-  const query = new URLSearchParams({ projectId });
-  const response = await fetch(`/api/long-agents?${query.toString()}`, {
+export async function fetchLongAgents(projectId?: string, signal?: AbortSignal): Promise<LongAgentsResponse> {
+  const query = new URLSearchParams(projectId === undefined ? {} : { projectId });
+  const suffix = query.toString();
+  const response = await fetch(`/api/long-agents${suffix === "" ? "" : `?${suffix}`}`, {
     cache: "no-store",
     ...(signal === undefined ? {} : { signal }),
   });
