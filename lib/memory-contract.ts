@@ -386,3 +386,59 @@ export const memoryContractParsers = {
   health: parseHealth,
   rebuild: parseRebuild,
 };
+
+export interface MemoryTree {
+  readonly schemaVersion: 1;
+  readonly personal: { readonly total: number };
+  readonly projects: readonly {
+    readonly projectId: string;
+    readonly name: string;
+    readonly path: string;
+    readonly available: boolean;
+    readonly total: number;
+  }[];
+  readonly longAgents: readonly {
+    readonly longAgentId: string;
+    readonly name: string;
+    readonly memoryFiles: number;
+    readonly coreIndexRevision: string | null;
+  }[];
+}
+
+function parseMemoryTree(value: unknown): MemoryTree {
+  if (!isRecord(value) || value.schemaVersion !== 1 || !isRecord(value.personal)
+    || typeof value.personal.total !== "number" || !Number.isFinite(value.personal.total)
+    || value.personal.total < 0
+    || !Array.isArray(value.projects) || !Array.isArray(value.longAgents)) {
+    throw new Error("Chat返回了无效的Memory树");
+  }
+  for (const [index, project] of value.projects.entries()) {
+    if (!isRecord(project) || typeof project.projectId !== "string" || typeof project.name !== "string"
+      || typeof project.path !== "string" || typeof project.available !== "boolean"
+      || typeof project.total !== "number" || !Number.isFinite(project.total) || project.total < 0) {
+      throw new Error(`Chat返回了无效的Memory树.projects[${index}]`);
+    }
+  }
+  for (const [index, agent] of value.longAgents.entries()) {
+    if (!isRecord(agent) || typeof agent.longAgentId !== "string" || typeof agent.name !== "string"
+      || typeof agent.memoryFiles !== "number" || !Number.isFinite(agent.memoryFiles) || agent.memoryFiles < 0
+      || (agent.coreIndexRevision !== null && typeof agent.coreIndexRevision !== "string")) {
+      throw new Error(`Chat返回了无效的Memory树.longAgents[${index}]`);
+    }
+  }
+  return value as unknown as MemoryTree;
+}
+
+/** 获取 Memory 归属树总览（系统/各 Project/各 Long Agent）。 */
+export async function fetchMemoryTree(signal?: AbortSignal): Promise<MemoryTree> {
+  const response = await fetch("/api/memories/tree", {
+    credentials: "same-origin",
+    ...(signal === undefined ? {} : { signal }),
+  });
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = isRecord(body) && typeof body.message === "string" ? body.message : `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+  return parseMemoryTree(body);
+}

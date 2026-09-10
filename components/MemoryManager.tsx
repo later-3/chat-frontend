@@ -19,6 +19,7 @@ import {
   createMemory,
   deleteMemory,
   fetchMemoryTargetsHealth,
+  fetchMemoryTree,
   listMemoryTargets,
   rebuildMemoryIndexes,
   searchMemories,
@@ -27,12 +28,18 @@ import {
   type MemoryKind,
   type MemoryRecord,
   type MemoryTarget,
+  type MemoryTree,
 } from "@/lib/memory-contract";
 import { fetchChatProjects, type ChatProjectSummary } from "@/lib/projects-contract";
+import { LongAgentMemorySettings } from "./LongAgentMemorySettings";
 import styles from "./MemoryManager.module.css";
 
 const PAGE_SIZE = 30;
-const VISIBLE_TARGET_KEY = "visible";
+
+type MemoryScope =
+  | { readonly kind: "personal" }
+  | { readonly kind: "project"; readonly projectId: string }
+  | { readonly kind: "agent"; readonly longAgentId: string };
 
 interface MemoryManagerProps {
   currentProjectId: string | null;
@@ -54,11 +61,36 @@ function targetFromKey(key: string): MemoryTarget {
     : { type: "project", projectId: key.slice("project:".length) };
 }
 
-function targetsForView(key: string, currentProjectId: string | null): readonly MemoryTarget[] {
-  if (key !== VISIBLE_TARGET_KEY) return [targetFromKey(key)];
-  return currentProjectId === null
-    ? [{ type: "personal" }]
-    : [{ type: "personal" }, { type: "project", projectId: currentProjectId }];
+function targetsForScope(scope: MemoryScope): readonly MemoryTarget[] {
+  if (scope.kind === "project") return [{ type: "project", projectId: scope.projectId }];
+  return [{ type: "personal" }];
+}
+
+function scopeKey(scope: MemoryScope): string {
+  return scope.kind === "personal" ? "personal" : scope.kind === "project" ? `project:${scope.projectId}` : `agent:${scope.longAgentId}`;
+}
+
+function scopeFromKey(key: string): MemoryScope {
+  if (key.startsWith("project:")) return { kind: "project", projectId: key.slice("project:".length) };
+  if (key.startsWith("agent:")) return { kind: "agent", longAgentId: key.slice("agent:".length) };
+  return { kind: "personal" };
+}
+
+function navHeaderStyle(label: string): React.CSSProperties {
+  return {
+    padding: "5px 8px 3px", fontSize: 10, fontWeight: 600, color: "var(--text-dim)",
+    textTransform: "uppercase", letterSpacing: "0.06em",
+  };
+}
+
+function navItemStyle(active: boolean): React.CSSProperties {
+  return {
+    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6,
+    width: "100%", padding: "6px 8px", marginBottom: 1, borderRadius: 6,
+    border: "none", background: active ? "var(--bg-selected)" : "transparent",
+    color: active ? "var(--text)" : "var(--text-muted)", fontSize: 12, textAlign: "left",
+    cursor: "pointer",
+  };
 }
 
 function targetForMemory(memory: MemoryRecord): MemoryTarget {
@@ -74,8 +106,12 @@ function draftFor(memory: MemoryRecord | null): MemoryDraft {
 export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps) {
   const { locale, t } = useI18n();
   const [projects, setProjects] = useState<readonly ChatProjectSummary[]>([]);
-  const [targetKey, setTargetKey] = useState(VISIBLE_TARGET_KEY);
-  const targets = useMemo(() => targetsForView(targetKey, currentProjectId), [currentProjectId, targetKey]);
+  const [tree, setTree] = useState<MemoryTree | null>(null);
+  const [treeError, setTreeError] = useState<string | null>(null);
+  const [scope, setScope] = useState<MemoryScope>({ kind: "personal" });
+  const [scopeKeyState, setScopeKeyState] = useState(scopeKey(scope));
+  const targets = useMemo(() => targetsForScope(scope), [scope]);
+  const isAgentScope = scope.kind === "agent";
   const [items, setItems] = useState<readonly MemoryRecord[]>([]);
   const [scores, setScores] = useState<ReadonlyMap<string, number | null>>(new Map());
   const [health, setHealth] = useState<MemoryHealth | null>(null);
@@ -92,6 +128,32 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
   const [editing, setEditing] = useState<MemoryRecord | null | undefined>(undefined);
   const [draft, setDraft] = useState<MemoryDraft>(() => draftFor(null));
   const [draftTargetKey, setDraftTargetKey] = useState("personal");
+
+  const loadTree = useCallback(async (signal?: AbortSignal) => {
+    setTreeError(null);
+    try {
+      setTree(await fetchMemoryTree(signal));
+    } catch (cause) {
+      if (!(cause instanceof DOMException && cause.name === "AbortError")) {
+        setTreeError(cause instanceof Error ? cause.message : String(cause));
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadTree(controller.signal);
+    return () => controller.abort();
+  }, [loadTree]);
+
+  const selectScope = (next: MemoryScope) => {
+    setScope(next);
+    setScopeKeyState(scopeKey(next));
+    setOffset(0);
+    setActiveQuery("");
+    setQuery("");
+    setEditing(undefined);
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -145,12 +207,10 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
     return () => controller.abort();
   }, [activeQuery, kind, loadHealth, offset, refreshKey, targets]);
 
-  const refresh = useCallback(() => setRefreshKey((value) => value + 1), []);
+  const refresh = useCallback(() => { setRefreshKey((value) => value + 1); void loadTree(); }, [loadTree]);
   const startCreate = () => {
     setDraft(draftFor(null));
-    setDraftTargetKey(targetKey === VISIBLE_TARGET_KEY
-      ? (currentProjectId === null ? "personal" : `project:${currentProjectId}`)
-      : targetKey);
+    setDraftTargetKey(scope.kind === "project" ? `project:${scope.projectId}` : "personal");
     setEditing(null);
     setError(null);
   };
@@ -208,13 +268,10 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
   };
 
   const rebuild = async () => {
-    const scope = targetKey === VISIBLE_TARGET_KEY
-      ? t("memory.allScopes")
-      : targetKey === "personal"
-        ? t("memory.scope.personal")
-        : projects.find((project) => `project:${project.projectId}` === targetKey)?.cachedName
-          ?? targetKey.slice("project:".length);
-    if (!window.confirm(t("memory.rebuildConfirm", { scope }))) return;
+    const scopeLabel = scope.kind === "project"
+      ? (projects.find((project) => project.projectId === scope.projectId)?.cachedName ?? scope.projectId)
+      : t("memory.scope.personal");
+    if (!window.confirm(t("memory.rebuildConfirm", { scope: scopeLabel }))) return;
     setBusy(true);
     setError(null);
     setNotice(t("memory.rebuilding"));
@@ -258,7 +315,69 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
         </div>
       </header>
 
-      <div className={styles.content}><div className={styles.inner}>
+      <div className={styles.content}>
+        <div style={{ display: "flex", gap: 0, minHeight: "100%", alignItems: "stretch" }}>
+          <nav
+            aria-label={t("memory.scopeTree")}
+            style={{
+              width: 200, flexShrink: 0, overflowY: "auto", padding: "8px 6px",
+              borderRight: "1px solid var(--border)", background: "var(--bg-panel)",
+            }}
+          >
+            {treeError !== null && <div style={{ padding: "4px 8px", fontSize: 10, color: "#f87171" }}>{treeError}</div>}
+            {tree === null && treeError === null && (
+              <div style={{ padding: "8px", fontSize: 11, color: "var(--text-dim)" }}>{t("common.loading")}</div>
+            )}
+            {tree !== null && (
+              <>
+                <div style={navHeaderStyle(t("memory.scopeTreeSystem"))}>
+                  <button
+                    type="button"
+                    onClick={() => selectScope({ kind: "personal" })}
+                    style={navItemStyle(scopeKeyState === "personal")}
+                  >
+                    <span>{t("memory.scope.personal")}</span>
+                    <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{tree.personal.total}</span>
+                  </button>
+                </div>
+                <div style={navHeaderStyle(t("memory.scopeTreeProjects"))}>
+                  {tree.projects.map((project) => (
+                    <button
+                      key={project.projectId}
+                      type="button"
+                      disabled={!project.available}
+                      onClick={() => selectScope({ kind: "project", projectId: project.projectId })}
+                      style={navItemStyle(scopeKeyState === `project:${project.projectId}`)}
+                    >
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{project.name}</span>
+                      <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{project.available ? project.total : "—"}</span>
+                    </button>
+                  ))}
+                </div>
+                <div style={navHeaderStyle(t("memory.scopeTreeAgents"))}>
+                  {tree.longAgents.map((agent) => (
+                    <button
+                      key={agent.longAgentId}
+                      type="button"
+                      onClick={() => selectScope({ kind: "agent", longAgentId: agent.longAgentId })}
+                      style={navItemStyle(scopeKeyState === `agent:${agent.longAgentId}`)}
+                    >
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{agent.name}</span>
+                      <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{agent.memoryFiles} f</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </nav>
+          <div style={{ flex: 1, minWidth: 0 }} className={styles.inner}>
+        {isAgentScope ? (
+          <LongAgentMemorySettings
+            longAgentId={scope.longAgentId}
+            onDirtyChange={() => {}}
+          />
+        ) : (
+        <>
         <div className={styles.healthGrid}>
           {([[
             "memory.total", health?.records ?? "—",
@@ -269,12 +388,6 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
 
         <form className={styles.toolbar} onSubmit={(event) => { event.preventDefault(); setOffset(0); setActiveQuery(query.trim()); }}>
           <div className={styles.searchBox}><IconSearch size={16} stroke={1.8} aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("memory.searchPlaceholder")} /></div>
-          <select className={styles.select} aria-label={t("memory.scope")} value={targetKey} onChange={(event) => { setTargetKey(event.target.value); setOffset(0); }}>
-            <option value={VISIBLE_TARGET_KEY}>{t("memory.allScopes")}</option>
-            <option value="personal">{t("memory.scope.personal")}</option>
-            {currentProjectId !== null && !projects.some((project) => project.projectId === currentProjectId) && <option value={`project:${currentProjectId}`}>{currentProjectId}</option>}
-            {projects.map((project) => <option key={project.projectId} value={`project:${project.projectId}`}>{project.cachedName}</option>)}
-          </select>
           <select className={styles.select} aria-label={t("memory.kind")} value={kind} onChange={(event) => { setKind(event.target.value as MemoryKind | "all"); setOffset(0); }}>
             <option value="all">{t("memory.allKinds")}</option>
             {MEMORY_KINDS.map((value) => <option key={value} value={value}>{t(`memory.kind.${value}`)}</option>)}
@@ -312,7 +425,11 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
           <span>{offset + 1}–{Math.min(offset + PAGE_SIZE, total)} / {total}</span>
           <button type="button" className={styles.iconButton} onClick={() => setOffset(offset + PAGE_SIZE)} disabled={offset + PAGE_SIZE >= total || loading} aria-label={t("memory.next")}><IconChevronRight size={17} stroke={1.8} aria-hidden="true" /></button>
         </div>}
-      </div></div>
+        </>
+        )}
+        </div>
+        </div>
+      </div>
 
       {editing !== undefined && <div className={styles.editorBackdrop} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setEditing(undefined); }}>
         <div className={styles.editor} role="dialog" aria-modal="true" aria-label={editing === null ? t("memory.add") : t("memory.edit")}>
