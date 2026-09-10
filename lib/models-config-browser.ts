@@ -26,6 +26,11 @@ export interface ChatModelsConfig {
   providers?: Record<string, ChatProviderEntry>;
 }
 
+export interface ChatModelCapabilities {
+  readonly thinkingLevels: readonly string[];
+  readonly modelApis: readonly string[];
+}
+
 export interface ChatModelsConfigDocument {
   readonly schemaVersion: 1;
   readonly source: {
@@ -33,6 +38,7 @@ export interface ChatModelsConfigDocument {
     readonly path: string;
   };
   readonly config: ChatModelsConfig;
+  readonly capabilities: ChatModelCapabilities;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -106,12 +112,24 @@ function validateConfig(value: unknown, field: string): asserts value is ChatMod
   }
 }
 
+function parseCapabilities(value: unknown): ChatModelCapabilities {
+  if (!isRecord(value)
+    || !Array.isArray(value.thinkingLevels)
+    || value.thinkingLevels.some((entry) => typeof entry !== "string" || entry === "")
+    || !Array.isArray(value.modelApis)
+    || value.modelApis.some((entry) => typeof entry !== "string" || entry === "")) {
+    throw new Error("Chat返回了无效的模型配置文档.capabilities");
+  }
+  return value as unknown as ChatModelCapabilities;
+}
+
 export function parseChatModelsConfigDocument(value: unknown): ChatModelsConfigDocument {
   if (!isRecord(value) || value.schemaVersion !== 1 || !isRecord(value.source)
     || value.source.kind !== "chat-home" || typeof value.source.path !== "string") {
     throw new Error("Chat返回了无效的模型配置文档");
   }
   validateConfig(value.config, "模型配置文档.config");
+  parseCapabilities(value.capabilities);
   return value as unknown as ChatModelsConfigDocument;
 }
 

@@ -391,7 +391,7 @@ export function ChatWindow({ projectId, session, sessionRunning, newSessionCwd, 
 
   const {
     loading, error, messages, entryIds, streamState,
-    agentRunning, bashRunning, pendingBash, workflowId, longAgentId, workflowAgentConfigs, promptResourceProposals, toolPreset, thinkingLevel,
+    agentRunning, bashRunning, pendingBash, workflowId, longAgentId, workflowAgentConfigs, promptResourceProposals,
     retryInfo, contextUsage, forkingEntryId,
     isCompacting, compactError, compactResult, sessionStats,
     slashCommands, slashCommandsLoading, queuedMessages,
@@ -404,7 +404,7 @@ export function ChatWindow({ projectId, session, sessionRunning, newSessionCwd, 
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior, handleAbortCompaction,
     handleRecallQueue,
     handleBuiltinSlashCommand,
-    handleToolPresetChange, handleThinkingLevelChange, loadSlashCommands, scrollUserMsgToTop,
+    loadSlashCommands, scrollUserMsgToTop,
     setWorkflowId, setWorkflowAgentConfigs,
   } = useAgentSession({
     projectId, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd: wrappedOnAgentEnd, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked,
@@ -676,10 +676,6 @@ export function ChatWindow({ projectId, session, sessionRunning, newSessionCwd, 
       isCompacting={isCompacting}
       compactError={compactError}
       compactResult={compactResult}
-      toolPreset={toolPreset}
-      onToolPresetChange={session || isNew ? handleToolPresetChange : undefined}
-      thinkingLevel={thinkingLevel}
-      onThinkingLevelChange={session || isNew ? handleThinkingLevelChange : undefined}
       retryInfo={retryInfo}
       queuedMessages={queuedMessages}
       inputHistory={inputHistory}

@@ -8,6 +8,7 @@ import type { DiscoveredModel } from "@/lib/model-discovery";
 import {
   fetchChatModelsConfig,
   saveChatModelsConfig,
+  type ChatModelCapabilities,
   type ChatModelEntry as ModelEntry,
   type ChatModelsConfig as ModelsJson,
   type ChatProviderEntry as ProviderEntry,
@@ -159,7 +160,15 @@ type Selection =
   | { type: "oauth"; providerId: string }
   | { type: "apikey"; providerId: string };
 
-const API_OPTIONS = ["openai-completions", "openai-responses", "anthropic-messages", "google-generative-ai"] as const;
+/**
+ * 当前值是 Extension 注册的自定义 API 时保留它；候选清单本身只来自 Backend
+ * `/api/models-config` 的 capabilities，Frontend 不维护第二份。
+ */
+function withCurrentOption(options: readonly string[], current: string | undefined): readonly string[] {
+  return current !== undefined && current !== "" && !options.includes(current)
+    ? [...options, current]
+    : options;
+}
 
 // ── Form field helpers ────────────────────────────────────────────────────────
 
@@ -298,8 +307,8 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 // ── Provider detail ───────────────────────────────────────────────────────────
 
-function ProviderDetail({ name, provider, onChange, onRename, onDelete, onAddModels }: {
-  name: string; provider: ProviderEntry;
+function ProviderDetail({ name, provider, apiOptions, onChange, onRename, onDelete, onAddModels }: {
+  name: string; provider: ProviderEntry; apiOptions: readonly string[];
   onChange: (p: ProviderEntry) => void; onRename: (n: string) => void; onDelete: () => void;
   onAddModels: (models: DiscoveredModel[]) => void;
 }) {
@@ -425,7 +434,7 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete, onAddMod
       </Field>
 
       <Field label="API">
-        <Select value={provider.api ?? "openai-completions"} onChange={(v) => set("api", v)} options={API_OPTIONS} required />
+        <Select value={provider.api ?? "openai-completions"} onChange={(v) => set("api", v)} options={withCurrentOption(apiOptions, provider.api)} required />
       </Field>
 
       <Field label="Headers">
@@ -544,10 +553,7 @@ function ProviderDetail({ name, provider, onChange, onRename, onDelete, onAddMod
 
 // ── ThinkingLevelMap editor ───────────────────────────────────────────────────
 
-const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
-type ThinkingLevel = typeof THINKING_LEVELS[number];
-
-const LEVEL_COLORS: Record<ThinkingLevel, string> = {
+const LEVEL_COLORS: Record<string, string> = {
   off:     "var(--text-dim)",
   minimal: "#6b7280",
   low:     "#60a5fa",
@@ -559,14 +565,16 @@ const LEVEL_COLORS: Record<ThinkingLevel, string> = {
 
 function ThinkingLevelMapEditor({
   value,
+  levels,
   onChange,
 }: {
   value: Record<string, string | null> | undefined;
+  levels: readonly string[];
   onChange: (v: Record<string, string | null> | undefined) => void;
 }) {
   const map = value ?? {};
 
-  const setLevel = (level: ThinkingLevel, entry: string | null | "omit") => {
+  const setLevel = (level: string, entry: string | null | "omit") => {
     const next = { ...map };
     if (entry === "omit") {
       delete next[level];
@@ -578,12 +586,12 @@ function ThinkingLevelMapEditor({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      {THINKING_LEVELS.map((level) => {
+      {levels.map((level) => {
         const raw = map[level];
         const state: "omit" | "null" | "string" =
           !(level in map) ? "omit" : raw === null ? "null" : "string";
         const strVal = typeof raw === "string" ? raw : "";
-        const color = LEVEL_COLORS[level];
+        const color = LEVEL_COLORS[level] ?? "var(--text-dim)";
 
         const btnBase: React.CSSProperties = {
           padding: "4px 10px",
@@ -812,12 +820,16 @@ function ModelDetail({
   providerName,
   provider,
   model,
+  apiOptions,
+  thinkingLevels,
   onChange,
   onDelete,
 }: {
   providerName: string;
   provider: ProviderEntry;
   model: ModelEntry;
+  apiOptions: readonly string[];
+  thinkingLevels: readonly string[];
   onChange: (m: ModelEntry) => void;
   onDelete: () => void;
 }) {
@@ -1247,7 +1259,7 @@ function ModelDetail({
         {advancedOpen && (
           <div id="model-advanced-settings" style={{ display: "flex", flexDirection: "column", gap: 14, padding: "4px 0 16px" }}>
             <Field label={t("models.apiOverride")}>
-              <Select value={model.api ?? ""} onChange={(v) => set("api", v || undefined)} options={API_OPTIONS} />
+              <Select value={model.api ?? ""} onChange={(v) => set("api", v || undefined)} options={withCurrentOption(apiOptions, model.api)} />
             </Field>
 
             <Field label={t("models.headers")}>
@@ -1288,6 +1300,7 @@ function ModelDetail({
                   </div>
                   <ThinkingLevelMapEditor
                     value={model.thinkingLevelMap}
+                    levels={thinkingLevels}
                     onChange={(v) => set("thinkingLevelMap", v)}
                   />
                 </div>
@@ -1874,6 +1887,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
   const isMobile = useIsMobile();
   const { t } = useI18n();
   const [config, setConfig] = useState<ModelsJson>({ providers: {} });
+  const [capabilities, setCapabilities] = useState<ChatModelCapabilities | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -1919,6 +1933,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           ? document.config
           : { ...document.config, providers: {} };
         setConfig(normalized);
+        setCapabilities(document.capabilities);
         setModelsConfigPath(document.source.path);
         const keys = Object.keys(normalized.providers ?? {});
         if (keys.length > 0) setSelection({ type: "provider", name: keys[0] });
@@ -2062,6 +2077,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           key={selection.name}
           name={selection.name}
           provider={provider}
+          apiOptions={capabilities?.modelApis ?? []}
           onChange={(p) => updateProvider(selection.name, p)}
           onRename={(n) => renameProvider(selection.name, n)}
           onDelete={() => deleteProvider(selection.name)}
@@ -2078,6 +2094,8 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
         providerName={selection.providerName}
         provider={provider}
         model={model}
+        apiOptions={capabilities?.modelApis ?? []}
+        thinkingLevels={capabilities?.thinkingLevels ?? []}
         onChange={(m) => updateModel(selection.providerName, selection.index, m)}
         onDelete={() => removeModel(selection.providerName, selection.index)}
       />

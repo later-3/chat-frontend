@@ -53,8 +53,6 @@ import {
 import { INITIAL_STREAMING_STATE, streamReducer } from "@/lib/streaming-message";
 import type { ClientAssistantMessageEvent } from "@/lib/streaming-message";
 import { normalizeToolCalls } from "@/lib/normalize";
-import { getPreferredToolPreset } from "@/lib/tool-preset-preference";
-import type { ToolEntry, ToolPreset } from "@/lib/tool-presets";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 import {
   parseWorkflowCallProjection,
@@ -144,7 +142,6 @@ export type BuiltinSlashCommandResult =
   | { handled: false }
   | { handled: true; message?: string; error?: string; action?: "openSessionStats" };
 
-export type ThinkingLevelOption = "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 export type AgentPhase =
   | { kind: "waiting_model" }
   | { kind: "workflow_stage"; stage: ChatRunStage }
@@ -180,7 +177,6 @@ interface UseAgentSessionOptions {
   onSystemPromptChange?: (prompt: string | null) => void;
   onSystemPromptLoaderChange?: (loader: (() => Promise<void>) | null) => void;
   onSessionStatsPanelOpen?: () => void;
-  setToolPreset?: (preset: ToolPreset) => void;
   onConnectionFailure?: () => Promise<boolean | null>;
 }
 
@@ -430,8 +426,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const persistedAgentConfigsByWorkflowRef = useRef<Record<string, Record<string, AgentConfigSelection>>>({});
   const chatRootConfigRef = useRef<ChatRootConfig | null>(null);
   const configSaveChainRef = useRef<Promise<void>>(Promise.resolve());
-  const [toolPreset] = useState<ToolPreset>(() => getPreferredToolPreset());
-  const [thinkingLevel] = useState<ThinkingLevelOption>("auto");
   const [promptAnchorActive, setPromptAnchorActive] = useState(false);
   const [activeRunStage, setActiveRunStage] = useState<ChatRunStage | null>(null);
   const [planReview, setPlanReview] = useState<PlanReview | null>(null);
@@ -1057,9 +1051,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     handled: true,
     error: longAgentId === null ? "当前Workflow只接受普通文本Prompt" : "当前长期 Agent只接受普通文本消息",
   }), [longAgentId]);
-  const handleToolPresetChange = useCallback(() => unsupported("工具权限由Chat Workflow配置决定"), [unsupported]);
-  const handleThinkingLevelChange = useCallback(() => unsupported("Thinking Level由Chat Workflow配置决定"), [unsupported]);
-  const loadTools = useCallback(async (): Promise<ToolEntry[]> => [], []);
   const loadSlashCommands = useCallback(async (): Promise<SlashCommandInfo[]> => [], []);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
@@ -1169,7 +1160,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   return {
     data, loading, error, activeLeafId, messages, entryIds, streamState,
     agentRunning, workflowId, longAgents, longAgentId,
-    workflowAgentConfigs: agentConfigsByWorkflow[workflowId] ?? {}, toolPreset, thinkingLevel,
+    workflowAgentConfigs: agentConfigsByWorkflow[workflowId] ?? {},
     promptResourceProposals: data?.promptResourceProposals ?? [],
     retryInfo: null, contextUsage: null as ContextUsage | null, systemPrompt: null, forkingEntryId: null,
     isCompacting: false, compactError: null, compactResult: null,
@@ -1186,7 +1177,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     handleSend, handleAbort, handlePlanReviewDecision, handleFork, handleNavigate,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior,
     handleAbortCompaction, handleRecallQueue, handleBuiltinSlashCommand,
-    handleToolPresetChange, handleThinkingLevelChange, loadTools, loadSlashCommands,
+    loadSlashCommands,
     setWorkflowId, setWorkflowAgentConfigs,
     setActiveLeafId, setData, setMessages, scrollToBottom, scrollUserMsgToTop,
     dispatch, setAgentRunning, setForkingEntryId: () => {},
