@@ -1670,10 +1670,9 @@ export function SessionSidebar({ selectedSession, selectedSessionId, newSessionD
           selectedSessionId={selectedSessionId}
           visible={contentPanel === "long-agents"}
           refreshKey={refreshKey}
-          onOpenSession={(sessionId) => {
-            if (activeProjectId === null) return;
+          onOpenSession={(sessionId, sessionProjectId) => {
             setContentPanel("long-agents");
-            return onOpenSessionById(sessionId, activeProjectId);
+            return onOpenSessionById(sessionId, sessionProjectId);
           }}
           onRequestClose={onRequestClose}
           closeAfterOpen={isMobile}

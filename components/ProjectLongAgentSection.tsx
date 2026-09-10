@@ -18,7 +18,7 @@ interface Props {
   selectedSessionId: string | null;
   visible?: boolean;
   refreshKey?: number;
-  onOpenSession: (sessionId: string) => void | Promise<void>;
+  onOpenSession: (sessionId: string, projectId: string) => void | Promise<void>;
   onRequestClose?: () => void;
   closeAfterOpen?: boolean;
 }
@@ -105,6 +105,9 @@ export function ProjectLongAgentSection({
     setError(null);
     try {
       const started = await startProjectLongAgent({ longAgentId: agent.id, projectId });
+      // start 返回的 projectId 是会话真实归属（共享 daily 入口会重定向到 Agent 自己的
+      // Daily Project）；打开时必须用它，否则前端会拿当前项目去查一个不存在的会话。
+      const sessionProjectId = started.projectId ?? projectId;
       setAgents((current) => current.map((item) => item.id === agent.id
         ? {
             ...item,
@@ -116,7 +119,7 @@ export function ProjectLongAgentSection({
             },
           }
         : item));
-      await onOpenSession(started.primarySessionId);
+      await onOpenSession(started.primarySessionId, sessionProjectId);
       if (closeAfterOpen) onRequestClose?.();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));

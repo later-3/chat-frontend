@@ -485,6 +485,7 @@ export const zhCNLocale: LocalePlugin = {
     "longAgentSettings.projectUpdate": "更新 Project",
     "longAgentSettings.projectConfigure": "配置 Project",
     "longAgentSettings.longAgentManage": "管理长期同事（生命周期）",
+    "longAgentSettings.channelSend": "通道主动消息",
     "longAgentSettings.toolUnavailable": "不在当前 Tool 目录中",
     "longAgentSettings.effectiveAssembly": "当前生效装配",
     "longAgentSettings.inspectionLoading": "正在按实际执行路径解析…",

@@ -485,6 +485,7 @@ export const enLocale: LocalePlugin = {
     "longAgentSettings.projectUpdate": "Update Project",
     "longAgentSettings.projectConfigure": "Configure Project",
     "longAgentSettings.longAgentManage": "Manage Long Agents (lifecycle)",
+    "longAgentSettings.channelSend": "Proactive channel message",
     "longAgentSettings.toolUnavailable": "Not in the current Tool catalog",
     "longAgentSettings.effectiveAssembly": "Effective assembly",
     "longAgentSettings.inspectionLoading": "Resolving through the execution path…",

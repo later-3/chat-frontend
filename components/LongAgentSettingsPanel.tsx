@@ -55,6 +55,7 @@ const CHAT_TOOL_LABEL_KEYS: Record<string, string> = {
   "system:tool/project_update": "longAgentSettings.projectUpdate",
   "system:tool/project_configure": "longAgentSettings.projectConfigure",
   "system:tool/long_agent_manage": "longAgentSettings.longAgentManage",
+  "system:tool/channel_send": "longAgentSettings.channelSend",
 };
 
 interface Props {
