@@ -466,6 +466,8 @@ export const zhCNLocale: LocalePlugin = {
     "longAgentSettings.piDefaultPrompt": "使用 Pi 默认 System Prompt",
     "longAgentSettings.replacePrompt": "替换 System Prompt",
     "longAgentSettings.systemPromptText": "替换后的 System Prompt",
+    "longAgentSettings.responseTemplate": "回复格式要求（留空则不要求）",
+    "longAgentSettings.responseTemplateHint": "可用变量：{{project}} 当前上下文项目、{{agentName}}、{{date}}。它作为提示词要求注入，由 Agent 自己写在回复末尾，因此 Web、渠道与会话历史完全一致。默认要求输出“project：<项目名>”。",
     "longAgentSettings.customInstructions": "自定义指令",
     "longAgentSettings.instructionSeparator": "单条指令内部可以换行；多条指令之间使用独立一行 {separator} 分隔。",
     "longAgentSettings.onePerLine": "每行一项",

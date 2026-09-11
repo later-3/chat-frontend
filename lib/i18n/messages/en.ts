@@ -466,6 +466,8 @@ export const enLocale: LocalePlugin = {
     "longAgentSettings.piDefaultPrompt": "Use Pi default System Prompt",
     "longAgentSettings.replacePrompt": "Replace System Prompt",
     "longAgentSettings.systemPromptText": "Replacement System Prompt",
+    "longAgentSettings.responseTemplate": "Reply format requirement (empty = none)",
+    "longAgentSettings.responseTemplateHint": "Variables: {{project}} current context project, {{agentName}}, {{date}}. Injected as a prompt requirement, so the Agent writes it at the end of its reply and Web, channels and session history stay identical. The default requires “project: <name>”.",
     "longAgentSettings.customInstructions": "Custom instructions",
     "longAgentSettings.instructionSeparator": "Keep line breaks inside one instruction. Separate instructions with a line containing {separator}.",
     "longAgentSettings.onePerLine": "One item per line",
