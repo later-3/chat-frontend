@@ -82,6 +82,8 @@ export interface LongAgentConfigurationDocument {
     readonly avatar: LongAgentAvatar;
     readonly enabled: boolean;
     readonly defaultProjectId: string;
+    /** 回复模板；null 表示使用默认（project 尾注）。 */
+    readonly responseTemplate: string | null;
     readonly effective: LongAgentEffectiveConfig;
     readonly definition: {
       readonly schemaVersion: 1;
@@ -109,6 +111,7 @@ export interface LongAgentConfigurationDocument {
 
 export interface LongAgentConfigurationUpdate {
   readonly name: string;
+  readonly responseTemplate?: string | null;
   readonly description: string;
   /** Display avatar; `undefined` keeps the current value, `image` avatars change only via the upload endpoint. */
   readonly avatar?: { readonly kind: "auto" } | { readonly kind: "emoji"; readonly emoji: string };
@@ -339,6 +342,9 @@ function parseLongAgentConfiguration(value: unknown): LongAgentConfigurationDocu
       description: value.agent.description,
       avatar: parseAvatar(value.agent.avatar),
       enabled: value.agent.enabled,
+    responseTemplate: value.agent.responseTemplate === null || value.agent.responseTemplate === undefined
+      ? null
+      : (value.agent.responseTemplate as string),
       defaultProjectId: value.agent.defaultProjectId,
       effective: parseEffective(value.agent.effective),
       definition: {
@@ -396,6 +402,8 @@ export async function fetchLongAgents(projectId?: string, signal?: AbortSignal):
 
 export async function sendLongAgentMessage(input: {
   readonly longAgentId: string;
+  /** 用户在顶栏选择的上下文项目（B1）；只注入提示词，不改变会话归属。 */
+  readonly contextProjectId?: string;
   readonly projectId: string;
   readonly sessionId?: string;
   readonly text: string;
@@ -405,6 +413,7 @@ export async function sendLongAgentMessage(input: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       projectId: input.projectId,
+      ...(input.contextProjectId === undefined ? {} : { contextProjectId: input.contextProjectId }),
       ...(input.sessionId === undefined ? {} : { sessionId: input.sessionId }),
       text: input.text,
     }),

@@ -159,6 +159,8 @@ export interface NoticeItem {
 
 interface UseAgentSessionOptions {
   projectId: string;
+  /** 顶栏上下文项目（B1）：随消息传给 Long Agent，仅注入提示词。 */
+  contextProjectId?: string | null;
   session: SessionInfo | null;
   sessionRunning?: boolean;
   newSessionCwd: string | null;
@@ -385,6 +387,7 @@ function hasLongAgentReply(messages: readonly AgentMessage[], messageId: string,
 export function useAgentSession(opts: UseAgentSessionOptions) {
   const {
     projectId,
+    contextProjectId,
     session,
     newSessionCwd,
     newSessionDraftKey,
@@ -810,6 +813,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             ? { sessionId: activeDedicatedSessionId }
             : {}),
           text: message,
+          ...(contextProjectId == null ? {} : { contextProjectId }),
         }, controller.signal);
         longAgentAccepted = true;
         const previousSessionId = sessionIdRef.current;

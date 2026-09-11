@@ -2289,6 +2289,7 @@ export function AppShell({
             <ChatWindow
               key={sessionKey}
               projectId={currentProjectId}
+              contextProjectId={activeProjectId}
               session={selectedSession}
               sessionRunning={Boolean(selectedSession && runningSessionIds.has(selectedSession.id))}
               newSessionCwd={effectiveNewSessionCwd}
