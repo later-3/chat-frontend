@@ -151,6 +151,7 @@ interface WorktreeState {
 interface ProjectSelection {
   root: string;
   key: string;
+  kind?: string;
 }
 
 interface ValidatedProject {
@@ -560,16 +561,17 @@ export function SessionSidebar({ selectedSession, selectedSessionId, newSessionD
   const restoredRef = useRef(false);
   const defaultLongAgentTriedRef = useRef(false);
 
-  const projectSelection = useCallback((root: string, key: string): ProjectSelection => ({
+  const projectSelection = useCallback((root: string, key: string, kind?: string): ProjectSelection => ({
     root,
     key,
+    ...(kind === undefined ? {} : { kind }),
   }), []);
 
   /** Resolve both display root and stable identity from server-provided data. */
   const projectFor = useCallback((cwd: string | null): ProjectSelection | null => {
     if (!cwd) return null;
     const registered = registeredProjects.find((project) => project.path === cwd);
-    if (registered) return projectSelection(registered.path, registered.projectId);
+    if (registered) return projectSelection(registered.path, registered.projectId, registered.kind);
     if (selectedProjectId && selectedCwdProp === cwd) return projectSelection(cwd, selectedProjectId);
     // /api/projects/open resolves identity before a custom path becomes active,
     // preventing one render with a raw path key from looking like a switch.
@@ -599,6 +601,8 @@ export function SessionSidebar({ selectedSession, selectedSessionId, newSessionD
   useEffect(() => {
     const project = projectFor(selectedCwd);
     const previous = lastNotifiedProjectRef.current;
+    // 长期同事会话的 workspace 是它的 home，不是上下文切换：不通知父级，顶栏保持用户所选上下文项目。
+    if (project?.kind === "agent") return;
     if (previous?.cwd === selectedCwd && previous.key === (project?.key ?? null)) return;
     lastNotifiedProjectRef.current = { cwd: selectedCwd, key: project?.key ?? null };
     onCwdChange?.(
@@ -1163,7 +1167,12 @@ export function SessionSidebar({ selectedSession, selectedSessionId, newSessionD
           >
             {selectedCwd ? (
               <PathLabel
-                text={displayCwd(selectedProject?.root ?? selectedCwd, homeDir)}
+                text={displayCwd(
+                  selectedSession?.owner?.type === "long-agent" && selectedProject?.kind === "agent"
+                    ? registeredProjects.find((project) => project.kind === "share")?.path ?? selectedProject.root
+                    : selectedProject?.root ?? selectedCwd,
+                  homeDir,
+                )}
                 style={{
                   flex: 1,
                   fontFamily: "var(--font-mono)",
