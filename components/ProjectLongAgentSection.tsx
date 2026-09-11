@@ -104,7 +104,9 @@ export function ProjectLongAgentSection({
     setOpeningAgentId(agent.id);
     setError(null);
     try {
-      const started = await startProjectLongAgent({ longAgentId: agent.id, projectId });
+      // 长期同事可以直接会话：它的会话永远落在它自己的 home 项目（defaultProjectId），
+      // 而不是当前选中的项目——否则在 Agent 工作区视图里会落到错误的项目并打开空会话。
+      const started = await startProjectLongAgent({ longAgentId: agent.id, projectId: agent.defaultProjectId });
       // start 返回的 projectId 是会话真实归属（共享 daily 入口会重定向到 Agent 自己的
       // Daily Project）；打开时必须用它，否则前端会拿当前项目去查一个不存在的会话。
       const sessionProjectId = started.projectId ?? projectId;
