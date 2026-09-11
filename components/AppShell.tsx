@@ -507,6 +507,8 @@ export function AppShell({
   const initialSessionId = initialNavigation.sessionId;
   const [activeCwd, setActiveCwd] = useState<string | null>(null);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  // 用户显式选择的上下文项目（顶部栏）；Long Agent 会话不覆盖它。
+  const [contextCwd, setContextCwd] = useState<string | null>(null);
   const activeProjectKeyRef = useRef<string | null>(null);
   // True once the initial ?session= URL param has been resolved (or confirmed absent)
   const [initialSessionRestored, setInitialSessionRestored] = useState<boolean>(() => !initialSessionId);
@@ -609,6 +611,7 @@ export function AppShell({
     invalidateWorkspaceRestore();
     const currentFreshCwd = newSessionCwd ?? activeCwd;
     setActiveCwd(cwd);
+    if (cwd) setContextCwd(cwd);
     // Skip if cwd is null (initial mount).
     if (!cwd) return;
     const newProject = projectKey ?? projectRoot ?? cwd;
@@ -683,6 +686,8 @@ export function AppShell({
     }
     setNewSessionCwd(null);
     setSelectedSession(session);
+    // 长期同事会话不占用顶部的上下文项目；普通会话仍跟随其项目。
+    if (session.owner?.type !== "long-agent") setContextCwd(session.cwd);
     setSessionKey((k) => k + 1);
     setSystemPrompt(null);
     setMobileUtilitiesOpen(false);
@@ -983,7 +988,11 @@ export function AppShell({
         onReady={onWorkspaceReady}
         refreshKey={refreshKey}
         onSessionRemoved={handleSessionRemoved}
-        selectedCwd={selectedSession?.cwd ?? newSessionCwd ?? null}
+        selectedCwd={selectedSession === null
+          ? (newSessionCwd ?? contextCwd)
+          : selectedSession.owner?.type === "long-agent"
+            ? (contextCwd ?? selectedSession.cwd)
+            : selectedSession.cwd}
         selectedProjectId={selectedSession?.projectId ?? activeProjectId}
         onCwdChange={handleCwdChange}
         onOpenFile={handleOpenFile}
