@@ -678,3 +678,58 @@ export async function submitLongAgentTask(
   if (!response.ok) throw new Error(readMessage(body, "定时任务操作失败", response.status));
   return parseTaskResponse(body, "定时任务响应");
 }
+
+export interface LongAgentActivityDay {
+  readonly date: string;
+  readonly sessions: number;
+  readonly turns: number;
+  readonly tokens: { readonly input: number; readonly output: number; readonly total: number };
+  readonly tools: readonly { readonly name: string; readonly count: number }[];
+  readonly models: readonly string[];
+}
+
+export interface LongAgentFeedPost {
+  readonly id: string;
+  readonly longAgentId: string;
+  readonly date: string;
+  readonly text: string;
+  readonly createdAt: string;
+  readonly comments: readonly { readonly id: string; readonly longAgentId: string; readonly text: string; readonly createdAt: string }[];
+}
+
+/** 活动日历：某 Long Agent 每天的轮次、token 与工具调用。 */
+export async function fetchLongAgentActivity(
+  longAgentId: string,
+  range: { readonly from: string; readonly to: string },
+  signal?: AbortSignal,
+): Promise<readonly LongAgentActivityDay[]> {
+  const response = await fetch(
+    `/api/long-agents/${encodeURIComponent(longAgentId)}/activity?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`,
+    { cache: "no-store", credentials: "same-origin", ...(signal === undefined ? {} : { signal }) },
+  );
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(readMessage(body, "读取活动记录失败", response.status));
+  if (!isRecord(body) || !Array.isArray(body.days)) throw new Error("Chat返回了无效的活动记录");
+  return body.days as readonly LongAgentActivityDay[];
+}
+
+/** 朋友圈时间流（默认全部长期同事，含评论）。 */
+export async function fetchLongAgentFeed(
+  longAgentId: string,
+  options: { readonly from?: string; readonly to?: string; readonly limit?: number } = {},
+  signal?: AbortSignal,
+): Promise<readonly LongAgentFeedPost[]> {
+  const query = new URLSearchParams();
+  if (options.from !== undefined) query.set("from", options.from);
+  if (options.to !== undefined) query.set("to", options.to);
+  if (options.limit !== undefined) query.set("limit", String(options.limit));
+  const suffix = query.toString();
+  const response = await fetch(
+    `/api/long-agents/${encodeURIComponent(longAgentId)}/social${suffix === "" ? "" : `?${suffix}`}`,
+    { cache: "no-store", credentials: "same-origin", ...(signal === undefined ? {} : { signal }) },
+  );
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(readMessage(body, "读取朋友圈失败", response.status));
+  if (!isRecord(body) || !Array.isArray(body.posts)) throw new Error("Chat返回了无效的朋友圈");
+  return body.posts as readonly LongAgentFeedPost[];
+}

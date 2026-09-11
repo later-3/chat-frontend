@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { IconArrowLeft, IconBrain, IconClock, IconRefresh, IconSettings, IconUsersGroup } from "@tabler/icons-react";
+import { IconActivity, IconArrowLeft, IconBrain, IconClock, IconRefresh, IconSettings, IconUsersGroup } from "@tabler/icons-react";
 import { useI18n } from "@/hooks/useI18n";
 import { fetchChatModelCatalog, type ChatModelCatalog } from "@/lib/chat-workflows-browser";
 import {
@@ -37,6 +37,7 @@ import { LongAgentAvatarEditor } from "./LongAgentAvatarEditor";
 import { LongAgentGroupSettings } from "./LongAgentGroupSettings";
 import { LongAgentMemorySettings } from "./LongAgentMemorySettings";
 import { LongAgentTasksSettings } from "./LongAgentTasksSettings";
+import { LongAgentActivitySettings } from "./LongAgentActivitySettings";
 
 /**
  * 可选系统Tool清单只来自Backend `/api/tools`；这里只提供已知地址的本地化标签，
@@ -87,7 +88,7 @@ interface Draft {
   pluginSourcesText: string;
 }
 
-type SettingsTab = "runtime" | "tasks" | "agent-group" | "agent-memory";
+type SettingsTab = "runtime" | "tasks" | "activity" | "agent-group" | "agent-memory";
 
 function lines(value: string): string[] {
   return [...new Set(value.split("\n").map((item) => item.trim()).filter(Boolean))];
@@ -458,6 +459,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
   const tabs = [
     { id: "runtime", label: t("longAgentSettings.runtimeTab"), icon: IconSettings },
     { id: "tasks", label: t("longAgentSettings.tasksTab"), icon: IconClock },
+    { id: "activity", label: t("longAgentSettings.activityTab"), icon: IconActivity },
     { id: "agent-group", label: t("longAgentSettings.agentGroupTab"), icon: IconUsersGroup },
     { id: "agent-memory", label: t("longAgentSettings.agentMemoryTab"), icon: IconBrain },
   ] as const;
@@ -836,6 +838,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                   </section>
                 )}
                 {activeTab === "tasks" && <LongAgentTasksSettings longAgentId={document.agent.id} />}
+                {activeTab === "activity" && <LongAgentActivitySettings longAgentId={document.agent.id} />}
                 {activeTab === "agent-group" && <LongAgentGroupSettings longAgentId={document.agent.id} onDirtyChange={setTabDirty} />}
                 {activeTab === "agent-memory" && <LongAgentMemorySettings longAgentId={document.agent.id} onDirtyChange={setTabDirty} />}
               </div>
