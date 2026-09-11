@@ -1159,6 +1159,54 @@
   font-weight: 600;
 }
 
+
+.taskList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.taskRow {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.taskHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.taskHead strong {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.taskHead small {
+  color: var(--text-dim);
+  font-size: 10px;
+  flex: 1;
+}
+
+.taskPrompt {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+}
+
+.pending {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .page * {
     scroll-behavior: auto !important;

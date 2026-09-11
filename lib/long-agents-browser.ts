@@ -595,3 +595,77 @@ import {
   type WorkflowAgentResources,
   type WorkflowAgentToolPolicy,
 } from "./chat-workflow-contract.ts";
+
+export interface LongAgentTask {
+  readonly id: string;
+  readonly seriesId: string;
+  readonly status: string;
+  readonly processAfter: string | null;
+  readonly recurrence: string | null;
+  readonly prompt: string;
+  readonly script: string | null;
+  readonly sessionId: string;
+  readonly agentGroupId: string;
+  readonly createdAt: string;
+  readonly tries: number;
+}
+
+function parseTask(value: unknown, field: string): LongAgentTask {
+  if (!isRecord(value)) throw new Error(`Chat返回了无效的${field}`);
+  for (const key of ["id", "seriesId", "status", "sessionId", "agentGroupId", "createdAt"] as const) {
+    if (!nonEmpty(value[key])) throw new Error(`Chat返回了无效的${field}.${key}`);
+  }
+  if (value.prompt !== undefined && typeof value.prompt !== "string") throw new Error(`Chat返回了无效的${field}.prompt`);
+  if (value.recurrence !== undefined && value.recurrence !== null && typeof value.recurrence !== "string") {
+    throw new Error(`Chat返回了无效的${field}.recurrence`);
+  }
+  if (value.processAfter !== undefined && value.processAfter !== null && typeof value.processAfter !== "string") {
+    throw new Error(`Chat返回了无效的${field}.processAfter`);
+  }
+  return value as unknown as LongAgentTask;
+}
+
+function parseTaskResponse(body: unknown, field: string): { readonly tasks: readonly LongAgentTask[]; readonly task: LongAgentTask | null } {
+  if (!isRecord(body)) throw new Error(`Chat返回了无效的${field}`);
+  const tasks = Array.isArray(body.tasks) ? body.tasks.map((task, index) => parseTask(task, `${field}.tasks[${index}]`)) : [];
+  const task = isRecord(body.task) ? parseTask(body.task, `${field}.task`) : null;
+  return { tasks, task };
+}
+
+/** Lists one Long Agent's scheduled tasks. */
+export async function fetchLongAgentTasks(longAgentId: string, signal?: AbortSignal): Promise<readonly LongAgentTask[]> {
+  const response = await fetch(`/api/long-agents/${encodeURIComponent(longAgentId)}/tasks`, {
+    cache: "no-store", credentials: "same-origin", ...(signal === undefined ? {} : { signal }),
+  });
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(readMessage(body, "读取定时任务失败", response.status));
+  return parseTaskResponse(body, "定时任务列表").tasks;
+}
+
+function readMessage(body: unknown, fallback: string, status: number): string {
+  return isRecord(body) && typeof body.message === "string" ? body.message : `${fallback}: HTTP ${String(status)}`;
+}
+
+/** Creates, updates, pauses, resumes, runs or deletes one scheduled task. */
+export async function submitLongAgentTask(
+  longAgentId: string,
+  input: {
+    readonly operation: "create" | "update" | "pause" | "resume" | "delete" | "run";
+    readonly taskId?: string;
+    readonly name?: string;
+    readonly prompt?: string;
+    readonly recurrence?: string | null;
+    readonly processAfter?: string;
+    readonly reason?: string;
+  },
+): Promise<{ readonly tasks: readonly LongAgentTask[]; readonly task: LongAgentTask | null }> {
+  const response = await fetch(`/api/long-agents/${encodeURIComponent(longAgentId)}/tasks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+    credentials: "same-origin",
+  });
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(readMessage(body, "定时任务操作失败", response.status));
+  return parseTaskResponse(body, "定时任务响应");
+}
