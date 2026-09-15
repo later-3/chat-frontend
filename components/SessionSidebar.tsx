@@ -13,7 +13,7 @@ import { DirectoryPicker } from "./DirectoryPicker";
 import { FileExplorer, type FileExplorerHandle } from "./FileExplorer";
 import { RemovedSessionsPanel } from "./RemovedSessionsPanel";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import { IconArchive, IconDotsVertical, IconPencil, IconX } from "@tabler/icons-react";
+import { IconArchive, IconPhoto, IconDotsVertical, IconPencil, IconX } from "@tabler/icons-react";
 import { removeSession, renameSession } from "@/lib/session-removal-browser";
 import { overlaySelectedSession } from "@/lib/session-summary";
 import { buildSidebarSessionTree, type SidebarSessionTreeNode } from "@/lib/session-tree";
@@ -91,6 +91,8 @@ function ToolbarIconButton({
 }
 
 interface Props {
+  momentsActive?: boolean;
+  onOpenMoments?: () => void;
   selectedSession: SessionInfo | null;
   selectedSessionId: string | null;
   newSessionDraftKey?: string | null;
@@ -366,7 +368,7 @@ function PiWebTitle() {
   );
 }
 
-export function SessionSidebar({ selectedSession, selectedSessionId, newSessionDraftKey, onSelectSession, onOpenSessionById, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, onReady, refreshKey, onSessionRemoved, selectedCwd: selectedCwdProp, selectedProjectId, onCwdChange, onOpenFile, explorerRefreshKey, onExplorerRefresh, onAtMention, onAtMentions, mobileView = "sessions", onMobileViewChange, onRequestClose, onBackgroundTaskDone, onRunningSessionIdsChange }: Props) {
+export function SessionSidebar({ momentsActive = false, onOpenMoments, selectedSession, selectedSessionId, newSessionDraftKey, onSelectSession, onOpenSessionById, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, onReady, refreshKey, onSessionRemoved, selectedCwd: selectedCwdProp, selectedProjectId, onCwdChange, onOpenFile, explorerRefreshKey, onExplorerRefresh, onAtMention, onAtMentions, mobileView = "sessions", onMobileViewChange, onRequestClose, onBackgroundTaskDone, onRunningSessionIdsChange }: Props) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
@@ -1142,6 +1144,15 @@ export function SessionSidebar({ selectedSession, selectedSessionId, newSessionD
             </button>
           </div>
           </div>
+        )}
+
+        {onOpenMoments && (
+          <nav className={modeStyles.globalNavigation} aria-label={t("social.navigation")}>
+            <button type="button" className={modeStyles.momentsLink} onClick={onOpenMoments} aria-current={momentsActive ? "page" : undefined}>
+              <IconPhoto size={20} stroke={1.7} aria-hidden="true" />
+              <span>{t("longAgentSettings.socialHeading")}</span>
+            </button>
+          </nav>
         )}
 
         {/* CWD picker */}

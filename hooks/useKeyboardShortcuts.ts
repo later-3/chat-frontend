@@ -21,6 +21,8 @@ export function registerAbortHandler(handler: (() => void) | null): void {
 // ---------------------------------------------------------------------------
 
 interface UseGlobalKeyboardShortcutsOptions {
+  /** Hidden chat surfaces must not receive shortcuts that stop background work. */
+  enabled?: boolean;
   /** Called when Ctrl+Alt+N is pressed. Receives current cwd. */
   onNewSession?: (cwd: string) => void;
   /** The currently selected project directory (sidebar cwd). */
@@ -42,9 +44,10 @@ interface UseGlobalKeyboardShortcutsOptions {
 export function useGlobalKeyboardShortcuts(
   options: UseGlobalKeyboardShortcutsOptions,
 ): void {
-  const { onNewSession, activeCwd } = options;
+  const { onNewSession, activeCwd, enabled = true } = options;
 
   useEffect(() => {
+    if (!enabled) return;
     const handler = (e: KeyboardEvent): void => {
       // ---- Esc: stop agent ----
       if (e.key === "Escape") {
@@ -69,5 +72,5 @@ export function useGlobalKeyboardShortcuts(
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [activeCwd, onNewSession]);
+  }, [activeCwd, enabled, onNewSession]);
 }

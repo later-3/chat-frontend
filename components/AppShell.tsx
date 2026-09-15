@@ -5,6 +5,8 @@ import { useBrowserRouter } from "@/lib/browser-router";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionSidebar, type MobileWorkspaceView } from "./SessionSidebar";
 import { ChatWindow } from "./ChatWindow";
+import { LongAgentFeedView } from "./LongAgentFeedView";
+import { useWorkspaceView } from "@/hooks/useWorkspaceView";
 import { FileViewer } from "./FileViewer";
 import { FullHistoryDialog } from "./FullHistoryDialog";
 import { TabBar, type Tab } from "./TabBar";
@@ -92,6 +94,7 @@ export function AppShell({
   onConnectionFailure,
 }: AppShellProps) {
   const router = useBrowserRouter();
+  const { view: workspaceView, openMoments, showChat: activateChat, goBack: returnFromMoments } = useWorkspaceView();
   const { preference, isDark, toggleTheme } = useTheme();
   const themeLabelKey =
     preference === "light" ? "theme.light" : preference === "dark" ? "theme.dark" : "theme.auto";
@@ -140,6 +143,14 @@ export function AppShell({
   const [mobileUtilitiesOpen, setMobileUtilitiesOpen] = useState(false);
   const [mobileWorkspaceView, setMobileWorkspaceView] = useState<MobileWorkspaceView>("sessions");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const chatSurfaceRef = useRef<HTMLDivElement>(null);
+  const momentsTriggerRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (workspaceView !== "chat" || !momentsTriggerRef.current) return;
+    const trigger = momentsTriggerRef.current;
+    (trigger.isConnected && trigger.offsetParent !== null ? trigger : chatSurfaceRef.current)?.focus({ preventScroll: true });
+    momentsTriggerRef.current = null;
+  }, [workspaceView]);
   const [rightPanelOpen, setRightPanelOpen] = useState(
     () => initialWorkspaceSnapshot.rightPanelOpen,
   );
@@ -670,6 +681,7 @@ export function AppShell({
   }, [activeCwd, invalidateWorkspaceRestore, newSessionCwd, router, selectedSession, restoreWorkspaceContext]);
 
   const handleSelectSession = useCallback((session: SessionInfo, isRestore = false) => {
+    if (!isRestore) activateChat();
     invalidateWorkspaceRestore();
     activeNewSessionDraftKeyRef.current = null;
     // Re-clicking the already-open session must not remount the chat and
@@ -705,9 +717,10 @@ export function AppShell({
     if (!isRestore) {
       router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
     }
-  }, [invalidateWorkspaceRestore, router, isMobile, selectedSession]);
+  }, [activateChat, invalidateWorkspaceRestore, router, isMobile, selectedSession]);
 
   const handleNewSession = useCallback((sessionId: string, cwd: string) => {
+    activateChat();
     invalidateWorkspaceRestore();
     const draftKey = `new:${sessionId}:${cwd}`;
     activeNewSessionDraftKeyRef.current = draftKey;
@@ -723,10 +736,11 @@ export function AppShell({
     setMobileUtilitiesOpen(false);
     if (isMobile) setSidebarOpen(false);
     router.replace("/", { scroll: false });
-  }, [invalidateWorkspaceRestore, router, isMobile]);
+  }, [activateChat, invalidateWorkspaceRestore, router, isMobile]);
 
   // Global keyboard shortcuts (handles Esc, Ctrl+Alt+N etc.)
   useGlobalKeyboardShortcuts({
+    enabled: workspaceView === "chat",
     onNewSession: (cwd: string) => handleNewSession(`kb-${Date.now()}`, cwd),
     activeCwd,
   });
@@ -976,6 +990,12 @@ export function AppShell({
   const sidebarContent = (
     <>
       <SessionSidebar
+        momentsActive={workspaceView === "moments"}
+        onOpenMoments={() => {
+          momentsTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+          openMoments();
+          if (isMobile) setSidebarOpen(false);
+        }}
         selectedSession={selectedSession}
         selectedSessionId={selectedSession?.id ?? null}
         newSessionDraftKey={newSessionDraftKey}
@@ -1845,8 +1865,10 @@ export function AppShell({
         />
       )}
 
-      {/* Center: chat */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+      {workspaceView === "moments" && <LongAgentFeedView onBack={returnFromMoments} />}
+
+      {/* Keep ChatWindow mounted while browsing Moments: draft, scroll and live Run remain owned by the same Session. */}
+      <div ref={chatSurfaceRef} tabIndex={-1} data-workspace-chat hidden={workspaceView !== "chat"} style={{ flex: 1, display: workspaceView === "chat" ? "flex" : "none", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         {isMobile && (
           <MobileWorkspaceHeader
             selectedSession={selectedSession}
@@ -2359,10 +2381,10 @@ export function AppShell({
 
       <div
         aria-hidden="true"
-        className={`right-panel-overlay-backdrop${rightPanelOpen ? " is-open" : ""}`}
+        className={`right-panel-overlay-backdrop${rightPanelOpen && workspaceView === "chat" ? " is-open" : ""}`}
         onClick={() => setRightPanelOpen(false)}
       />
-      {rightPanelOpen && (
+      {rightPanelOpen && workspaceView === "chat" && (
         <div
           {...rightPanelResizer.separatorProps}
           aria-controls="file-panel"
@@ -2376,10 +2398,11 @@ export function AppShell({
       <div
         ref={rightPanelResizer.panelRef}
         id="file-panel"
+        hidden={workspaceView !== "chat"}
         className={`right-panel-container${rightPanelOpen ? " right-panel-open" : " right-panel-closed"}${rightPanelResizer.isResizing ? " right-panel-resizing" : ""}`}
         style={{
           "--right-panel-width": `${rightPanelResizer.width}px`,
-          display: "flex",
+          display: workspaceView === "chat" ? "flex" : "none",
           flexDirection: "column",
           borderLeft: "1px solid var(--border)",
           background: "var(--bg)",

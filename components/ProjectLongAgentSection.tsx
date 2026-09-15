@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { IconRefresh, IconSettings } from "@tabler/icons-react";
+import { IconPlus, IconRefresh, IconSettings } from "@tabler/icons-react";
 import { useI18n } from "@/hooks/useI18n";
 import {
   createChatLongAgent,
@@ -12,7 +12,6 @@ import {
 import styles from "./ProjectLongAgentSection.module.css";
 import { LongAgentAvatarView } from "./LongAgentAvatar";
 import { LongAgentSettingsPanel } from "./LongAgentSettingsPanel";
-import { LongAgentFeedView } from "./LongAgentFeedView";
 
 interface Props {
   projectId: string | null;
@@ -39,7 +38,6 @@ export function ProjectLongAgentSection({
   const [error, setError] = useState<string | null>(null);
   const [openingAgentId, setOpeningAgentId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [feedOpen, setFeedOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createDraft, setCreateDraft] = useState({ id: "", name: "", description: "", nanoclawAgentGroupId: "" });
   const [creating, setCreating] = useState(false);
@@ -159,20 +157,11 @@ export function ProjectLongAgentSection({
         <button
           type="button"
           className={styles.settingsButton}
-          onClick={() => { setFeedOpen(true); setCreateOpen(false); }}
-          title={t("longAgentSettings.socialHeading")}
-          aria-label={t("longAgentSettings.socialHeading")}
-        >
-          <span aria-hidden="true" style={{ fontSize: 14, lineHeight: 1 }}>圈</span>
-        </button>
-        <button
-          type="button"
-          className={styles.settingsButton}
           onClick={() => setCreateOpen((open) => !open)}
           title={t("longAgent.create")}
           aria-label={t("longAgent.create")}
         >
-          <span aria-hidden="true" style={{ fontSize: 14, lineHeight: 1 }}>＋</span>
+          <IconPlus size={16} stroke={1.8} aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -285,7 +274,6 @@ export function ProjectLongAgentSection({
 
       {error && agents.length > 0 && <p className={styles.inlineError} role="status">{error}</p>}
     </section>
-    {feedOpen && <LongAgentFeedView onClose={() => setFeedOpen(false)} />}
     {settingsOpen && agents.length > 0 && (
       <LongAgentSettingsPanel
         agents={agents}

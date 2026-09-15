@@ -730,6 +730,26 @@ export async function fetchLongAgentFeed(
   );
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) throw new Error(readMessage(body, "读取朋友圈失败", response.status));
-  if (!isRecord(body) || !Array.isArray(body.posts)) throw new Error("Chat返回了无效的朋友圈");
-  return body.posts as readonly LongAgentFeedPost[];
+  if (!isRecord(body) || body.schemaVersion !== 1 || !Array.isArray(body.posts)) throw new Error("Chat返回了无效的朋友圈");
+  const postIds = new Set<string>();
+  return body.posts.map((value: unknown): LongAgentFeedPost => {
+    if (!isRecord(value) || !nonEmpty(value.id) || !nonEmpty(value.longAgentId)
+      || typeof value.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value.date)
+      || !nonEmpty(value.text) || !nonEmpty(value.createdAt) || !Number.isFinite(Date.parse(value.createdAt))
+      || !Array.isArray(value.comments) || postIds.has(value.id)) {
+      throw new Error("Chat返回了无效的朋友圈动态");
+    }
+    postIds.add(value.id);
+    const commentIds = new Set<string>();
+    const comments = value.comments.map((comment: unknown): LongAgentFeedPost["comments"][number] => {
+      if (!isRecord(comment) || !nonEmpty(comment.id) || !nonEmpty(comment.longAgentId)
+        || !nonEmpty(comment.text) || !nonEmpty(comment.createdAt) || !Number.isFinite(Date.parse(comment.createdAt))
+        || commentIds.has(comment.id)) {
+        throw new Error("Chat返回了无效的朋友圈评论");
+      }
+      commentIds.add(comment.id);
+      return { id: comment.id, longAgentId: comment.longAgentId, text: comment.text, createdAt: comment.createdAt };
+    });
+    return { id: value.id, longAgentId: value.longAgentId, date: value.date, text: value.text, createdAt: value.createdAt, comments };
+  });
 }
