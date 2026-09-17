@@ -28,6 +28,7 @@ import { MobileDebugOverlay } from "./MobileDebugOverlay";
 import { MobileWorkspaceHeader } from "./MobileWorkspaceHeader";
 import { DeviceSwitcher } from "./DeviceSwitcher";
 import { useAudio } from "@/hooks/useAudio";
+import { rekeyDraft } from "@/lib/draft-store";
 import { copyText } from "@/lib/clipboard";
 import { getFileName } from "@/lib/file-paths";
 import { openChatProject } from "@/lib/projects-contract";
@@ -73,6 +74,10 @@ type AutoNameStatus =
 
 const TOP_BAR_ICON_BUTTON_SIZE = 36;
 const LANGUAGE_MENU_WIDTH = 176;
+
+function parkedNewSessionDraftKey(cwd: string): string {
+  return `parked-new:${cwd}`;
+}
 
 interface AppShellProps {
   deviceDirectory: DeviceDirectoryResponse | null;
@@ -578,7 +583,7 @@ export function AppShell({
   // from handleCwdChange once the outgoing context has been reset. The session
   // is looked up against the live list so a deleted or drifted session falls
   // back to the default welcome page instead of erroring.
-  const restoreWorkspaceContext = useCallback((projectKey: string) => {
+  const restoreWorkspaceContext = useCallback((projectKey: string, cwd: string) => {
     const token = ++workspaceRestoreTokenRef.current;
     const lastOpenSessionId = getLastOpenSession(projectKey);
     if (!lastOpenSessionId) return;
@@ -599,6 +604,9 @@ export function AppShell({
           clearLastOpen(projectKey);
           return;
         }
+        const activeDraftKey = activeNewSessionDraftKeyRef.current;
+        if (activeDraftKey) rekeyDraft(activeDraftKey, parkedNewSessionDraftKey(cwd));
+        activeNewSessionDraftKeyRef.current = null;
         // Selecting the session must remount the chat with the session
         // present: useAgentSession loads content in a mount-only effect, so
         // the null-session welcome mount from the switch would never load
@@ -651,11 +659,17 @@ export function AppShell({
     }
     // Close any session that belongs to a different project — it no longer
     // matches the selected project directory.
+    const previousDraftKey = activeNewSessionDraftKeyRef.current;
+    if (previousDraftKey && currentFreshCwd) {
+      rekeyDraft(previousDraftKey, parkedNewSessionDraftKey(currentFreshCwd));
+    }
     const draftId = typeof crypto.randomUUID === "function"
       ? crypto.randomUUID()
       : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    const draftKey = `new:${draftId}:${cwd}`;
+    rekeyDraft(parkedNewSessionDraftKey(cwd), draftKey);
     setNewSessionDraftId(draftId);
-    activeNewSessionDraftKeyRef.current = `new:${draftId}:${cwd}`;
+    activeNewSessionDraftKeyRef.current = draftKey;
     setSelectedSession(null);
     setNewSessionCwd((prev) => {
       if (prev && prev !== cwd) return null;
@@ -675,7 +689,7 @@ export function AppShell({
       setRightPanelOpen(false);
       // Restore the workspace we switched to: its last open session, or keep
       // the default welcome page when none is remembered.
-      restoreWorkspaceContext(newProject);
+      restoreWorkspaceContext(newProject, cwd);
     }
     router.replace("/", { scroll: false });
   }, [activeCwd, invalidateWorkspaceRestore, newSessionCwd, router, selectedSession, restoreWorkspaceContext]);
@@ -683,6 +697,11 @@ export function AppShell({
   const handleSelectSession = useCallback((session: SessionInfo, isRestore = false) => {
     if (!isRestore) activateChat();
     invalidateWorkspaceRestore();
+    const activeDraftKey = activeNewSessionDraftKeyRef.current;
+    const activeDraftCwd = newSessionCwd ?? (selectedSession === null ? activeCwd : null);
+    if (activeDraftKey && activeDraftCwd) {
+      rekeyDraft(activeDraftKey, parkedNewSessionDraftKey(activeDraftCwd));
+    }
     activeNewSessionDraftKeyRef.current = null;
     // Re-clicking the already-open session must not remount the chat and
     // re-run the full load/positioning cycle. Only skip when the effective
@@ -717,12 +736,18 @@ export function AppShell({
     if (!isRestore) {
       router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
     }
-  }, [activateChat, invalidateWorkspaceRestore, router, isMobile, selectedSession]);
+  }, [activeCwd, activateChat, invalidateWorkspaceRestore, router, isMobile, newSessionCwd, selectedSession]);
 
   const handleNewSession = useCallback((sessionId: string, cwd: string) => {
     activateChat();
     invalidateWorkspaceRestore();
+    const previousDraftKey = activeNewSessionDraftKeyRef.current;
+    const previousCwd = newSessionCwd ?? (selectedSession === null ? activeCwd : null);
+    if (previousDraftKey && previousCwd) {
+      rekeyDraft(previousDraftKey, parkedNewSessionDraftKey(previousCwd));
+    }
     const draftKey = `new:${sessionId}:${cwd}`;
+    rekeyDraft(parkedNewSessionDraftKey(cwd), draftKey);
     activeNewSessionDraftKeyRef.current = draftKey;
     setNewSessionDraftId(sessionId);
     setSelectedSession(null);
@@ -736,7 +761,7 @@ export function AppShell({
     setMobileUtilitiesOpen(false);
     if (isMobile) setSidebarOpen(false);
     router.replace("/", { scroll: false });
-  }, [activateChat, invalidateWorkspaceRestore, router, isMobile]);
+  }, [activeCwd, activateChat, invalidateWorkspaceRestore, router, isMobile, newSessionCwd, selectedSession]);
 
   // Global keyboard shortcuts (handles Esc, Ctrl+Alt+N etc.)
   useGlobalKeyboardShortcuts({
