@@ -19,6 +19,12 @@ Frontend 不负责：
 - 在 React 内存、浏览器存储或构建产物中保存一份独立的服务端事实；
 - 在静态文件或 Vite 环境变量中保存 Credential、真实设备目录等私有数据。
 
+### 普通 Workflow 与终端接续
+
+普通 Session 使用 `activeWorkflowRun` 恢复所有 Workflow 的活跃 Run，兼容既有 `activePlanningExecution`。可见且空闲的当前会话每 3 秒重新读取 Backend；保留输入草稿，历史浏览时暂停自动替换。同步失败显示提示并重试，不能自动重发 Prompt。Session 侧栏继续使用自身刷新周期。
+
+Fork 通过 `lib/session-fork-browser.ts` 调用 `POST /api/sessions/:id/fork`，携带 Project、用户 Entry 与稳定 UUID requestId。响应通过运行时校验后切换到新 Session，所选文字存入子 Session 草稿；源会话不修改。正在运行、等待审核或 Long Agent 会话不允许此操作。完整合同见父仓库 `docs/architecture/chat-workflow-tui.md`。
+
 ### 1.1 当前Long Agent页面基线
 
 以下描述迁移前的现有界面和合同，不限定下一版设计。已认可目标包含独立Agent配置、各自Daily、多个主题Session、有效资源展示和工具执行Docker；当前尚未实现。联合设计从Chat父仓库`docs/architecture/chat-long-agent-roadmap.md`与`chat-module-contracts.md`进入，不延续旧唯一主Session或身份拆分作为永久约束。

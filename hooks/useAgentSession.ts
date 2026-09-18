@@ -19,7 +19,7 @@ import type {
   SessionInfo,
   SessionTreeNode,
 } from "@/lib/types";
-import { clearDraft } from "@/lib/draft-store";
+import { clearDraft, setDraft } from "@/lib/draft-store";
 import {
   cancelChatWorkflowRun,
   resumeChatWorkflowRun,
@@ -66,6 +66,7 @@ import {
 } from "@/lib/long-agents-browser";
 import { parseSessionInfo } from "@/lib/session-list-browser";
 import { sessionLongAgentId } from "@/lib/session-owner";
+import { forkSession } from "@/lib/session-fork-browser";
 
 export interface SessionData {
   session: SessionInfo;
@@ -85,6 +86,7 @@ export interface SessionData {
   workflowCallStatistics: WorkflowCallStatistics;
   workflowCallTree: WorkflowCallTreeNode[];
   promptResourceProposals: PromptResourceProposal[];
+  activeWorkflowRun?: SessionData["activePlanningExecution"];
   activePlanningExecution?: ChatWorkflowRunReference & {
     readonly workflowId: string;
     readonly phase: PlanningExecutionPhase;
@@ -357,6 +359,7 @@ async function fetchSessionData(
     workflowTurnConfigurations: body.workflowTurnConfigurations.map(parseWorkflowTurnConfiguration),
     ...workflowCallProjection,
     promptResourceProposals: body.promptResourceProposals.map(parsePromptResourceProposal),
+    ...(body.activeWorkflowRun === undefined ? {} : { activeWorkflowRun: parseActivePlanningExecution(body.activeWorkflowRun, projectId) }),
     ...(body.activePlanningExecution === undefined
       ? {}
       : { activePlanningExecution: parseActivePlanningExecution(body.activePlanningExecution, projectId) }),
@@ -394,6 +397,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     onAgentEnd,
     onSessionCreated,
     onSessionOpen,
+    onSessionForked,
     onBranchDataChange,
     onSystemPromptChange,
     onSystemPromptLoaderChange,
@@ -407,6 +411,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const [data, setData] = useState<SessionData | null>(null);
   const [loading, setLoading] = useState(!isNew);
+  const [forkingEntryId, setForkingEntryId] = useState<string | null>(null);
+  const forkRequestRef = useRef<{ sessionId: string; entryId: string; requestId: string } | null>(null);
+  const browsingHistoryRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [entryIds, setEntryIds] = useState<string[]>([]);
@@ -518,11 +525,12 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setMessages(body.context.messages);
     setEntryIds(body.context.entryIds);
     setActiveLeafId(body.leafId);
-    activeWorkflowRunRef.current = body.activePlanningExecution === undefined
+    const recoveredRun = body.activeWorkflowRun ?? body.activePlanningExecution;
+    activeWorkflowRunRef.current = recoveredRun === undefined
       ? null
       : {
-          runId: body.activePlanningExecution.runId,
-          workflowInvocationId: body.activePlanningExecution.workflowInvocationId,
+          runId: recoveredRun.runId,
+          workflowInvocationId: recoveredRun.workflowInvocationId,
           projectId,
         };
     setPlanReview(body.activePlanningExecution?.review ?? null);
@@ -688,6 +696,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [showActiveStage]);
 
   const loadSession = useCallback(async (sessionId: string) => {
+    browsingHistoryRef.current = false;
     sessionLoadAbortRef.current?.abort();
     const controller = new AbortController();
     sessionLoadAbortRef.current = controller;
@@ -711,6 +720,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [applySessionData, projectId]);
 
   const loadContext = useCallback(async (leafId: string | null) => {
+    browsingHistoryRef.current = true;
     const sessionId = sessionIdRef.current;
     if (!sessionId) return;
     const query = new URLSearchParams({ projectId, deferThinking: "1", deferMedia: "1" });
@@ -1027,7 +1037,21 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setPlanReview(null);
   }, [addNotice]);
   const unsupported = useCallback((message: string) => addNotice({ type: "info", message }), [addNotice]);
-  const handleFork = useCallback(async () => unsupported("当前Workflow模式尚未接入Session分支"), [unsupported]);
+  const handleFork = useCallback(async (entryId: string) => {
+    const currentSessionId = sessionIdRef.current;
+    if (!currentSessionId || forkingEntryId !== null || agentRunning || longAgentId !== null) return;
+    setForkingEntryId(entryId);
+    try {
+      if (forkRequestRef.current?.sessionId !== currentSessionId || forkRequestRef.current.entryId !== entryId) {
+        forkRequestRef.current = { sessionId: currentSessionId, entryId, requestId: crypto.randomUUID() };
+      }
+      const result = await forkSession(projectId, currentSessionId, entryId, forkRequestRef.current.requestId);
+      setDraft(result.sessionId, { value: result.selectedText, images: [] });
+      onSessionForked?.(result.sessionId);
+    } catch (cause) {
+      addNotice({ type: "error", message: cause instanceof Error ? cause.message : String(cause) });
+    } finally { setForkingEntryId(null); }
+  }, [addNotice, agentRunning, forkingEntryId, longAgentId, onSessionForked, projectId]);
   const handleNavigate = useCallback((leafId: string) => {
     void loadContext(leafId).catch((cause) => addNotice({
       type: "error",
@@ -1090,7 +1114,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [data?.sessionId, loadSession, session]);
 
   useEffect(() => {
-    const active = data?.activePlanningExecution;
+    const active = data?.activeWorkflowRun ?? data?.activePlanningExecution;
     if (active === undefined || workflowAbortRef.current !== null) return;
     const reference: ChatWorkflowRunReference = {
       runId: active.runId,
@@ -1139,7 +1163,33 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     return () => {
       if (workflowAbortRef.current === controller) controller.abort();
     };
-  }, [addNotice, applySessionData, data?.activePlanningExecution, handleRunEvent, onAgentEnd, projectId]);
+  }, [addNotice, applySessionData, data?.activeWorkflowRun, data?.activePlanningExecution, handleRunEvent, onAgentEnd, projectId]);
+
+  // External clients can create turns while this page is open. Preserve composer drafts and history browsing.
+  useEffect(() => {
+    if (!session || longAgentId !== null) return;
+    let stopped = false;
+    let refreshFailed = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const controller = new AbortController();
+    const refresh = async () => {
+      try {
+        if (document.visibilityState === "visible" && workflowAbortRef.current === null && !browsingHistoryRef.current) {
+          const body = await fetchSessionData(session.id, projectId, controller.signal);
+          if (!stopped && sessionIdRef.current === session.id && workflowAbortRef.current === null) applySessionData(body);
+        }
+        refreshFailed = false;
+      } catch (cause) {
+        if (!stopped && !refreshFailed) {
+          refreshFailed = true;
+          addNotice({ type: "error", message: `会话同步中断，将自动重试：${cause instanceof Error ? cause.message : String(cause)}` });
+        }
+      }
+      if (!stopped) timer = setTimeout(refresh, 3000);
+    };
+    timer = setTimeout(refresh, 3000);
+    return () => { stopped = true; controller.abort(); clearTimeout(timer); };
+  }, [addNotice, applySessionData, longAgentId, projectId, session?.id]);
 
   useEffect(() => {
     onSystemPromptChange?.(null);
@@ -1166,7 +1216,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     agentRunning, workflowId, longAgents, longAgentId,
     workflowAgentConfigs: agentConfigsByWorkflow[workflowId] ?? {},
     promptResourceProposals: data?.promptResourceProposals ?? [],
-    retryInfo: null, contextUsage: null as ContextUsage | null, systemPrompt: null, forkingEntryId: null,
+    retryInfo: null, contextUsage: null as ContextUsage | null, systemPrompt: null, forkingEntryId,
     isCompacting: false, compactError: null, compactResult: null,
     sessionStats,
     slashCommands: [] as SlashCommandInfo[], slashCommandsLoading: false,
