@@ -452,25 +452,48 @@ export async function startProjectLongAgent(input: {
   return parseProjectLongAgentStarted(await responseBody(response));
 }
 
-/** Creates one Long Agent with full Backend provisioning (S2 lifecycle). */
+export interface CreatedLongAgent {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+  readonly defaultProjectId: string;
+  readonly status: "active" | "archived";
+}
+
+export function parseCreatedLongAgent(value: unknown): CreatedLongAgent {
+  if (!isRecord(value) || value.schemaVersion !== 1 || !isRecord(value.agent)) throw new Error("Invalid Long Agent creation response");
+  const agent = value.agent;
+  if (Object.keys(value).some((key) => !["schemaVersion", "agent"].includes(key))
+    || Object.keys(agent).some((key) => !["id", "name", "description", "defaultProjectId", "status"].includes(key))
+    || typeof agent.id !== "string" || !/^[a-z0-9][a-z0-9._-]*$/.test(agent.id) || typeof agent.name !== "string" || !agent.name
+    || typeof agent.description !== "string" || typeof agent.defaultProjectId !== "string" || !agent.defaultProjectId
+    || (agent.status !== "active" && agent.status !== "archived")) throw new Error("Invalid created Long Agent");
+  return { id: agent.id, name: agent.name, description: agent.description, defaultProjectId: agent.defaultProjectId, status: agent.status };
+}
+
+/** Explicit first-use opt-in, idempotent when a coworker already exists. */
+export async function enableChatLongAgents(): Promise<CreatedLongAgent> {
+  const response = await fetch("/api/long-agents/enable", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: "{}", credentials: "same-origin",
+  });
+  return parseCreatedLongAgent(await responseBody(response));
+}
+
+/** Creates the Group and Agent home through the same Backend lifecycle service. */
 export async function createChatLongAgent(input: {
   readonly id: string;
   readonly name: string;
   readonly description?: string;
-  readonly instanceId: string;
-  readonly nanoclawAgentGroupId: string;
-}): Promise<void> {
+  readonly instanceId?: string;
+  readonly nanoclawAgentGroupId?: string;
+}): Promise<CreatedLongAgent> {
   const response = await fetch("/api/long-agents", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
     credentials: "same-origin",
   });
-  const body: unknown = await response.json().catch(() => null);
-  if (!response.ok) {
-    const message = isRecord(body) && typeof body.message === "string" ? body.message : `HTTP ${response.status}`;
-    throw new Error(message);
-  }
+  return parseCreatedLongAgent(await responseBody(response));
 }
 
 /** Archives or restores one Long Agent (S2 lifecycle). */

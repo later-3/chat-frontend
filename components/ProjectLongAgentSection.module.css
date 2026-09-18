@@ -230,7 +230,7 @@
 
 .inlineError {
   margin: 6px 2px 0;
-  color: var(--text-dim);
+  color: var(--text);
   font-size: 11px;
   line-height: 1.4;
   overflow-wrap: anywhere;
@@ -268,9 +268,51 @@
   color: var(--text);
 }
 
+.createForm label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.empty {
+  padding: 12px 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.empty button {
+  min-height: 36px;
+  padding: 8px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--bg-selected);
+  cursor: pointer;
+}
+
+.empty button:focus-visible,
+.createForm :is(input, button):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.empty button:disabled,
+.createForm button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .createForm input { font-size: 16px; min-height: 44px; }
+  .createForm button, .empty button, .settingsButton { min-width: 44px; min-height: 44px; }
+}
+
 .createHelp {
   font-size: 11px;
-  color: var(--text-dim);
+  color: var(--text-muted);
   margin: 0;
 }
 

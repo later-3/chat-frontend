@@ -5,6 +5,7 @@ import { IconPlus, IconRefresh, IconSettings } from "@tabler/icons-react";
 import { useI18n } from "@/hooks/useI18n";
 import {
   createChatLongAgent,
+  enableChatLongAgents,
   fetchLongAgents,
   startProjectLongAgent,
   type LongAgentSummary,
@@ -39,20 +40,15 @@ export function ProjectLongAgentSection({
   const [openingAgentId, setOpeningAgentId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [createDraft, setCreateDraft] = useState({ id: "", name: "", description: "", nanoclawAgentGroupId: "" });
+  const [createDraft, setCreateDraft] = useState({ id: "", name: "", description: "" });
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
 
   const load = useCallback(async (signal?: AbortSignal) => {
-    if (!projectId) {
-      setAgents([]);
-      setError(null);
-      return;
-    }
     setLoading(true);
     try {
-      const response = await fetchLongAgents(projectId, signal);
+      const response = await fetchLongAgents(projectId ?? undefined, signal);
       setAgents(response.agents);
       setError(null);
     } catch (cause) {
@@ -71,11 +67,9 @@ export function ProjectLongAgentSection({
         id: createDraft.id.trim(),
         name: createDraft.name.trim(),
         description: createDraft.description.trim(),
-        instanceId: "local",
-        nanoclawAgentGroupId: createDraft.nanoclawAgentGroupId.trim(),
       });
       setCreateOpen(false);
-      setCreateDraft({ id: "", name: "", description: "", nanoclawAgentGroupId: "" });
+      setCreateDraft({ id: "", name: "", description: "" });
       await load();
     } catch (cause) {
       setCreateError(cause instanceof Error ? cause.message : String(cause));
@@ -83,6 +77,17 @@ export function ProjectLongAgentSection({
       setCreating(false);
     }
   }, [createDraft, load]);
+
+  const enable = async () => {
+    setCreating(true);
+    setCreateError(null);
+    try {
+      await enableChatLongAgents();
+      await load();
+    } catch (cause) {
+      setCreateError(cause instanceof Error ? cause.message : String(cause));
+    } finally { setCreating(false); }
+  };
 
   useEffect(() => {
     setAgents([]);
@@ -100,7 +105,7 @@ export function ProjectLongAgentSection({
   );
 
   const handleOpen = useCallback(async (agent: LongAgentSummary) => {
-    if (!projectId || openingAgentId !== null || !agent.available) return;
+    if (openingAgentId !== null || !agent.available) return;
     setOpeningAgentId(agent.id);
     setError(null);
     try {
@@ -109,7 +114,7 @@ export function ProjectLongAgentSection({
       const started = await startProjectLongAgent({ longAgentId: agent.id, projectId: agent.defaultProjectId });
       // start 返回的 projectId 是会话真实归属（共享 daily 入口会重定向到 Agent 自己的
       // Daily Project）；打开时必须用它，否则前端会拿当前项目去查一个不存在的会话。
-      const sessionProjectId = started.projectId ?? projectId;
+      const sessionProjectId = started.projectId;
       setAgents((current) => current.map((item) => item.id === agent.id
         ? {
             ...item,
@@ -130,7 +135,7 @@ export function ProjectLongAgentSection({
     }
   }, [closeAfterOpen, onOpenSession, onRequestClose, openingAgentId, projectId]);
 
-  if (!projectId || !visible) return null;
+  if (!visible) return null;
 
   return (
     <>
@@ -157,7 +162,12 @@ export function ProjectLongAgentSection({
         <button
           type="button"
           className={styles.settingsButton}
-          onClick={() => setCreateOpen((open) => !open)}
+          disabled={creating}
+          onClick={() => {
+            setCreateError(null);
+            if (!createDraft.id) setCreateDraft((draft) => ({ ...draft, id: `agent-${crypto.randomUUID()}` }));
+            setCreateOpen((open) => !open);
+          }}
           title={t("longAgent.create")}
           aria-label={t("longAgent.create")}
         >
@@ -177,38 +187,33 @@ export function ProjectLongAgentSection({
       </div>
 
       {createOpen && (
-        <div className={styles.createForm}>
+        <form className={styles.createForm} onSubmit={(event) => { event.preventDefault(); void submitCreate(); }}>
           <p className={styles.createHelp}>{t("longAgent.createHint")}</p>
-          <input
+          <label>{t("longAgent.createId")}<input
             value={createDraft.id}
-            placeholder={t("longAgent.createId")}
+            required maxLength={80} pattern={"[a-z0-9][a-z0-9._\\-]*"} disabled={creating}
             onChange={(event) => setCreateDraft((draft) => ({ ...draft, id: event.target.value }))}
-          />
-          <input
+          /></label>
+          <label>{t("longAgent.createName")}<input
             value={createDraft.name}
-            placeholder={t("longAgent.createName")}
+            required maxLength={200} disabled={creating}
             onChange={(event) => setCreateDraft((draft) => ({ ...draft, name: event.target.value }))}
-          />
-          <input
+          /></label>
+          <label>{t("longAgent.createDescription")}<input
             value={createDraft.description}
-            placeholder={t("longAgent.createDescription")}
+            disabled={creating}
             onChange={(event) => setCreateDraft((draft) => ({ ...draft, description: event.target.value }))}
-          />
-          <input
-            value={createDraft.nanoclawAgentGroupId}
-            placeholder={t("longAgent.createGroupId")}
-            onChange={(event) => setCreateDraft((draft) => ({ ...draft, nanoclawAgentGroupId: event.target.value }))}
-          />
+          /></label>
           {createError && <p className={styles.inlineError} role="alert">{createError}</p>}
           <div>
-            <button type="button" disabled={creating} onClick={() => void submitCreate()}>
+            <button type="submit" disabled={creating || !createDraft.name.trim()}>
               {creating ? t("common.saving") : t("longAgent.createSubmit")}
             </button>
             <button type="button" disabled={creating} onClick={() => setCreateOpen(false)}>
               {t("common.close")}
             </button>
           </div>
-        </div>
+        </form>
       )}
 
       {loading && agents.length === 0 ? (
@@ -221,7 +226,15 @@ export function ProjectLongAgentSection({
           </button>
         </div>
       ) : agents.length === 0 ? (
-        <div className={styles.loading} role="status">{t("sidebar.longAgentEmpty")}</div>
+        <div className={styles.empty}>
+          <p>{t("sidebar.longAgentEmpty")}</p>
+          {!createOpen && <>
+            <button type="button" disabled={creating} onClick={() => void enable()}>
+              {creating ? t("common.saving") : t("longAgent.enable")}
+            </button>
+            {createError && <p className={styles.inlineError} role="alert">{createError}</p>}
+          </>}
+        </div>
       ) : (
         <nav aria-label={t("sidebar.longAgentCoworkers")}>
           <ul className={styles.list}>

@@ -27,6 +27,8 @@ Fork 通过 `lib/session-fork-browser.ts` 调用 `POST /api/sessions/:id/fork`�
 
 ### 1.1 当前Long Agent页面基线
 
+首次使用的“长期同事”面板不要求已选 Project。空状态通过 `POST /api/long-agents/enable`（空对象）显式创建默认 Nexus；有同事后仍提供“＋”创建。新建表单不接收 NanoClaw Group ID、不硬编码实例 ID，`POST /api/long-agents` 由 Backend 完成 Group 与独立空间初始化。两个响应共用运行时 Parser；失败保留草稿、允许原请求重试，成功重读列表，点击同事进入其 home 会话。前端不启动服务、不保存另一份启用状态。
+
 以下描述迁移前的现有界面和合同，不限定下一版设计。已认可目标包含独立Agent配置、各自Daily、多个主题Session、有效资源展示和工具执行Docker；当前尚未实现。联合设计从Chat父仓库`docs/architecture/chat-long-agent-roadmap.md`与`chat-module-contracts.md`进入，不延续旧唯一主Session或身份拆分作为永久约束。
 
 Workflow与长期Agent共享同一个Project和Chat Session模型，但不是输入区中的同一种选择项。Project侧边栏在同一Project上下文中提供互斥的“会话 / 长期同事”导航面板，默认显示“会话”。“会话”面板必须保留旧有普通Session的布局、列表信息和新建入口，不得为Long Agent预留占位；“长期同事”面板展示同事在当前Project中的唯一专属主Session入口和设置。专属主Session不在普通Session列表重复展示。

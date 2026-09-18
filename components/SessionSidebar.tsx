@@ -923,7 +923,8 @@ export function SessionSidebar({ momentsActive = false, onOpenMoments, selectedS
     if (lastClassifiedSessionKeyRef.current === classificationKey) return;
     if (selectedSessionId === null) {
       lastClassifiedSessionKeyRef.current = classificationKey;
-      setContentPanel("sessions");
+      // Initial Project discovery must not close first-use coworker setup.
+      // Explicit new-session actions already select the sessions panel.
       return;
     }
     lastClassifiedSessionKeyRef.current = classificationKey;
@@ -941,7 +942,6 @@ export function SessionSidebar({ momentsActive = false, onOpenMoments, selectedS
     if (nextIndex === null) return;
     event.preventDefault();
     const nextPanel = panels[nextIndex];
-    if (nextPanel === "long-agents" && activeProjectId === null) return;
     setContentPanel(nextPanel);
     const tabs = event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
     tabs?.[nextIndex]?.focus();
@@ -1703,7 +1703,6 @@ export function SessionSidebar({ momentsActive = false, onOpenMoments, selectedS
                 aria-controls={`sidebar-${panel}-panel`}
                 aria-selected={contentPanel === panel}
                 tabIndex={contentPanel === panel ? 0 : -1}
-                disabled={panel === "long-agents" && activeProjectId === null}
                 onClick={() => setContentPanel(panel)}
                 onKeyDown={handleContentPanelKeyDown}
               >
