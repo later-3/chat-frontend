@@ -1,6 +1,7 @@
 export type WorkflowCallStatus = "starting" | "running" | "completed" | "failed" | "cancelled";
 
 export interface WorkflowCallEndpoint {
+  projectId?: string;
   sessionId: string;
   workflowId: string;
   workflowInvocationId: string;
@@ -39,6 +40,7 @@ function nonEmptyString(value: unknown, field: string): string {
 function endpoint(value: unknown, field: string): WorkflowCallEndpoint {
   if (!isRecord(value)) throw new Error(`Chat返回了无效Workflow调用树: ${field}`);
   return {
+    ...(value.projectId === undefined ? {} : { projectId: nonEmptyString(value.projectId, `${field}.projectId`) }),
     sessionId: nonEmptyString(value.sessionId, `${field}.sessionId`),
     workflowId: nonEmptyString(value.workflowId, `${field}.workflowId`),
     workflowInvocationId: nonEmptyString(value.workflowInvocationId, `${field}.workflowInvocationId`),

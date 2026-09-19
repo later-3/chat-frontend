@@ -19,7 +19,6 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       "/api": chatBackendUrl,
-      "/login": chatBackendUrl,
       "/run": chatBackendUrl,
       "/runs": chatBackendUrl
     }

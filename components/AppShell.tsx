@@ -1,11 +1,16 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect, useLayoutEffect } from "react";
+import { CoworkerDetails } from "./CoworkerDetails";
+import { WorkspaceNavigation, type WorkspaceSection } from "./WorkspaceNavigation";
+import { WorkspaceSettings } from "./WorkspaceSettings";
+import { IconLayoutSidebar, IconFolder, IconX, IconArrowLeft, IconUser } from "@tabler/icons-react";
 import { useBrowserRouter } from "@/lib/browser-router";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionSidebar, type MobileWorkspaceView } from "./SessionSidebar";
 import { ChatWindow } from "./ChatWindow";
 import { LongAgentFeedView } from "./LongAgentFeedView";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useWorkspaceView } from "@/hooks/useWorkspaceView";
 import { FileViewer } from "./FileViewer";
 import { FullHistoryDialog } from "./FullHistoryDialog";
@@ -25,13 +30,11 @@ import { useIsMobile, useIsNarrowMobile } from "@/hooks/useIsMobile";
 import { useVisualViewport } from "@/hooks/useVisualViewport";
 import { useResizablePanel } from "@/hooks/useResizablePanel";
 import { MobileDebugOverlay } from "./MobileDebugOverlay";
-import { MobileWorkspaceHeader } from "./MobileWorkspaceHeader";
 import { DeviceSwitcher } from "./DeviceSwitcher";
 import { useAudio } from "@/hooks/useAudio";
-import { rekeyDraft } from "@/lib/draft-store";
 import { copyText } from "@/lib/clipboard";
 import { getFileName } from "@/lib/file-paths";
-import { openChatProject } from "@/lib/projects-contract";
+import { fetchChatProjects, openChatProject } from "@/lib/projects-contract";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
 import {
   claimExtensionAttentionNotification,
@@ -45,6 +48,7 @@ import {
   workspaceKeyOf,
 } from "@/lib/workspace-memory";
 import {
+  isRightPanelOverlay,
   getDefaultRightPanelWidth,
   getRightPanelMaxWidth,
   getSidebarMaxWidth,
@@ -66,18 +70,9 @@ import { mergeSessionSummary } from "@/lib/session-summary";
 import { fetchProjectSessionById, parseSessionListPage } from "@/lib/session-list-browser";
 
 type SessionCopyField = "file" | "id";
-type AutoNameStatus =
-  | { kind: "idle" }
-  | { kind: "naming" }
-  | { kind: "success" }
-  | { kind: "error"; message: string };
-
 const TOP_BAR_ICON_BUTTON_SIZE = 36;
 const LANGUAGE_MENU_WIDTH = 176;
 
-function parkedNewSessionDraftKey(cwd: string): string {
-  return `parked-new:${cwd}`;
-}
 
 interface AppShellProps {
   deviceDirectory: DeviceDirectoryResponse | null;
@@ -99,8 +94,33 @@ export function AppShell({
   onConnectionFailure,
 }: AppShellProps) {
   const router = useBrowserRouter();
+  const deviceId = deviceDirectory?.currentDeviceId ?? window.location.origin;
+  const projectIdsByCwd = useRef(new Map<string, string>(initialWorkspaceSnapshot.contextSelection
+    ? [[initialWorkspaceSnapshot.contextSelection.cwd, initialWorkspaceSnapshot.contextSelection.projectId]] : []));
+  const projectDraftKey = useCallback((cwd: string) =>
+    JSON.stringify([deviceId, "new", projectIdsByCwd.current.get(cwd) ?? cwd]), [deviceId]);
+  const [contentPanel, setContentPanel] = useState<"sessions" | "long-agents">(
+    () => initialNavigation.requestedCwd ? "sessions" : "long-agents",
+  );
+  const [settingsVisible, setSettingsVisible] = useState(false);
+  const [wideContent, setWideContent] = useState(() => {
+    try { return localStorage.getItem("chat:wide-content") === "true"; } catch { return false; }
+  });
+  const toggleContentWidth = () => setWideContent(current => {
+    try { localStorage.setItem("chat:wide-content", String(!current)); } catch { /* Layout remains usable without storage. */ }
+    return !current;
+  });
+  const [projectSlot, setProjectSlot] = useState<HTMLDivElement | null>(null);
+  const [filesSlot, setFilesSlot] = useState<HTMLDivElement | null>(null);
+  const lastCoworkerRef = useRef<SessionInfo | null>(null);
+  const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
+  useEffect(() => {
+    const resize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, []);
   const { view: workspaceView, openMoments, showChat: activateChat, goBack: returnFromMoments } = useWorkspaceView();
-  const { preference, isDark, toggleTheme } = useTheme();
+  const { preference, toggleTheme } = useTheme();
   const themeLabelKey =
     preference === "light" ? "theme.light" : preference === "dark" ? "theme.dark" : "theme.auto";
   const { locale, setLocale, t: translate, supportedLocales } = useI18n();
@@ -142,10 +162,8 @@ export function AppShell({
   const [pluginsConfigOpen, setPluginsConfigOpen] = useState(false);
   const [extensionsConfigOpen, setExtensionsConfigOpen] = useState(false);
   // 左下角 Agent 配置菜单：把模型/记忆/Tools/技能/规则/插件/Ext 七个配置入口收敛为一个触发器 + 弹出菜单。
-  const [agentConfigMenuOpen, setAgentConfigMenuOpen] = useState(false);
   const [fullHistorySessionId, setFullHistorySessionId] = useState<string | null>(null);
   const [mobileDebugOpen, setMobileDebugOpen] = useState(false);
-  const [mobileUtilitiesOpen, setMobileUtilitiesOpen] = useState(false);
   const [mobileWorkspaceView, setMobileWorkspaceView] = useState<MobileWorkspaceView>("sessions");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const chatSurfaceRef = useRef<HTMLDivElement>(null);
@@ -189,11 +207,17 @@ export function AppShell({
       }),
     [sidebarOpen],
   );
+  const getSidebarResizeMaxWidth = useCallback(() => {
+    const viewport = window.innerWidth;
+    const inlineRight = rightPanelOpen && !isRightPanelOverlay(viewport, sidebarOpen);
+    return Math.min(SIDEBAR_MAX_WIDTH, viewport - 64 - 480 - 1 - (inlineRight ? rightPanelWidthRef.current + 1 : 0));
+  }, [rightPanelOpen, sidebarOpen]);
   const sidebarResizer = useResizablePanel({
     ariaLabel: translate("layout.resizeSidebar"),
     cssVariable: "--sidebar-width",
     defaultWidth: SIDEBAR_DEFAULT_WIDTH,
     getMaxWidth: getResponsiveSidebarMaxWidth,
+    getResizeMaxWidth: getSidebarResizeMaxWidth,
     growthDirection: "right",
     maxWidth: SIDEBAR_MAX_WIDTH,
     minWidth: SIDEBAR_MIN_WIDTH,
@@ -220,6 +244,9 @@ export function AppShell({
     if (isMobile) setSidebarOpen(false);
   }, [isMobile]);
   useEffect(() => {
+    if (viewportWidth < 960 && rightPanelOpen) setSidebarOpen(false);
+  }, [viewportWidth, rightPanelOpen]);
+  useEffect(() => {
     setMobileSidebarReady(true);
   }, []);
   useEffect(() => {
@@ -227,10 +254,9 @@ export function AppShell({
     reclampSidebarWidth();
     reclampRightPanelWidth();
   }, [reclampRightPanelWidth, reclampSidebarWidth, rightPanelOpen]);
+  useEffect(() => { reclampRightPanelWidth(); }, [sidebarResizer.width, reclampRightPanelWidth]);
   const chatInputRef = useRef<ChatInputHandle | null>(null);
   const topBarRef = useRef<HTMLDivElement>(null);
-  const agentConfigRef = useRef<HTMLDivElement>(null);
-  const agentConfigTriggerRef = useRef<HTMLButtonElement>(null);
   const mobileToolbarRef = useRef<HTMLDivElement>(null);
   const languageBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -268,8 +294,6 @@ export function AppShell({
 
   // Session stats (tokens + cost) — populated by ChatWindow, displayed in top bar
   const [sessionStats, setSessionStats] = useState<SessionStatsInfo | null>(null);
-  const [autoNameStatus, setAutoNameStatus] = useState<AutoNameStatus>({ kind: "idle" });
-  const autoNameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeSessionIdRef = useRef<string | null>(selectedSession?.id ?? null);
   activeSessionIdRef.current = selectedSession?.id ?? null;
   const handleSessionStatsChange = useCallback((stats: SessionStatsInfo | null) => {
@@ -288,7 +312,6 @@ export function AppShell({
   useEffect(() => {
     return () => {
       if (sessionCopyTimerRef.current) clearTimeout(sessionCopyTimerRef.current);
-      if (autoNameTimerRef.current) clearTimeout(autoNameTimerRef.current);
     };
   }, []);
 
@@ -309,7 +332,6 @@ export function AppShell({
     if (isMobile) {
       setSidebarOpen(false);
       setRightPanelOpen(false);
-      setMobileUtilitiesOpen(false);
     }
     setActiveTopPanel((cur) => cur === panel ? null : panel);
     if (isMobile && isNarrowMobile && keepMobileToolbarOpen) setMobileToolbarMoreOpen(true);
@@ -337,22 +359,20 @@ export function AppShell({
     if (isMobile) {
       setSidebarOpen(false);
       setRightPanelOpen(false);
-      setMobileUtilitiesOpen(false);
     }
     setMobileToolbarMoreOpen(false);
     setActiveTopPanel("session");
   }, [isMobile]);
 
   const handleSidebarToggle = useCallback(() => {
-    if (isMobile) {
+    if (isMobile || viewportWidth < 960) {
       setActiveTopPanel(null);
-      setMobileUtilitiesOpen(false);
       // On mobile, opening sidebar closes right panel (mutual exclusion)
       setRightPanelOpen(false);
       setMobileToolbarMoreOpen(false);
     }
     setSidebarOpen((open) => !open);
-  }, [isMobile]);
+  }, [isMobile, viewportWidth]);
 
   const handleMobileToolbarMoreToggle = useCallback(() => {
     setSidebarOpen(false);
@@ -396,61 +416,6 @@ export function AppShell({
     setMobileToolbarMoreOpen(false);
   }, [isMobile, isNarrowMobile, selectedSession?.id, newSessionDraftId]);
 
-  const closeAgentConfigMenu = useCallback((restoreFocus: boolean) => {
-    setAgentConfigMenuOpen(false);
-    if (restoreFocus) agentConfigTriggerRef.current?.focus();
-  }, []);
-
-  // 菜单打开时把焦点移入第一个可用项；点击菜单外任意处关闭。
-  useEffect(() => {
-    if (!agentConfigMenuOpen) return;
-    const firstItem = agentConfigRef.current?.querySelector<HTMLElement>(
-      '[role="menuitem"]:not([disabled])',
-    );
-    firstItem?.focus();
-    const handlePointerDown = (event: PointerEvent) => {
-      const container = agentConfigRef.current;
-      if (container && event.composedPath().includes(container)) return;
-      setAgentConfigMenuOpen(false);
-    };
-    document.addEventListener("pointerdown", handlePointerDown, true);
-    return () => document.removeEventListener("pointerdown", handlePointerDown, true);
-  }, [agentConfigMenuOpen]);
-
-  // 菜单键盘操作：Escape 关闭并归还焦点，方向键/Home/End 在可用项间循环，Tab 直接关闭。
-  const handleAgentConfigMenuKeyDown = useCallback((event: React.KeyboardEvent) => {
-    const items = Array.from(
-      agentConfigRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not([disabled])') ?? [],
-    );
-    const index = items.indexOf(document.activeElement as HTMLButtonElement);
-    switch (event.key) {
-      case "Escape":
-        event.preventDefault();
-        event.stopPropagation();
-        closeAgentConfigMenu(true);
-        break;
-      case "ArrowDown":
-        event.preventDefault();
-        if (items.length > 0) items[(index + 1) % items.length].focus();
-        break;
-      case "ArrowUp":
-        event.preventDefault();
-        if (items.length > 0) items[(index - 1 + items.length) % items.length].focus();
-        break;
-      case "Home":
-        event.preventDefault();
-        items[0]?.focus();
-        break;
-      case "End":
-        event.preventDefault();
-        items[items.length - 1]?.focus();
-        break;
-      case "Tab":
-        closeAgentConfigMenu(false);
-        break;
-    }
-  }, [closeAgentConfigMenu]);
-
   useEffect(() => {
     if (!activeTopPanel || !topBarRef.current) return;
     const update = () => {
@@ -478,6 +443,7 @@ export function AppShell({
   const [fileTabs, setFileTabs] = useState<Tab[]>(
     () => initialWorkspaceSnapshot.fileTabs.map((tab) => ({ ...tab })),
   );
+  const [detailsMode, setDetailsMode] = useState<"files" | "coworker">("files");
   const [activeFileTabId, setActiveFileTabId] = useState<string | null>(
     () => initialWorkspaceSnapshot.activeFileTabId,
   );
@@ -485,14 +451,21 @@ export function AppShell({
   const onWorkspaceSnapshotRef = useRef(onWorkspaceSnapshot);
   onWorkspaceSnapshotRef.current = onWorkspaceSnapshot;
   workspaceSnapshotRef.current = {
+    ...workspaceSnapshotRef.current,
     navigation: initialNavigation,
     fileTabs,
     activeFileTabId,
     rightPanelOpen,
   };
-  useEffect(() => () => {
-    onWorkspaceSnapshotRef.current(workspaceSnapshotRef.current);
+  useEffect(() => {
+    const save = () => onWorkspaceSnapshotRef.current(workspaceSnapshotRef.current);
+    window.addEventListener("pagehide", save);
+    return () => { window.removeEventListener("pagehide", save); save(); };
   }, []);
+  useEffect(() => {
+    const timer = setTimeout(() => onWorkspaceSnapshotRef.current(workspaceSnapshotRef.current), 200);
+    return () => clearTimeout(timer);
+  }, [fileTabs, activeFileTabId, rightPanelOpen]);
 
   const handleFileViewerStateChange = useCallback((
     tabId: string,
@@ -521,12 +494,18 @@ export function AppShell({
   }, [isMobile]);
 
   const initialSessionId = initialNavigation.sessionId;
-  const [activeCwd, setActiveCwd] = useState<string | null>(null);
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [activeCwd, setActiveCwd] = useState<string | null>(initialWorkspaceSnapshot.contextSelection?.cwd ?? null);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(initialWorkspaceSnapshot.contextSelection?.projectId ?? null);
   // 用户显式选择的上下文项目（顶部栏）；Long Agent 会话不覆盖它。
-  const [contextCwd, setContextCwd] = useState<string | null>(null);
+  const [contextCwd, setContextCwd] = useState<string | null>(initialWorkspaceSnapshot.contextSelection?.cwd ?? null);
   const activeProjectKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!contextCwd || !activeProjectId) return;
+    workspaceSnapshotRef.current = { ...workspaceSnapshotRef.current, contextSelection: { cwd: contextCwd, projectId: activeProjectId } };
+    onWorkspaceSnapshotRef.current(workspaceSnapshotRef.current);
+  }, [contextCwd, activeProjectId]);
   // True once the initial ?session= URL param has been resolved (or confirmed absent)
+  const [navigationError, setNavigationError] = useState<string | null>(null);
   const [initialSessionRestored, setInitialSessionRestored] = useState<boolean>(() => !initialSessionId);
   // Suppresses sessionKey bump in handleCwdChange during the initial URL restore
   const suppressCwdBumpRef = useRef(false);
@@ -546,7 +525,7 @@ export function AppShell({
     const projectKey = selectedSession.projectKey
       ?? activeProjectKeyRef.current
       ?? workspaceKeyOf(selectedSession);
-    setLastOpenSession(projectKey, selectedSession.id);
+    setLastOpenSession(JSON.stringify([deviceId, projectKey]), selectedSession.id);
   }, [selectedSession]);
 
   useEffect(() => {
@@ -562,9 +541,10 @@ export function AppShell({
         // The sidebar will notify us when it adopts this cwd. Avoid remounting
         // the just-created empty chat during that initial synchronization.
         suppressCwdBumpRef.current = true;
+        projectIdsByCwd.current.set(data.cwd, data.projectId);
         const draftId = `initial:${requestedCwd}`;
         setNewSessionDraftId(draftId);
-        activeNewSessionDraftKeyRef.current = `new:${draftId}:${data.cwd}`;
+        activeNewSessionDraftKeyRef.current = projectDraftKey(data.cwd);
         setNewSessionCwd(data.cwd);
         setActiveProjectId(data.projectId);
         setRefreshKey((key) => key + 1);
@@ -585,27 +565,25 @@ export function AppShell({
   // back to the default welcome page instead of erroring.
   const restoreWorkspaceContext = useCallback((projectKey: string, cwd: string) => {
     const token = ++workspaceRestoreTokenRef.current;
-    const lastOpenSessionId = getLastOpenSession(projectKey);
+    const lastOpenSessionId = getLastOpenSession(JSON.stringify([deviceId, projectKey]));
     if (!lastOpenSessionId) return;
     void fetch(`/api/sessions?projectId=${encodeURIComponent(projectKey)}`)
       .then(async (r) => (r.ok ? parseSessionListPage(await r.json() as unknown) : null))
       .then((d) => {
         if (token !== workspaceRestoreTokenRef.current) return; // stale switch
-        const s = d?.sessions.find((x) => x.id === lastOpenSessionId);
+        const s = d?.sessions.find((x) => x.id === lastOpenSessionId && x.owner.type === "ordinary");
         if (!s) {
           // The list loaded but the remembered session is gone — forget it.
           // When the list itself failed (d === null) keep the memory so a
           // later switch retries the restore.
-          if (d) clearLastOpen(projectKey);
+          if (d) clearLastOpen(JSON.stringify([deviceId, projectKey]));
           return;
         }
         if (workspaceKeyOf(s) !== projectKey) {
           // Defensive: the remembered session drifted out of this workspace.
-          clearLastOpen(projectKey);
+          clearLastOpen(JSON.stringify([deviceId, projectKey]));
           return;
         }
-        const activeDraftKey = activeNewSessionDraftKeyRef.current;
-        if (activeDraftKey) rekeyDraft(activeDraftKey, parkedNewSessionDraftKey(cwd));
         activeNewSessionDraftKeyRef.current = null;
         // Selecting the session must remount the chat with the session
         // present: useAgentSession loads content in a mount-only effect, so
@@ -628,16 +606,25 @@ export function AppShell({
     projectKey?: string | null,
   ) => {
     invalidateWorkspaceRestore();
+    setNavigationError(null);
     const currentFreshCwd = newSessionCwd ?? activeCwd;
     setActiveCwd(cwd);
     if (cwd) setContextCwd(cwd);
     // Skip if cwd is null (initial mount).
     if (!cwd) return;
     const newProject = projectKey ?? projectRoot ?? cwd;
+    projectIdsByCwd.current.set(cwd, newProject);
     setActiveProjectId(projectKey ?? selectedSession?.projectId ?? null);
     const currentProject = activeProjectKeyRef.current
       ?? (selectedSession ? workspaceKeyOf(selectedSession) : null);
     activeProjectKeyRef.current = newProject;
+    if (contentPanel === "long-agents") {
+      // A Project is context, never an instruction to replace the coworker.
+      suppressCwdBumpRef.current = false;
+      if (currentProject !== newProject) setActiveFileTabId(null);
+      return;
+    }
+
 
     // Keep the project identity in sync during the initial URL restore without
     // remounting the just-created or restored chat.
@@ -659,15 +646,10 @@ export function AppShell({
     }
     // Close any session that belongs to a different project — it no longer
     // matches the selected project directory.
-    const previousDraftKey = activeNewSessionDraftKeyRef.current;
-    if (previousDraftKey && currentFreshCwd) {
-      rekeyDraft(previousDraftKey, parkedNewSessionDraftKey(currentFreshCwd));
-    }
     const draftId = typeof crypto.randomUUID === "function"
       ? crypto.randomUUID()
       : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-    const draftKey = `new:${draftId}:${cwd}`;
-    rekeyDraft(parkedNewSessionDraftKey(cwd), draftKey);
+    const draftKey = projectDraftKey(cwd);
     setNewSessionDraftId(draftId);
     activeNewSessionDraftKeyRef.current = draftKey;
     setSelectedSession(null);
@@ -684,24 +666,22 @@ export function AppShell({
     if (currentProject !== newProject) {
       // File tabs are keyed by absolute path, so tabs opened in the previous
       // project must not linger. Same-project worktree switches keep them.
-      setFileTabs([]);
       setActiveFileTabId(null);
       setRightPanelOpen(false);
       // Restore the workspace we switched to: its last open session, or keep
       // the default welcome page when none is remembered.
       restoreWorkspaceContext(newProject, cwd);
     }
-    router.replace("/", { scroll: false });
-  }, [activeCwd, invalidateWorkspaceRestore, newSessionCwd, router, selectedSession, restoreWorkspaceContext]);
+    router.replace(`?cwd=${encodeURIComponent(cwd ?? "")}`, { scroll: false });
+  }, [activeCwd, contentPanel, invalidateWorkspaceRestore, newSessionCwd, router, selectedSession, restoreWorkspaceContext]);
 
   const handleSelectSession = useCallback((session: SessionInfo, isRestore = false) => {
+    setNavigationError(null);
     if (!isRestore) activateChat();
+    setSettingsVisible(false);
+    setContentPanel(session.owner.type === "long-agent" ? "long-agents" : "sessions");
+    if (session.owner.type === "long-agent") lastCoworkerRef.current = session;
     invalidateWorkspaceRestore();
-    const activeDraftKey = activeNewSessionDraftKeyRef.current;
-    const activeDraftCwd = newSessionCwd ?? (selectedSession === null ? activeCwd : null);
-    if (activeDraftKey && activeDraftCwd) {
-      rekeyDraft(activeDraftKey, parkedNewSessionDraftKey(activeDraftCwd));
-    }
     activeNewSessionDraftKeyRef.current = null;
     // Re-clicking the already-open session must not remount the chat and
     // re-run the full load/positioning cycle. Only skip when the effective
@@ -718,10 +698,13 @@ export function AppShell({
     setNewSessionCwd(null);
     setSelectedSession(session);
     // 长期同事会话不占用顶部的上下文项目；普通会话仍跟随其项目。
-    if (session.owner?.type !== "long-agent") setContextCwd(session.cwd);
+    if (session.owner?.type !== "long-agent") {
+      setContextCwd(session.cwd);
+      setActiveCwd(session.cwd);
+      setActiveProjectId(session.projectId ?? null);
+    }
     setSessionKey((k) => k + 1);
     setSystemPrompt(null);
-    setMobileUtilitiesOpen(false);
     setSystemPromptLoading(false);
     setInitialSessionRestored(true);
     // On mobile, collapse the overlay drawer so the chat is revealed after pick.
@@ -734,20 +717,17 @@ export function AppShell({
     // Skip router.replace when restoring from URL — the param is already correct
     // and calling replace in production Next.js triggers a Suspense remount loop
     if (!isRestore) {
-      router.replace(`?session=${encodeURIComponent(session.id)}`, { scroll: false });
+      router.push(`?session=${encodeURIComponent(session.id)}&projectId=${encodeURIComponent(session.projectId ?? session.projectKey ?? "")}`);
     }
   }, [activeCwd, activateChat, invalidateWorkspaceRestore, router, isMobile, newSessionCwd, selectedSession]);
 
   const handleNewSession = useCallback((sessionId: string, cwd: string) => {
+    setNavigationError(null);
+    setContentPanel("sessions");
+    setSettingsVisible(false);
     activateChat();
     invalidateWorkspaceRestore();
-    const previousDraftKey = activeNewSessionDraftKeyRef.current;
-    const previousCwd = newSessionCwd ?? (selectedSession === null ? activeCwd : null);
-    if (previousDraftKey && previousCwd) {
-      rekeyDraft(previousDraftKey, parkedNewSessionDraftKey(previousCwd));
-    }
-    const draftKey = `new:${sessionId}:${cwd}`;
-    rekeyDraft(parkedNewSessionDraftKey(cwd), draftKey);
+    const draftKey = projectDraftKey(cwd);
     activeNewSessionDraftKeyRef.current = draftKey;
     setNewSessionDraftId(sessionId);
     setSelectedSession(null);
@@ -758,14 +738,13 @@ export function AppShell({
     setSystemPrompt(null);
     setSystemPromptLoading(false);
     setActiveTopPanel(null);
-    setMobileUtilitiesOpen(false);
     if (isMobile) setSidebarOpen(false);
-    router.replace("/", { scroll: false });
-  }, [activeCwd, activateChat, invalidateWorkspaceRestore, router, isMobile, newSessionCwd, selectedSession]);
+    router.replace(`?cwd=${encodeURIComponent(cwd ?? "")}`, { scroll: false });
+  }, [activateChat, invalidateWorkspaceRestore, router, isMobile, projectDraftKey]);
 
   // Global keyboard shortcuts (handles Esc, Ctrl+Alt+N etc.)
   useGlobalKeyboardShortcuts({
-    enabled: workspaceView === "chat",
+    enabled: !settingsVisible && workspaceView === "chat",
     onNewSession: (cwd: string) => handleNewSession(`kb-${Date.now()}`, cwd),
     activeCwd,
   });
@@ -868,20 +847,6 @@ export function AppShell({
     });
   }, [deliverSessionNotification, selectedSession, translate]);
 
-  const handleAutoName = useCallback(async () => {
-    const sessionId = selectedSession?.id;
-    if (!sessionId || autoNameStatus.kind === "naming") return;
-    if (autoNameTimerRef.current) clearTimeout(autoNameTimerRef.current);
-    setActiveTopPanel(null);
-    setAutoNameStatus({ kind: "error", message: "当前Workflow模式尚未接入Session自动命名" });
-    autoNameTimerRef.current = setTimeout(() => setAutoNameStatus({ kind: "idle" }), 5000);
-  }, [autoNameStatus.kind, selectedSession?.id]);
-
-  useEffect(() => {
-    if (autoNameTimerRef.current) clearTimeout(autoNameTimerRef.current);
-    setAutoNameStatus({ kind: "idle" });
-  }, [selectedSession?.id]);
-
   const handleExplorerRefresh = useCallback(() => {
     setExplorerRefreshKey((k) => k + 1);
   }, []);
@@ -902,14 +867,65 @@ export function AppShell({
   }, [invalidateWorkspaceRestore, router, hydrateSelectedSession]);
 
   const handleOpenExistingSession = useCallback(async (sessionId: string, projectId: string) => {
+    const token = ++workspaceRestoreTokenRef.current;
     const target = await fetchProjectSessionById(projectId, sessionId);
-    handleSelectSession(target);
+    if (workspaceRestoreTokenRef.current === token) handleSelectSession(target);
   }, [handleSelectSession]);
+
+  useEffect(() => {
+    const restore = () => {
+      const url = new URL(window.location.href);
+      const sessionId = url.searchParams.get("session");
+      const projectId = url.searchParams.get("projectId");
+      const token = ++workspaceRestoreTokenRef.current;
+      if (!sessionId) {
+        const cwd = url.searchParams.get("cwd");
+        if (!cwd) return;
+        setNavigationError(translate("session.load"));
+        void openChatProject(cwd).then(project => {
+          if (token !== workspaceRestoreTokenRef.current) return;
+          projectIdsByCwd.current.set(project.cwd, project.projectId);
+          suppressCwdBumpRef.current = true;
+          setContextCwd(project.cwd);
+          setActiveCwd(project.cwd);
+          setActiveProjectId(project.projectId);
+          handleNewSession(`history:${project.projectId}`, project.cwd);
+        }).catch(() => {
+          if (token === workspaceRestoreTokenRef.current) setNavigationError(translate("workspaceNav.missingTarget"));
+        });
+        return;
+      }
+      if (sessionId === selectedSession?.id) {
+        setNavigationError(null);
+        return;
+      }
+      setNavigationError(translate("session.load"));
+      const lookup = projectId
+        ? fetchProjectSessionById(projectId, sessionId)
+        : fetchChatProjects().then(async projects => {
+          const pages = await Promise.all(projects.filter(project => project.available).map(async project => {
+            const response = await fetch(`/api/sessions?projectId=${encodeURIComponent(project.projectId)}`, { cache: "no-store" });
+            if (!response.ok) throw new Error(translate("workspaceNav.missingTarget"));
+            return parseSessionListPage(await response.json() as unknown);
+          }));
+          const target = pages.flatMap(page => page.sessions).find(session => session.id === sessionId);
+          if (!target) throw new Error(translate("workspaceNav.missingTarget"));
+          return target;
+        });
+      void lookup.then(target => {
+        if (token === workspaceRestoreTokenRef.current) handleSelectSession(target, true);
+      }).catch(() => {
+        if (token === workspaceRestoreTokenRef.current) setNavigationError(translate("workspaceNav.missingTarget"));
+      });
+    };
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
+  }, [handleNewSession, handleSelectSession, selectedSession?.id, translate]);
 
   const handleInitialRestoreDone = useCallback(() => {
     setInitialSessionRestored(true);
-    router.replace("/", { scroll: false });
-  }, [router]);
+    setNavigationError(translate("workspaceNav.missingTarget"));
+  }, [translate]);
 
   const handleSessionRemoved = useCallback((sessionId: string) => {
     invalidateWorkspaceRestore();
@@ -920,7 +936,7 @@ export function AppShell({
         ? crypto.randomUUID()
         : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
       setNewSessionDraftId(draftId);
-      activeNewSessionDraftKeyRef.current = cwd ? `new:${draftId}:${cwd}` : null;
+      activeNewSessionDraftKeyRef.current = cwd ? projectDraftKey(cwd) : null;
       setSelectedSession(null);
       setNewSessionCwd(cwd ?? null);
       setSessionKey((k) => k + 1);
@@ -929,14 +945,14 @@ export function AppShell({
       setSystemPrompt(null);
       setSystemPromptLoading(false);
       setActiveTopPanel(null);
-      router.replace("/", { scroll: false });
+      router.replace(`?cwd=${encodeURIComponent(cwd ?? "")}`, { scroll: false });
     }
   }, [invalidateWorkspaceRestore, selectedSession, router]);
 
   const handleOpenFile = useCallback((
     filePath: string,
     fileName: string,
-    options?: { sourceSessionId?: string | null; modeHint?: "diff" },
+    options?: { sourceSessionId?: string | null; sourceCwd?: string; modeHint?: "diff" },
   ) => {
     const sourceSessionId = options?.sourceSessionId;
     const modeHint = options?.modeHint;
@@ -946,25 +962,26 @@ export function AppShell({
       filePath,
       modeHint,
       sourceSessionId,
+      sourceCwd: options?.sourceCwd ?? activeCwd ?? undefined,
       tabId,
     }));
     setActiveFileTabId(tabId);
+    setDetailsMode("files");
     setRightPanelOpen(true);
     // On mobile the file panel is full-screen; close the drawer so it shows.
     if (isMobile) {
       setSidebarOpen(false);
       setActiveTopPanel(null);
     }
-  }, [isMobile]);
+  }, [isMobile, activeCwd]);
 
   const handleOpenLinkedFile = useCallback((filePath: string) => {
-    handleOpenFile(filePath, getFileName(filePath), { sourceSessionId: selectedSession?.id ?? null });
-  }, [handleOpenFile, selectedSession?.id]);
+    handleOpenFile(filePath, getFileName(filePath), { sourceSessionId: selectedSession?.id ?? null, sourceCwd: selectedSession?.cwd });
+  }, [handleOpenFile, selectedSession?.id, selectedSession?.cwd]);
 
   const handleCloseFileTab = useCallback((tabId: string) => {
     setFileTabs((prev) => {
       const next = prev.filter((t) => t.id !== tabId);
-      if (next.length === 0) setRightPanelOpen(false);
       return next;
     });
     setActiveFileTabId((cur) => {
@@ -987,15 +1004,16 @@ export function AppShell({
   const effectiveNewSessionCwd = newSessionCwd ?? (selectedSession === null && activeCwd ? activeCwd : null);
   const currentProjectId = selectedSession?.projectId ?? activeProjectId;
   const newSessionDraftKey = selectedSession === null && effectiveNewSessionCwd
-    ? `new:${newSessionDraftId}:${effectiveNewSessionCwd}`
+    ? projectDraftKey(effectiveNewSessionCwd)
     : null;
   useLayoutEffect(() => {
     activeNewSessionDraftKeyRef.current = newSessionDraftKey;
   }, [newSessionDraftKey]);
   const showChat = Boolean(currentProjectId && (selectedSession !== null || effectiveNewSessionCwd !== null));
-  const resourceCwd = selectedSession?.cwd ?? effectiveNewSessionCwd;
+  const resourceCwd = contextCwd ?? selectedSession?.cwd ?? effectiveNewSessionCwd;
+  const resourceProjectId = activeProjectId ?? currentProjectId;
   // While restoring initial session from URL, don't show the placeholder
-  const showPlaceholder = initialSessionRestored && !showChat;
+  const showPlaceholder = (contentPanel === "long-agents" && selectedSession?.owner.type !== "long-agent") || (initialSessionRestored && !showChat);
 
   const activeFileTab = fileTabs.find((tab) => tab.id === activeFileTabId) ?? null;
   const activeCwdName = activeCwd ? getFileName(activeCwd) || activeCwd : null;
@@ -1015,12 +1033,10 @@ export function AppShell({
   const sidebarContent = (
     <>
       <SessionSidebar
-        momentsActive={workspaceView === "moments"}
-        onOpenMoments={() => {
-          momentsTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-          openMoments();
-          if (isMobile) setSidebarOpen(false);
-        }}
+        contentPanel={contentPanel}
+        onContentPanelChange={setContentPanel}
+        projectSlot={projectSlot}
+        filesSlot={filesSlot}
         selectedSession={selectedSession}
         selectedSessionId={selectedSession?.id ?? null}
         newSessionDraftKey={newSessionDraftKey}
@@ -1028,6 +1044,7 @@ export function AppShell({
         onOpenSessionById={handleOpenExistingSession}
         onNewSession={handleNewSession}
         initialSessionId={initialSessionId}
+        initialSessionProjectId={initialNavigation.sessionProjectId}
         skipInitialProjectSelection={initialNavigation.requestedCwd !== null}
         onInitialRestoreDone={handleInitialRestoreDone}
         onReady={onWorkspaceReady}
@@ -1038,7 +1055,7 @@ export function AppShell({
           : selectedSession.owner?.type === "long-agent"
             ? (contextCwd ?? selectedSession.cwd)
             : selectedSession.cwd}
-        selectedProjectId={selectedSession?.projectId ?? activeProjectId}
+        selectedProjectId={activeProjectId}
         onCwdChange={handleCwdChange}
         onOpenFile={handleOpenFile}
         explorerRefreshKey={explorerRefreshKey}
@@ -1051,200 +1068,7 @@ export function AppShell({
         onBackgroundTaskDone={handleBackgroundTaskDone}
         onRunningSessionIdsChange={handleRunningSessionIdsChange}
       />
-      {!isMobile && (() => {
-        // 桌面侧栏底部：七个配置入口（模型/记忆/Tools/技能/规则/插件/Ext）收敛为一个菜单触发器。
-        // 各项打开的配置对话框与禁用条件保持与原平铺按钮一致。
-        const workspaceUnavailable = !activeCwd && !selectedSession?.cwd && !newSessionCwd;
-        const agentConfigItems: { label: string; onOpen: () => void; disabled: boolean; disabledReason?: string; icon: React.ReactNode }[] = [
-          {
-            label: translate("common.models"),
-            onOpen: () => setModelsConfigOpen(true),
-            disabled: false,
-            icon: (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" />
-                <line x1="9" y1="1" x2="9" y2="4" /><line x1="15" y1="1" x2="15" y2="4" />
-                <line x1="9" y1="20" x2="9" y2="23" /><line x1="15" y1="20" x2="15" y2="23" />
-                <line x1="20" y1="9" x2="23" y2="9" /><line x1="20" y1="14" x2="23" y2="14" />
-                <line x1="1" y1="9" x2="4" y2="9" /><line x1="1" y1="14" x2="4" y2="14" />
-              </svg>
-            ),
-          },
-          {
-            label: translate("common.memory"),
-            onOpen: () => setMemoryManagerOpen(true),
-            disabled: false,
-            icon: (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M9.5 4A3.5 3.5 0 0 0 6 7.5c0 .4.07.79.2 1.15A3.5 3.5 0 0 0 4.5 15c0 1.93 1.57 3.5 3.5 3.5h1.5" />
-                <path d="M14.5 4A3.5 3.5 0 0 1 18 7.5c0 .4-.07.79-.2 1.15A3.5 3.5 0 0 1 19.5 15c0 1.93-1.57 3.5-3.5 3.5h-1.5" />
-                <path d="M9.5 4v16M14.5 4v16M9.5 12h5" />
-              </svg>
-            ),
-          },
-          {
-            label: "Tools",
-            onOpen: () => setToolsConfigOpen(true),
-            disabled: !currentProjectId,
-            disabledReason: translate("common.agentConfigNeedProject"),
-            icon: (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M14.7 6.3a4 4 0 0 0-5 5L3 18v3h3l6.7-6.7a4 4 0 0 0 5-5l-2.3 2.3-3-3 2.3-2.3Z" />
-              </svg>
-            ),
-          },
-          {
-            label: translate("common.skills"),
-            onOpen: () => setSkillsConfigOpen(true),
-            disabled: workspaceUnavailable,
-            disabledReason: translate("common.agentConfigNeedWorkspace"),
-            icon: (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                <path d="M2 17l10 5 10-5" />
-                <path d="M2 12l10 5 10-5" />
-              </svg>
-            ),
-          },
-          {
-            label: "规则",
-            onOpen: () => setPromptResourcesConfigOpen(true),
-            disabled: false,
-            icon: (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
-              </svg>
-            ),
-          },
-          {
-            label: translate("common.plugins"),
-            onOpen: () => setPluginsConfigOpen(true),
-            disabled: workspaceUnavailable,
-            disabledReason: translate("common.agentConfigNeedWorkspace"),
-            icon: (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M9 7V2" />
-                <path d="M15 7V2" />
-                <path d="M6 13V8a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v5a6 6 0 0 1-12 0Z" />
-                <path d="M12 19v3" />
-              </svg>
-            ),
-          },
-          {
-            label: "Ext",
-            onOpen: () => setExtensionsConfigOpen(true),
-            disabled: workspaceUnavailable,
-            disabledReason: translate("common.agentConfigNeedWorkspace"),
-            icon: (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M20 7h-9" />
-                <path d="M14 17H5" />
-                <circle cx="17" cy="17" r="3" />
-                <circle cx="7" cy="7" r="3" />
-              </svg>
-            ),
-          },
-        ];
-        return (
-          <div
-            ref={agentConfigRef}
-            onKeyDown={handleAgentConfigMenuKeyDown}
-            style={{ position: "relative", padding: "4px 8px 8px", flexShrink: 0 }}
-          >
-            <button
-              ref={agentConfigTriggerRef}
-              type="button"
-              onClick={() => setAgentConfigMenuOpen((open) => !open)}
-              title={translate("configCenter.title")}
-              aria-haspopup="menu"
-              aria-expanded={agentConfigMenuOpen}
-              aria-controls="agent-config-menu"
-              style={{
-                display: "flex", alignItems: "center", gap: 8,
-                width: "100%", height: 32, padding: "0 10px",
-                background: agentConfigMenuOpen ? "var(--bg-selected)" : "none",
-                border: "none", borderRadius: 9,
-                color: agentConfigMenuOpen ? "var(--text)" : "var(--text-muted)",
-                cursor: "pointer", fontSize: 12,
-                transition: "background 0.12s, color 0.12s",
-              }}
-              onMouseEnter={(e) => { if (!agentConfigMenuOpen) { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text)"; } }}
-              onMouseLeave={(e) => { if (!agentConfigMenuOpen) { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-muted)"; } }}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
-                <circle cx="14" cy="6" r="2" />
-                <line x1="4" y1="6" x2="12" y2="6" /><line x1="16" y1="6" x2="20" y2="6" />
-                <circle cx="8" cy="12" r="2" />
-                <line x1="4" y1="12" x2="6" y2="12" /><line x1="10" y1="12" x2="20" y2="12" />
-                <circle cx="17" cy="18" r="2" />
-                <line x1="4" y1="18" x2="15" y2="18" /><line x1="19" y1="18" x2="20" y2="18" />
-              </svg>
-              <span style={{ flex: 1, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {translate("configCenter.title")}
-              </span>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, transform: agentConfigMenuOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
-                <polyline points="18 15 12 9 6 15" />
-              </svg>
-            </button>
-            {agentConfigMenuOpen && (
-              <div
-                id="agent-config-menu"
-                role="menu"
-                aria-label={translate("configCenter.title")}
-                style={{
-                  position: "absolute", left: 8, right: 8, bottom: "100%", marginBottom: 2,
-                  background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 10,
-                  boxShadow: "0 -6px 24px rgba(0,0,0,0.12)", padding: 4,
-                  display: "flex", flexDirection: "column", gap: 2,
-                  maxHeight: "min(360px, 70dvh)", overflowY: "auto",
-                }}
-              >
-                <div
-                  style={{
-                    padding: "5px 10px 3px", fontSize: 10, fontWeight: 600,
-                    color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.06em",
-                  }}
-                >
-                  {translate("configCenter.systemGroup")}
-                </div>
-                {agentConfigItems.map(({ label, onOpen, disabled, disabledReason, icon }) => (
-                  <button
-                    key={label}
-                    type="button"
-                    role="menuitem"
-                    disabled={disabled}
-                    title={disabled && disabledReason ? `${label}：${disabledReason}` : label}
-                    onClick={() => { closeAgentConfigMenu(false); onOpen(); }}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 8,
-                      width: "100%", height: 32, padding: "0 10px",
-                      border: "none", borderRadius: 6, background: "transparent",
-                      color: "var(--text)", cursor: disabled ? "default" : "pointer",
-                      fontSize: 12, textAlign: "left",
-                      opacity: disabled ? 0.45 : 1,
-                      transition: "background 0.1s",
-                    }}
-                    onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.background = "var(--bg-hover)"; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                  >
-                    <span style={{ display: "flex", flexShrink: 0, color: "var(--text-muted)" }}>{icon}</span>
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
-                  </button>
-                ))}
-                <div
-                  style={{
-                    marginTop: 4, padding: "6px 10px 4px", borderTop: "1px solid var(--border)",
-                    fontSize: 10, color: "var(--text-dim)", lineHeight: 1.5,
-                  }}
-                >
-                  {translate("configCenter.otherLayersHint")}
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })()}
+
     </>
   );
 
@@ -1364,7 +1188,7 @@ export function AppShell({
             cursor: selectedSession ? "pointer" : "not-allowed",
             opacity: selectedSession ? 1 : 0.45,
             flexShrink: 0,
-            fontSize: 11,
+            fontSize: 12,
             whiteSpace: "nowrap",
             transition: "color 0.1s, background 0.1s, opacity 0.1s",
           }}
@@ -1400,84 +1224,6 @@ export function AppShell({
           </svg>
           {!mobile && <span>{translate("history.label")}</span>}
         </button>
-        {(() => {
-          // 上下文压缩后当前消息可能不再包含 user 消息，需同时参考会话文件的消息总数。
-          const hasMessages = Boolean(
-            selectedSession
-            && ((sessionStats?.userMessages ?? 0) > 0 || selectedSession.messageCount > 0),
-          );
-          const disabled = !selectedSession || selectedSession.transient || !hasMessages || autoNameStatus.kind === "naming";
-          const isSuccess = autoNameStatus.kind === "success";
-          const isError = autoNameStatus.kind === "error";
-          const label = autoNameStatus.kind === "naming"
-            ? translate("title.generating")
-            : isSuccess
-              ? translate("title.updated")
-              : isError
-                ? translate("title.failed")
-                : translate("title.generate");
-          const title = !selectedSession || selectedSession.transient
-            ? translate("title.unsaved")
-            : !hasMessages
-              ? translate("title.noMessages")
-              : isError
-                ? autoNameStatus.message
-                : translate("title.generateSession");
-
-          return (
-            <button
-              type="button"
-              onClick={() => {
-                void handleAutoName();
-                if (mobile && isNarrowMobile) setMobileToolbarMoreOpen(true);
-              }}
-              disabled={disabled}
-              title={title}
-              aria-label={label}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                width: mobile ? TOP_BAR_ICON_BUTTON_SIZE : undefined,
-                height: "100%", padding: mobile ? 0 : "0 12px",
-                background: "none", border: "none",
-                borderTop: "2px solid transparent",
-                borderRight: "1px solid var(--border)",
-                color: isError ? "#dc2626" : isSuccess ? "var(--accent)" : disabled ? "var(--text-dim)" : "var(--text-muted)",
-                cursor: disabled ? "not-allowed" : "pointer",
-                opacity: disabled && autoNameStatus.kind !== "naming" ? 0.45 : 1,
-                flexShrink: 0, fontSize: 11, whiteSpace: "nowrap",
-                transition: "color 0.1s, background 0.1s, opacity 0.1s",
-              }}
-              onMouseEnter={(event) => {
-                if (disabled) return;
-                event.currentTarget.style.color = isError ? "#dc2626" : "var(--text)";
-                event.currentTarget.style.background = "var(--bg-hover)";
-              }}
-              onMouseLeave={(event) => {
-                event.currentTarget.style.color = isError ? "#dc2626" : isSuccess ? "var(--accent)" : disabled ? "var(--text-dim)" : "var(--text-muted)";
-                event.currentTarget.style.background = "none";
-              }}
-              data-mobile-toolbar-action={mobile ? "name" : undefined}
-            >
-              {autoNameStatus.kind === "naming" ? (
-                <svg className="animate-spin" width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" opacity="0.25" />
-                  <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-              ) : isSuccess ? (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              ) : (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="m15 4 5 5L7 22l-5-5Z" />
-                  <path d="m14 5 5 5" />
-                  <path d="M6 4V2M5 3H3M19 19v3M17.5 20.5h3" />
-                </svg>
-              )}
-              {!mobile && <span>{label}</span>}
-            </button>
-          );
-        })()}
         {mobile ? (
           <button
             type="button"
@@ -1535,7 +1281,7 @@ export function AppShell({
             cursor: mobile && !showChat ? "not-allowed" : "pointer",
             color: activeTopPanel === "system" ? "var(--text)" : "var(--text-muted)",
             opacity: mobile && !showChat ? 0.45 : 1,
-            fontSize: 11, whiteSpace: "nowrap", transition: "color 0.1s, background 0.1s",
+            fontSize: 12, whiteSpace: "nowrap", transition: "color 0.1s, background 0.1s",
           }}
           onMouseEnter={(event) => {
             if (mobile && !showChat) return;
@@ -1632,7 +1378,7 @@ export function AppShell({
           background: activeTopPanel === "session" ? "var(--bg-selected)" : "none",
           border: "none",
           borderTop: activeTopPanel === "session" ? "2px solid var(--accent)" : "2px solid transparent",
-          fontSize: 11, color: "var(--text-muted)",
+          fontSize: 12, color: "var(--text-muted)",
           whiteSpace: "nowrap", cursor: showChat ? "pointer" : "default",
           fontVariantNumeric: "tabular-nums",
           transition: "color 0.1s, background 0.1s",
@@ -1723,104 +1469,49 @@ export function AppShell({
     );
   };
 
-  const renderMainFileToggle = (mobile: boolean) => {
-    const covered = mobile && isNarrowMobile && mobileToolbarMoreOpen;
-    return (
-      <button
-        type="button"
-        onClick={handleRightPanelToggle}
-        disabled={covered}
-        tabIndex={covered ? -1 : undefined}
-        aria-controls="file-panel"
-        aria-expanded={rightPanelOpen}
-        aria-hidden={covered ? true : undefined}
-        title={rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")}
-        aria-label={rightPanelOpen ? translate("files.hidePanel") : translate("files.showPanel")}
-        data-mobile-toolbar-file={mobile ? "true" : undefined}
-        style={{
-          marginLeft: !mobile && !sessionStats && !contextUsage ? "auto" : 0,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
-          visibility: covered ? "hidden" : "visible",
-          pointerEvents: covered ? "none" : "auto",
-          background: rightPanelOpen ? "var(--bg-selected)" : "none",
-          border: "none", borderLeft: "1px solid var(--border)",
-          color: rightPanelOpen ? "var(--text)" : "var(--text-muted)",
-          cursor: "pointer", flexShrink: 0, transition: "color 0.12s, background 0.12s",
-        }}
-        onMouseEnter={(event) => { if (!covered) event.currentTarget.style.color = "var(--text)"; }}
-        onMouseLeave={(event) => { event.currentTarget.style.color = rightPanelOpen ? "var(--text)" : "var(--text-muted)"; }}
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="15" y1="3" x2="15" y2="21" />
-        </svg>
-      </button>
-    );
-  };
+  const rightPanelOverlay = isMobile || viewportWidth < 960 || viewportWidth - 64 - (sidebarOpen ? 225 : 0) - 321 < 480;
+  const sidebarModal = sidebarOpen && (isMobile || viewportWidth < 960) && !settingsVisible && workspaceView === "chat";
+  const detailsModal = rightPanelOpen && rightPanelOverlay && !settingsVisible && workspaceView === "chat";
+  const sidebarFocusRef = useDialogFocus(() => setSidebarOpen(false), sidebarModal);
+  const detailsFocusRef = useDialogFocus(() => setRightPanelOpen(false), detailsModal);
+  const settingsItems = [
+    { id: "models", scope: "personal" as const, label: translate("common.models"), description: translate("workspaceNav.modelsHint"), onOpen: () => setModelsConfigOpen(true) },
+    { id: "memory", scope: "personal" as const, label: translate("common.memory"), description: translate("workspaceNav.memoryHint"), onOpen: () => setMemoryManagerOpen(true) },
+    { id: "tools", scope: "project" as const, label: "Tools", description: translate("workspaceNav.toolsHint"), onOpen: () => setToolsConfigOpen(true), disabled: !resourceProjectId },
+    { id: "skills", scope: "project" as const, label: translate("common.skills"), description: translate("workspaceNav.skillsHint"), onOpen: () => setSkillsConfigOpen(true), disabled: !resourceCwd || !resourceProjectId },
+    { id: "prompts", scope: "project" as const, label: translate("workspaceNav.prompts"), description: translate("workspaceNav.promptsHint"), onOpen: () => setPromptResourcesConfigOpen(true), disabled: !resourceProjectId },
+    { id: "plugins", scope: "project" as const, label: translate("common.plugins"), description: translate("workspaceNav.pluginsHint"), onOpen: () => setPluginsConfigOpen(true), disabled: !resourceCwd || !resourceProjectId },
+    { id: "extensions", scope: "project" as const, label: "Extensions", description: translate("workspaceNav.extensionsHint"), onOpen: () => setExtensionsConfigOpen(true), disabled: !resourceCwd || !resourceProjectId },
+  ];
+  function handleNavigateSection(section: WorkspaceSection) {
+    invalidateWorkspaceRestore();
+    setActiveTopPanel(null);
+    setSettingsVisible(section === "settings");
+    if (section === "settings") return;
+    if (section === "moments") { openMoments(); setSidebarOpen(false); return; }
+    activateChat();
+    setSidebarOpen(true);
+    setMobileWorkspaceView("sessions");
+    if (isMobile || viewportWidth < 960) setRightPanelOpen(false);
+    const target = section === "coworkers" ? "long-agents" : "sessions";
+    if (contentPanel === target) return;
+    setContentPanel(target);
+    if (section === "coworkers") {
+      if (lastCoworkerRef.current) handleSelectSession(lastCoworkerRef.current);
+      else {
+        activeNewSessionDraftKeyRef.current = null;
+        setSelectedSession(null);
+        setSessionKey(k => k + 1);
+      }
+    } else if (activeCwd) {
+      handleNewSession(`project-${crypto.randomUUID()}`, activeCwd);
+      if (activeProjectId) restoreWorkspaceContext(activeProjectId, activeCwd);
+    } else { setSelectedSession(null); setSessionKey(k => k + 1); }
+  }
 
   return (
     <>
     <style>{`
-      @keyframes session-info-pop {
-        0% {
-          opacity: 0;
-          transform: translateY(-24px);
-          filter: blur(6px);
-          box-shadow: 0 2px 8px rgba(0,0,0,0);
-        }
-        55% {
-          opacity: 1;
-          transform: translateY(0);
-          filter: blur(0);
-          background: color-mix(in srgb, var(--accent) 8%, var(--bg-panel));
-          box-shadow: 0 18px 44px rgba(37,99,235,0.16);
-        }
-        100% {
-          opacity: 1;
-          transform: translateY(0);
-          filter: blur(0);
-          background: var(--bg-panel);
-          box-shadow: 0 10px 28px rgba(0,0,0,0.10);
-        }
-      }
-      @keyframes session-info-light-wash {
-        0% {
-          opacity: 0;
-          transform: translateX(-110%) skewX(-16deg);
-        }
-        24% {
-          opacity: 0.42;
-        }
-        100% {
-          opacity: 0;
-          transform: translateX(115%) skewX(-16deg);
-        }
-      }
-      .session-info-popover {
-        position: relative;
-        overflow: hidden;
-        transform-origin: top right;
-        animation: session-info-pop 360ms ease-out both;
-        will-change: transform, opacity, filter, background, box-shadow;
-      }
-      .session-info-popover::after {
-        content: "";
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        left: 0;
-        width: 44%;
-        pointer-events: none;
-        background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 24%, transparent), transparent);
-        animation: session-info-light-wash 620ms ease-out both;
-      }
-      @media (prefers-reduced-motion: reduce) {
-        .session-info-popover,
-        .session-info-popover::after {
-          animation: none;
-        }
-      }
-      @media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
       .mobile-session-stats {
         container-type: inline-size;
       }
@@ -1845,137 +1536,22 @@ export function AppShell({
         }
       }
     `}</style>
-    <div className="app-shell-root" style={{ display: "flex", height: "100dvh", overflow: "hidden", background: "var(--bg)" }}>
-      {/* Mobile overlay backdrop */}
-      <div
-        className={`sidebar-overlay-backdrop${mobileSidebarReady ? "" : " sidebar-mobile-pending"}`}
-        onClick={() => setSidebarOpen(false)}
-        style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 199,
-          background: "rgba(0,0,0,0.4)",
-          opacity: sidebarOpen ? 1 : 0,
-          pointerEvents: sidebarOpen ? "auto" : "none",
-          transition: "opacity 0.25s ease",
-        }}
-      />
-
-      {/* Left sidebar */}
-      <div
-        ref={sidebarResizer.panelRef}
-        id="session-sidebar"
-        className={`sidebar-container${sidebarOpen ? " sidebar-open" : " sidebar-closed"}${mobileSidebarReady ? "" : " sidebar-mobile-pending"}${sidebarResizer.isResizing ? " sidebar-resizing" : ""}`}
-        style={{
-          "--sidebar-width": `${sidebarResizer.width}px`,
-          background: "var(--bg-panel)",
-          borderRight: "1px solid var(--border)",
-          display: "flex",
-          flexDirection: "column",
-          flexShrink: 0,
-          paddingTop: "env(safe-area-inset-top)",
-          paddingBottom: "env(safe-area-inset-bottom)",
-          zIndex: 200,
-        } as React.CSSProperties}
-      >
-        {sidebarContent}
-      </div>
-      {sidebarOpen && (
-        <div
-          {...sidebarResizer.separatorProps}
-          aria-controls="session-sidebar"
-          className={`panel-resize-handle sidebar-resize-handle${sidebarResizer.isResizing ? " is-resizing" : ""}`}
-          data-resize-handle="sidebar"
-          title={`${translate("layout.resizeSidebar")}: ${translate("layout.resizeHint")}`}
-        />
-      )}
-
-      {workspaceView === "moments" && <LongAgentFeedView onBack={returnFromMoments} />}
-
-      {/* Keep ChatWindow mounted while browsing Moments: draft, scroll and live Run remain owned by the same Session. */}
-      <div ref={chatSurfaceRef} tabIndex={-1} data-workspace-chat hidden={workspaceView !== "chat"} style={{ flex: 1, display: workspaceView === "chat" ? "flex" : "none", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
-        {isMobile && (
-          <MobileWorkspaceHeader
-            selectedSession={selectedSession}
-            cwd={selectedSession?.cwd ?? activeCwd ?? effectiveNewSessionCwd}
-            deviceDirectory={deviceDirectory}
-            onDeviceNavigate={onDeviceNavigate}
-            isDark={isDark}
-            onNewSession={(cwd) => handleNewSession(`mobile-${Date.now()}`, cwd)}
-            onOpenWorkspace={() => {
-              setActiveTopPanel(null);
-              setMobileUtilitiesOpen(false);
-              setRightPanelOpen(false);
-              setMobileWorkspaceView("sessions");
-              setSidebarOpen(true);
-            }}
-            onRefresh={() => {
-              setRefreshKey((key) => key + 1);
-              setExplorerRefreshKey((key) => key + 1);
-            }}
-            onOpenFiles={() => {
-              setActiveTopPanel(null);
-              setMobileUtilitiesOpen(false);
-              setRightPanelOpen(false);
-              setMobileWorkspaceView("files");
-              setSidebarOpen(true);
-            }}
-            onViewHistory={handleViewFullHistory}
-            onToggleTheme={() => toggleTheme()}
-            onShowUtilities={() => {
-              setActiveTopPanel(null);
-              setSidebarOpen(false);
-              setRightPanelOpen(false);
-              setMobileUtilitiesOpen(true);
-            }}
-            onRunSelfCheck={() => setMobileDebugOpen(true)}
-            settingsAvailable={Boolean(activeCwd || selectedSession?.cwd || newSessionCwd)}
-            onOpenModels={() => setModelsConfigOpen(true)}
-            onOpenMemory={() => setMemoryManagerOpen(true)}
-            onOpenTools={() => setToolsConfigOpen(true)}
-            onOpenSkills={() => setSkillsConfigOpen(true)}
-            onOpenPromptResources={() => setPromptResourcesConfigOpen(true)}
-            onOpenPlugins={() => setPluginsConfigOpen(true)}
-            onOpenExtensions={() => setExtensionsConfigOpen(true)}
-          />
-        )}
+    <div className={`workspace-app${wideContent ? " workspace-wide-content" : ""}`}>
+      <WorkspaceNavigation section={settingsVisible ? "settings" : workspaceView === "moments" ? "moments" : contentPanel === "long-agents" ? "coworkers" : "projects"} onSelect={handleNavigateSection} />
+      <div className="workspace-stage">
+        <header className="workspace-context-bar" hidden={workspaceView === "moments" || settingsVisible} style={workspaceView === "moments" || settingsVisible ? { display: "none" } : undefined}>
+          <button type="button" className="workspace-icon" onClick={handleSidebarToggle} aria-label={translate("layout.toggleList")} aria-expanded={sidebarOpen} aria-controls="session-sidebar"><IconLayoutSidebar size={20} /></button>
+          <span className="workspace-context-label">{translate("workspaceNav.context")}</span>
+          <div ref={setProjectSlot} className="workspace-project-slot" />
         {/* Top bar with sidebar toggle */}
         <div
           ref={topBarRef}
-          className={isMobile ? `mobile-topbar mobile-utility-tray${mobileUtilitiesOpen ? " is-open" : ""}` : undefined}
+          data-workspace-tools
+          className={isMobile ? "mobile-topbar" : undefined}
           style={{ flexShrink: 0, background: "var(--bg-panel)" }}
         >
-        <div style={{ display: "flex", alignItems: "center", position: "relative", borderBottom: "1px solid var(--border)", height: "calc(36px + env(safe-area-inset-top))", paddingTop: "env(safe-area-inset-top)" }}>
-          <button
-            onClick={handleSidebarToggle}
-             title={sidebarOpen ? translate("sidebar.hide") : translate("sidebar.show")}
-             aria-label={sidebarOpen ? translate("sidebar.hide") : translate("sidebar.show")}
-            style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: isMobile ? 44 : TOP_BAR_ICON_BUTTON_SIZE, height: isMobile ? 44 : TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
-              background: "none", border: "none", borderRight: "1px solid var(--border)",
-              color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; }}
-          >
-            {sidebarOpen ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" /><line x1="9" y1="3" x2="9" y2="21" />
-              </svg>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-              </svg>
-            )}
-          </button>
-          {!isMobile && (
-            <DeviceSwitcher
-              variant="desktop"
-              directory={deviceDirectory}
-              onNavigate={onDeviceNavigate}
-            />
-          )}
+        <div className="workspace-conversation-toolbar">
+          <h1 className="workspace-conversation-heading" title={selectedSession?.name || undefined}>{contentPanel === "long-agents" ? (selectedSession?.owner.type === "long-agent" ? selectedSession.name || selectedSession.owner.longAgentId : translate("workspaceNav.coworkers")) : selectedSession?.name || translate("i18n.newSession")}</h1>
           {isMobile && (
             <div
               ref={mobileToolbarRef}
@@ -2021,8 +1597,7 @@ export function AppShell({
                 </button>
               )}
               {!isNarrowMobile && renderChatToolbarActions(true)}
-              {renderSessionStatsButton(true)}
-              {renderMainFileToggle(true)}
+              {!isNarrowMobile && renderSessionStatsButton(true)}
               {isNarrowMobile && mobileToolbarMoreOpen && (
                 <div
                   id="mobile-toolbar-actions"
@@ -2031,10 +1606,9 @@ export function AppShell({
                   data-mobile-toolbar-actions="true"
                   style={{
                     position: "absolute",
-                    top: 0,
+                    top: "100%",
                     right: 0,
-                    bottom: 0,
-                    left: TOP_BAR_ICON_BUTTON_SIZE,
+                    minHeight: 44,
                     zIndex: 20,
                     display: "flex",
                     alignItems: "stretch",
@@ -2044,19 +1618,17 @@ export function AppShell({
                   }}
                 >
                   {renderChatToolbarActions(true)}
+                  {renderSessionStatsButton(true)}
                 </div>
               )}
             </div>
           )}
           {!isMobile && (
             <>
-              {renderThemeButton(false)}
-              {renderLanguageButton(false)}
               {renderChatToolbarActions(false)}
               {renderSessionStatsButton(false)}
             </>
           )}
-          {!isMobile && renderMainFileToggle(false)}
           {isMobile && (
             <BranchNavigator
               tree={branchTree}
@@ -2210,7 +1782,7 @@ export function AppShell({
                       compact = false,
                     ) => (
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{title}</div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{title}</div>
                           <div style={{
                             display: "grid",
                             gridTemplateColumns: compact ? "max-content max-content" : "auto minmax(0, 1fr)",
@@ -2282,7 +1854,7 @@ export function AppShell({
                     };
                     const sessionInfoSection = (
                       <div style={{ minWidth: 0 }}>
-                         <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{translate("session.infoSection")}</div>
+                         <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>{translate("session.infoSection")}</div>
                         <div style={{ display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", columnGap: 12, rowGap: 8, alignItems: "start" }}>
                           {sessionRows.map((row) => (
                             <div key={`session-info:${row.label}`} style={{ display: "contents" }}>
@@ -2330,12 +1902,73 @@ export function AppShell({
         </div>
         </div>
 
+          {selectedSession?.owner.type === "long-agent" && <button type="button" className="workspace-icon" aria-label={translate("workspaceNav.profile")} aria-expanded={rightPanelOpen && detailsMode === "coworker"} onClick={() => { setDetailsMode("coworker"); setRightPanelOpen(true); if (isMobile || viewportWidth < 960) setSidebarOpen(false); }}><IconUser size={20} /></button>}
+          <DeviceSwitcher variant="desktop" directory={deviceDirectory} onNavigate={onDeviceNavigate} />
+          <button type="button" className="workspace-icon" onClick={() => { setSettingsVisible(false); activateChat(); setDetailsMode("files"); setRightPanelOpen(open => detailsMode !== "files" || !open); if (isMobile || viewportWidth < 960) setSidebarOpen(false); }} aria-label={translate("workspaceNav.files")} aria-expanded={rightPanelOpen}><IconFolder size={20} /></button>
+        </header>
+    <div className={`app-shell-root workspace-body${viewportWidth < 960 && !isMobile ? " workspace-medium" : ""}${rightPanelOverlay ? " workspace-right-overlay" : ""}${settingsVisible || workspaceView === "moments" ? " workspace-global-view" : ""}`}>
+
+      {/* Mobile overlay backdrop */}
+      <div
+        className={`sidebar-overlay-backdrop${mobileSidebarReady ? "" : " sidebar-mobile-pending"}`}
+        onClick={() => setSidebarOpen(false)}
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 199,
+          background: "rgba(0,0,0,0.4)",
+          opacity: sidebarOpen ? 1 : 0,
+          pointerEvents: sidebarOpen ? "auto" : "none",
+          transition: "opacity 0.25s ease",
+        }}
+      />
+
+      {/* Left sidebar */}
+      <div
+        ref={element => { sidebarResizer.panelRef.current = element; sidebarFocusRef.current = element; }}
+        role={sidebarModal ? "dialog" : "complementary"}
+        aria-modal={sidebarModal || undefined}
+        aria-label={translate("layout.toggleList")}
+        tabIndex={-1}
+        id="session-sidebar"
+        inert={!sidebarOpen || settingsVisible || workspaceView !== "chat"}
+        aria-hidden={!sidebarOpen || settingsVisible || workspaceView !== "chat"}
+        className={`sidebar-container${sidebarOpen ? " sidebar-open" : " sidebar-closed"}${mobileSidebarReady ? "" : " sidebar-mobile-pending"}${sidebarResizer.isResizing ? " sidebar-resizing" : ""}`}
+        style={{
+          "--sidebar-width": `${sidebarResizer.width}px`,
+          background: "var(--bg-panel)",
+          borderRight: "1px solid var(--border)",
+          display: "flex",
+          flexDirection: "column",
+          flexShrink: 0,
+          paddingTop: "env(safe-area-inset-top)",
+          paddingBottom: "env(safe-area-inset-bottom)",
+          zIndex: 200,
+        } as React.CSSProperties}
+      >
+        {sidebarContent}
+      </div>
+      {sidebarOpen && (
+        <div
+          {...sidebarResizer.separatorProps}
+          aria-controls="session-sidebar"
+          className={`panel-resize-handle sidebar-resize-handle${sidebarResizer.isResizing ? " is-resizing" : ""}`}
+          data-resize-handle="sidebar"
+          title={`${translate("layout.resizeSidebar")}: ${translate("layout.resizeHint")}`}
+        />
+      )}
+
+      {!settingsVisible && workspaceView === "moments" && <LongAgentFeedView onBack={returnFromMoments} />}
+
+      {/* Keep ChatWindow mounted while browsing Moments: draft, scroll and live Run remain owned by the same Session. */}
+      <div ref={chatSurfaceRef} tabIndex={-1} data-workspace-chat hidden={settingsVisible || workspaceView !== "chat"} style={{ flex: 1, display: !settingsVisible && workspaceView === "chat" ? "flex" : "none", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         {/* Chat content */}
         <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
-          {showChat && currentProjectId ? (
+          {navigationError ? <div className="workspace-navigation-error" role="alert">{navigationError}</div> : showChat && currentProjectId && (contentPanel === "sessions" || selectedSession?.owner.type === "long-agent") ? (
             <ChatWindow
               key={sessionKey}
               projectId={currentProjectId}
+              deviceId={deviceId}
               contextProjectId={activeProjectId}
               session={selectedSession}
               sessionRunning={Boolean(selectedSession && runningSessionIds.has(selectedSession.id))}
@@ -2384,7 +2017,7 @@ export function AppShell({
           ) : showPlaceholder ? (
             activeCwd ? (
               <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 15 }}>
-                 {translate("workspace.selectSession")}
+                 {contentPanel === "long-agents" ? translate("workspaceNav.selectCoworker") : translate("workspace.selectSession")}
               </div>
             ) : (
               <div style={{ position: "absolute", top: 12, left: 12, display: "flex", alignItems: "flex-start", gap: 8, userSelect: "none", pointerEvents: "none" }}>
@@ -2406,10 +2039,10 @@ export function AppShell({
 
       <div
         aria-hidden="true"
-        className={`right-panel-overlay-backdrop${rightPanelOpen && workspaceView === "chat" ? " is-open" : ""}`}
+        className={`right-panel-overlay-backdrop${rightPanelOpen && !settingsVisible && workspaceView === "chat" ? " is-open" : ""}`}
         onClick={() => setRightPanelOpen(false)}
       />
-      {rightPanelOpen && workspaceView === "chat" && (
+      {rightPanelOpen && !settingsVisible && workspaceView === "chat" && (
         <div
           {...rightPanelResizer.separatorProps}
           aria-controls="file-panel"
@@ -2421,24 +2054,41 @@ export function AppShell({
 
       {/* Right panel: file viewer — always mounted, width animated via CSS */}
       <div
-        ref={rightPanelResizer.panelRef}
+        ref={element => { rightPanelResizer.panelRef.current = element; detailsFocusRef.current = element; }}
+        role={detailsModal ? "dialog" : "complementary"}
+        aria-modal={detailsModal || undefined}
+        aria-label={translate(detailsMode === "coworker" ? "workspaceNav.profile" : "workspaceNav.files")}
+        tabIndex={-1}
         id="file-panel"
-        hidden={workspaceView !== "chat"}
+        inert={!rightPanelOpen || settingsVisible || workspaceView !== "chat"}
+        aria-hidden={!rightPanelOpen || settingsVisible || workspaceView !== "chat"}
+        hidden={settingsVisible || workspaceView !== "chat"}
         className={`right-panel-container${rightPanelOpen ? " right-panel-open" : " right-panel-closed"}${rightPanelResizer.isResizing ? " right-panel-resizing" : ""}`}
         style={{
           "--right-panel-width": `${rightPanelResizer.width}px`,
-          display: workspaceView === "chat" ? "flex" : "none",
+          display: !settingsVisible && workspaceView === "chat" ? "flex" : "none",
           flexDirection: "column",
           borderLeft: "1px solid var(--border)",
           background: "var(--bg)",
         } as React.CSSProperties}
       >
+        <div className="workspace-details-heading">
+          <button type="button" className="workspace-button" onClick={() => { setDetailsMode("files"); setActiveFileTabId(null); }}><IconArrowLeft size={16} />{translate("workspaceNav.files")}</button>
+          <button type="button" className="workspace-icon" onClick={() => setRightPanelOpen(false)} aria-label={translate("files.hidePanel")}><IconX size={20} /></button>
+        </div>
+        {detailsMode === "coworker" && selectedSession?.owner.type === "long-agent" && <CoworkerDetails key={selectedSession.owner.longAgentId} agentId={selectedSession.owner.longAgentId} />}
+        <div className="workspace-file-details" hidden={detailsMode === "coworker" && selectedSession?.owner.type === "long-agent"}>
+        {!activeFileTab && fileTabs.length > 0 && <button type="button" className="workspace-button" onClick={() => setActiveFileTabId(fileTabs.at(-1)?.id ?? null)}>{translate("workspaceNav.lastFile")}</button>}
+        <div ref={setFilesSlot} className="workspace-files-slot" hidden={activeFileTab !== null} />
+        {activeFileTab && <div className="workspace-file-source" title={activeFileTab.sourceCwd ?? activeFileTab.filePath}>
+          {activeFileTab.sourceSessionId ? translate("workspaceNav.historySource") : translate("workspaceNav.context")}: {activeFileTab.sourceCwd ?? activeFileTab.filePath}
+        </div>}
         {/* Right panel tab bar */}
         <div style={{
-          display: "flex",
           alignItems: "center",
           flexShrink: 0,
-          height: "calc(36px + env(safe-area-inset-top))",
+          display: activeFileTab ? "flex" : "none",
+          height: "36px",
           paddingTop: "env(safe-area-inset-top)",
           background: "var(--bg-panel)",
           borderBottom: "1px solid var(--border)",
@@ -2474,12 +2124,12 @@ export function AppShell({
         </div>
 
         {/* Only the active viewer is mounted. Lightweight per-tab state is restored on activation. */}
-        <div style={{ flex: 1, overflow: "hidden", paddingBottom: "env(safe-area-inset-bottom)" }}>
+        <div hidden={!activeFileTab} style={{ flex: 1, overflow: "hidden", paddingBottom: "env(safe-area-inset-bottom)" }}>
           {activeFileTab?.filePath ? (
             <FileViewer
               key={`${activeFileTab.id}:${activeFileTab.viewerRevision ?? 0}`}
               filePath={activeFileTab.filePath}
-              cwd={activeCwd ?? undefined}
+              cwd={activeFileTab.sourceCwd}
               sourceSessionId={activeFileTab.sourceSessionId}
               gitRefreshKey={explorerRefreshKey}
               initialDisplayMode={activeFileTab.initialDisplayMode}
@@ -2495,7 +2145,7 @@ export function AppShell({
               onOpenFile={(filePath) => handleOpenFile(
                 filePath,
                 getFileName(filePath),
-                { sourceSessionId: activeFileTab.sourceSessionId },
+                { sourceSessionId: activeFileTab.sourceSessionId, sourceCwd: activeFileTab.sourceCwd },
               )}
             />
           ) : (
@@ -2504,12 +2154,16 @@ export function AppShell({
             </div>
           )}
         </div>
+        </div>
+      </div>
+      {settingsVisible && <WorkspaceSettings projectLabel={resourceCwd?.split(/[\\/]/).filter(Boolean).at(-1) ?? resourceProjectId ?? undefined} wideContent={wideContent} onContentWidth={toggleContentWidth} items={settingsItems} theme={translate(themeLabelKey)} onTheme={() => toggleTheme()} language={locale === "zh-CN" ? "简体中文" : "English"} onLanguage={() => setLocale(locale === "zh-CN" ? "en" : "zh-CN")} onBack={() => setSettingsVisible(false)} onRefresh={() => { setRefreshKey(key => key + 1); setExplorerRefreshKey(key => key + 1); }} onSelfCheck={isMobile ? () => { setSettingsVisible(false); activateChat(); setSidebarOpen(false); setRightPanelOpen(false); setMobileDebugOpen(true); } : undefined} />}
+    </div>
       </div>
     </div>
     {modelsConfigOpen && <ModelsConfig onClose={() => { setModelsConfigOpen(false); }} />}
     {memoryManagerOpen && (
       <MemoryManager
-        currentProjectId={currentProjectId}
+        currentProjectId={resourceProjectId}
         onClose={() => setMemoryManagerOpen(false)}
       />
     )}
@@ -2520,29 +2174,29 @@ export function AppShell({
         onClose={handleCloseFullHistory}
       />
     )}
-    {skillsConfigOpen && resourceCwd && currentProjectId && (
-      <SkillsConfig projectId={currentProjectId} cwd={resourceCwd} onClose={() => setSkillsConfigOpen(false)} />
+    {skillsConfigOpen && resourceCwd && resourceProjectId && (
+      <SkillsConfig projectId={resourceProjectId} cwd={resourceCwd} onClose={() => setSkillsConfigOpen(false)} />
     )}
-    {toolsConfigOpen && currentProjectId && (
-      <ToolsConfig projectId={currentProjectId} onClose={() => setToolsConfigOpen(false)} />
+    {toolsConfigOpen && resourceProjectId && (
+      <ToolsConfig projectId={resourceProjectId} onClose={() => setToolsConfigOpen(false)} />
     )}
-    {promptResourcesConfigOpen && currentProjectId && (
-      <PromptResourcesConfig projectId={currentProjectId} onClose={() => setPromptResourcesConfigOpen(false)} />
+    {promptResourcesConfigOpen && resourceProjectId && (
+      <PromptResourcesConfig projectId={resourceProjectId} onClose={() => setPromptResourcesConfigOpen(false)} />
     )}
-    {pluginsConfigOpen && resourceCwd && currentProjectId && (
+    {pluginsConfigOpen && resourceCwd && resourceProjectId && (
       <PluginsConfig
-        projectId={currentProjectId}
+        projectId={resourceProjectId}
         cwd={resourceCwd}
-        sessionId={selectedSession?.id ?? null}
+        sessionId={selectedSession?.projectId === resourceProjectId ? selectedSession.id : null}
         onClose={() => setPluginsConfigOpen(false)}
         onReloaded={() => setSessionKey((k) => k + 1)}
       />
     )}
-    {extensionsConfigOpen && currentProjectId && (activeCwd ?? selectedSession?.cwd ?? newSessionCwd) && (
+    {extensionsConfigOpen && resourceProjectId && (activeCwd ?? selectedSession?.cwd ?? newSessionCwd) && (
       <ExtensionsConfig
-        projectId={currentProjectId}
+        projectId={resourceProjectId}
         cwd={(activeCwd ?? selectedSession?.cwd ?? newSessionCwd)!}
-        sessionId={selectedSession?.id ?? null}
+        sessionId={selectedSession?.projectId === resourceProjectId ? selectedSession.id : null}
         onClose={() => setExtensionsConfigOpen(false)}
         onReloaded={() => setSessionKey((k) => k + 1)}
       />

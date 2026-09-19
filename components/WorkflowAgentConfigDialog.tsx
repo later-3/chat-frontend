@@ -1,5 +1,6 @@
 "use client";
 
+import { IconX } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   AgentConfigSelection,
@@ -285,8 +286,8 @@ function ModelConfigSection({
         <strong>模型配置</strong>
         <small>
           {hasDurableConfig
-            ? "当前存在本项目覆盖；选择“使用Workflow默认”只移除对应字段的覆盖。"
-            : "当前使用Workflow默认；选择模型或思考等级后会保存为本项目覆盖。"}
+            ? "已设置项目覆盖。单项选择“使用 Workflow 默认”可恢复继承。"
+            : "当前继承 Workflow 默认。修改后仅对本项目生效。"}
         </small>
       </div>
       <dl className="workflow-agent-facts">
@@ -302,20 +303,19 @@ function ModelConfigSection({
       <label>
         模型
         <select
+          title={durableModelKey || "使用 Workflow 默认"}
           value={durableModelKey}
           disabled={busy || modelCatalog === null}
           onChange={(event) => applyModel(event.target.value)}
         >
-          <option value="">使用Workflow默认{durableModelKey === "" && inspection.agent.effectiveModel !== null
-            ? `（当前：${inspection.agent.effectiveModel.provider}/${inspection.agent.effectiveModel.modelId}）`
-            : ""}</option>
+          <option value="">使用 Workflow 默认</option>
           {catalogModels.map((model) => (
             <option
               key={`${model.provider}/${model.modelId}`}
               value={`${model.provider}/${model.modelId}`}
               disabled={!model.authConfigured}
             >
-              {model.provider}/{model.modelId}（{model.name}）{model.authConfigured ? "" : " · 未认证"}
+              {model.name} · {model.provider}{model.authConfigured ? "" : " · 未认证"}
             </option>
           ))}
           {!durableModelInCatalog && (
@@ -327,19 +327,18 @@ function ModelConfigSection({
         思考等级
         <select
           value={durableThinking}
+          title="思考等级"
           disabled={busy || modelCatalog === null}
           onChange={(event) => applyThinking(event.target.value)}
         >
-          <option value="">使用Workflow默认{durableThinking === "" && inspection.agent.effectiveThinkingLevel !== ""
-            ? `（当前：${inspection.agent.effectiveThinkingLevel}）`
-            : ""}</option>
+          <option value="">使用 Workflow 默认</option>
           {(modelCatalog?.thinkingLevels ?? []).map((level) => (
             <option key={level} value={level}>{level}</option>
           ))}
         </select>
       </label>
       <button type="button" disabled={busy || !hasDurableConfig} onClick={() => void apply("clear")}>
-        恢复Workflow默认模型与思考等级
+        重置模型与思考等级
       </button>
       {error && <small className="workflow-agent-model-error" role="alert">{error}</small>}
     </section>
@@ -751,14 +750,14 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
   return (
     <dialog
       ref={dialogRef}
-      className="workflow-agent-dialog"
+      className="workflow-agent-dialog configuration-dialog"
       onCancel={(event) => { event.preventDefault(); closeDialog(); }}
       onClick={(event) => { if (event.target === event.currentTarget) closeDialog(); }}
     >
       <div className="workflow-agent-dialog-shell">
         <header>
           <div><strong>{workflow.name}</strong><small>{workflow.description}</small></div>
-          <button type="button" onClick={closeDialog} aria-label="关闭">×</button>
+          <button type="button" onClick={closeDialog} aria-label="关闭"><IconX size={18} aria-hidden /></button>
         </header>
         <nav aria-label="Workflow Agents">
           {workflow.agents.map((item) => (
@@ -795,7 +794,7 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
           {tab === "runtime" && (
             <div className="workflow-agent-tab-panel" role="tabpanel" aria-label="模型与工具">
               <p className="workflow-agent-tab-note">
-                这里的修改保存到当前 Project 的持久配置并立即生效，之后每次运行这个 Workflow Agent 都会使用。
+                此处修改自动保存到当前项目，从下一次运行生效。
               </p>
               {inspection && (
                 <ModelConfigSection

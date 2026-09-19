@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useCallback, useEffect, useLayoutEffect, useImperativeHandle, forwardRef, KeyboardEvent } from "react";
+import React, { useRef, useState, useCallback, useEffect, useLayoutEffect, useImperativeHandle, useSyncExternalStore, forwardRef, KeyboardEvent } from "react";
 import type { BuiltinSlashCommandResult, CompactResultInfo, PromptResourceProposal, QueuedMessages, SlashCommandInfo } from "@/hooks/useAgentSession";
 import type { SkillsResponse } from "@/lib/api-types";
 import type { TextContent, UserMessage } from "@/lib/types";
@@ -44,6 +44,8 @@ import {
   type ChatWorkflowSummary,
 } from "@/lib/chat-workflows-browser";
 import { WorkflowAgentConfigDialog } from "./WorkflowAgentConfigDialog";
+import { readPendingSubmission, clearPendingSubmission, subscribePendingSubmissions } from "@/lib/pending-submission";
+import { BUILTIN_SLASH_COMMANDS, getBuiltinSlashCommand, type BuiltinSlashCommand } from "@/lib/builtin-slash-commands";
 
 export interface AttachedImage {
   data: string;   // base64, no prefix
@@ -55,6 +57,8 @@ interface Props {
   projectId: string;
   onSend: (message: string, images?: AttachedImage[]) => void;
   onAbort: () => void;
+  stopLabel?: string;
+  stopping?: boolean;
   onSteer?: (message: string, images?: AttachedImage[]) => void;
   onFollowUp?: (message: string, images?: AttachedImage[]) => void;
   onPromptWithStreamingBehavior?: (message: string, behavior: "steer" | "followUp", images?: AttachedImage[]) => void;
@@ -62,6 +66,7 @@ interface Props {
   workflowId: ChatWorkflowId;
   onWorkflowChange: (workflowId: ChatWorkflowId) => void;
   longAgentId: string | null;
+  friendImages?: boolean;
   workflowAgentConfigs: Record<string, AgentConfigSelection>;
   promptResourceProposals?: readonly PromptResourceProposal[];
   onWorkflowAgentConfigsChange: (configs: Record<string, AgentConfigSelection>) => void;
@@ -125,30 +130,9 @@ function formatTokenCount(tokens: number): string {
   return tokens.toLocaleString();
 }
 
-type BuiltinSlashCommand = {
-  name: string;
-  description: string;
-  source: "builtin";
-  availableWhileStreaming?: boolean;
-};
-
 type SlashCommandPaletteItem = SlashCommandInfo | BuiltinSlashCommand;
 
 type SlashCommandSource = SlashCommandPaletteItem["source"];
-
-const BUILTIN_SLASH_COMMANDS: BuiltinSlashCommand[] = [
-  { name: "compact", description: "chat.commandCompact", source: "builtin" },
-  { name: "reload", description: "chat.commandReload", source: "builtin" },
-  { name: "name", description: "chat.commandName", source: "builtin" },
-  { name: "session", description: "chat.commandSession", source: "builtin", availableWhileStreaming: true },
-  { name: "copy", description: "chat.commandCopy", source: "builtin", availableWhileStreaming: true },
-];
-
-function getBuiltinSlashCommand(message: string): BuiltinSlashCommand | undefined {
-  const match = message.trim().match(/^\/([^\s]+)(?:\s|$)/);
-  if (!match) return undefined;
-  return BUILTIN_SLASH_COMMANDS.find((command) => command.name === match[1]);
-}
 
 export function canRunBuiltinSlashCommandWhileStreaming(message: string): boolean {
   return getBuiltinSlashCommand(message)?.availableWhileStreaming === true;
@@ -372,8 +356,8 @@ function QueuedMessageRow({ kind, text }: { kind: "steer" | "follow-up"; text: s
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   projectId,
-  onSend, onAbort, onSteer, onFollowUp, isStreaming, workflowId, onWorkflowChange, workflowAgentConfigs, promptResourceProposals, onWorkflowAgentConfigsChange,
-  longAgentId,
+  onSend, onAbort, stopLabel, stopping, onSteer, onFollowUp, isStreaming, workflowId, onWorkflowChange, workflowAgentConfigs, promptResourceProposals, onWorkflowAgentConfigsChange,
+  longAgentId, friendImages = false,
   onCompact, onAbortCompaction, isCompacting, compactError, compactResult,
   retryInfo, queuedMessages, inputHistory = [], onRecallQueue,
   slashCommands, slashCommandsLoading, onLoadSlashCommands,
@@ -385,6 +369,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 }: Props, ref) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
+  const pendingSubmission = useSyncExternalStore(subscribePendingSubmissions,
+    () => draftKey ? readPendingSubmission(draftKey) : null, () => null);
+  const [missingImages, setMissingImages] = useState(() => draftKey ? getDraft(draftKey)?.missingImages ?? 0 : 0);
   const [value, setValue] = useState(() => (draftKey ? getDraft(draftKey)?.value ?? "" : ""));
   const [controlsMenuOpen, setControlsMenuOpen] = useState(false);
   const [workflowSummaries, setWorkflowSummaries] = useState<ChatWorkflowSummary[]>([]);
@@ -444,7 +431,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const selectedWorkflow = visibleWorkflows.find((workflow) => workflow.id === workflowId);
   // Image input is gated per Workflow; the backend re-validates at the HTTP
   // boundary, this only keeps the composer honest before submitting.
-  const imagesAllowed = longAgentId === null && selectedWorkflow?.supportsImageInput !== false;
+  const imagesAllowed = longAgentId === null ? selectedWorkflow?.supportsImageInput !== false : friendImages;
   const attachImageTitle = !imagesAllowed
     ? longAgentId !== null ? t("chat.longAgentTextOnly") : t("chat.workflowNoImages")
     : t("chat.attachImage");
@@ -700,6 +687,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const clearInput = useCallback(() => {
     valueRef.current = "";
     setValue("");
+    setMissingImages(0);
     setAtQuery(null);
     setHistoryMenuOpen(false);
     if (draftKey) clearDraft(draftKey);
@@ -714,9 +702,10 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     if (!draftKey || draftKeyRef.current !== draftKey) return;
     setDraft(draftKey, {
       value,
+      missingImages,
       images: attachedImages.map(imageToDraftImage),
     });
-  }, [attachedImages, draftKey, value]);
+  }, [attachedImages, draftKey, value, missingImages]);
 
   useEffect(() => {
     const previousDraftKey = draftKeyRef.current;
@@ -731,6 +720,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
     const draft = draftKey ? getDraft(draftKey) : null;
     draftKeyRef.current = draftKey;
+    setMissingImages(draft?.missingImages ?? 0);
     const nextValue = draft?.value ?? "";
     const nextImages = draftImagesToAttachedImages(draft?.images);
     valueRef.current = nextValue;
@@ -758,7 +748,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   }, []);
 
   const runBuiltinCommand = useCallback(async (msg: string): Promise<boolean> => {
-    if (attachedImages.length || !msg.startsWith("/") || !onBuiltinCommand) return false;
+    if (attachedImages.length || !getBuiltinSlashCommand(msg) || !onBuiltinCommand) return false;
     const result = await onBuiltinCommand(msg);
     if (!result.handled) return false;
     if (!result.error && canClearBuiltinCommandInput(valueRef.current, attachedImagesRef.current.length, msg)) clearInput();
@@ -1387,7 +1377,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           e.target.value = "";
         }}
       />
-      <div style={{ maxWidth: 820, margin: "0 auto" }}>
+      <div style={{ maxWidth: 880, margin: "0 auto" }}>
         {/* Queued steering / follow-up messages (delivered by pi on upcoming turns) */}
         {((queuedMessages?.steering.length ?? 0) + (queuedMessages?.followUp.length ?? 0)) > 0 && (
           <div style={{
@@ -1456,6 +1446,25 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             ))}
           </div>
         )}
+        {pendingSubmission && !isStreaming && <details className="workspace-unconfirmed-input">
+          <summary>{t("draft.unconfirmed")}</summary>
+          <p>{t("draft.verifyBeforeResend")}</p>
+          <pre>{pendingSubmission.text}</pre>
+          <div>
+            <button type="button" className="workspace-button" onClick={() => {
+              setValue(current => current === pendingSubmission.text ? current : mergeRestoredSubmissionText(pendingSubmission.text, current));
+              setMissingImages(current => current + pendingSubmission.missingImages);
+              if (draftKey) clearPendingSubmission(draftKey, pendingSubmission.id);
+            }}>{t("draft.restoreUnconfirmed")}</button>
+            <button type="button" className="workspace-button" onClick={() => {
+              if (draftKey) clearPendingSubmission(draftKey, pendingSubmission.id);
+            }}>{t("draft.clearVerified")}</button>
+          </div>
+        </details>}
+        {missingImages > 0 && <div className="workspace-draft-warning" role="status">
+          <span>{t("draft.missingImages", { count: missingImages })}</span>
+          <button type="button" className="workspace-button" onClick={() => setMissingImages(0)}>{t("common.close")}</button>
+        </div>}
         {/* Retry banner */}
         {retryInfo && (
           <div style={{
@@ -2002,7 +2011,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 background: (value.trim() || attachedImages.length) ? "var(--accent)" : "var(--bg-panel)",
                 border: "none",
                 borderRadius: 8,
-                color: (value.trim() || attachedImages.length) ? "#fff" : "var(--text-dim)",
+                color: (value.trim() || attachedImages.length) ? "var(--on-accent)" : "var(--text-dim)",
                 cursor: (value.trim() || attachedImages.length) ? "pointer" : "not-allowed",
                 fontSize: 13,
                 fontWeight: 600,
@@ -2301,7 +2310,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               <button
                 className={isMobile ? "mobile-settings-tile" : undefined}
                 onClick={onAbort}
-                 title={t("chat.stopAgent")}
+                disabled={stopping}
+                 title={stopLabel ?? t("chat.stopAgent")}
                 style={{
                   display: "flex", alignItems: "center", gap: 6,
                   padding: isMobile ? "12px 16px" : "8px 14px",
@@ -2321,7 +2331,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                   <rect x="1.5" y="1.5" width="7" height="7" rx="1.5" fill="currentColor" />
                 </svg>
-                 {t("chat.stop")}
+                 {stopLabel ?? t("chat.stop")}
               </button>
             )}
 

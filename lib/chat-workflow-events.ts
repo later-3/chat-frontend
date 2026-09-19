@@ -22,7 +22,7 @@ export interface PlanReview {
 export type ChatRunEvent =
   | { readonly type: "stage_start"; readonly stage: ChatRunStage }
   | { readonly type: "review_required"; readonly stage: ChatRunStage; readonly review: PlanReview }
-  | { readonly type: "agent_event"; readonly stage: ChatRunStage; readonly event: AgentEventLike };
+  | { readonly type: "agent_event"; readonly stage?: ChatRunStage; readonly event: AgentEventLike };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -92,6 +92,8 @@ export function parsePlanReview(value: unknown): PlanReview {
 
 function isMessage(value: unknown): boolean {
   if (!isRecord(value) || typeof value.role !== "string") return false;
+  if (value.role === "bashExecution") return typeof value.command === "string" && typeof value.output === "string";
+  if (value.role === "custom") return typeof value.customType === "string" && (typeof value.content === "string" || Array.isArray(value.content));
   if (value.role === "user") return typeof value.content === "string" || Array.isArray(value.content);
   if (value.role === "assistant") return Array.isArray(value.content);
   return value.role === "toolResult"
@@ -99,11 +101,11 @@ function isMessage(value: unknown): boolean {
     && Array.isArray(value.content);
 }
 
-function parseAgentEvent(value: unknown): AgentEventLike {
+export function parseAgentEvent(value: unknown): AgentEventLike {
   if (!isRecord(value) || typeof value.type !== "string") {
     throw new Error("Chat Workflow返回了无效Agent事件");
   }
-  if (value.type === "agent_start") return { type: value.type };
+  if (value.type === "agent_start" || value.type === "turn_start") return { type: value.type };
   if (value.type === "agent_end") {
     if (typeof value.willRetry !== "boolean") throw new Error("Chat Workflow返回了无效Agent结束事件");
     return value as AgentEventLike;
@@ -131,12 +133,21 @@ function parseAgentEvent(value: unknown): AgentEventLike {
     }
     return value as AgentEventLike;
   }
-  if (
-    value.type === "auto_retry_start"
-    || value.type === "auto_retry_end"
-    || value.type === "compaction_start"
-    || value.type === "compaction_end"
-  ) {
+  if (value.type === "auto_retry_start") {
+    if (!Number.isSafeInteger(value.attempt) || (value.attempt as number) < 1
+      || !Number.isSafeInteger(value.maxAttempts) || (value.maxAttempts as number) < (value.attempt as number)
+      || typeof value.delayMs !== "number" || !Number.isFinite(value.delayMs) || value.delayMs < 0) {
+      throw new Error("Chat Workflow返回了无效重试事件");
+    }
+    return value as AgentEventLike;
+  }
+  if (value.type === "auto_retry_end") {
+    if (typeof value.success !== "boolean" || !Number.isSafeInteger(value.attempt)) throw new Error("Chat Workflow返回了无效重试结果");
+    return value as AgentEventLike;
+  }
+  if (value.type === "compaction_start" || value.type === "compaction_end") {
+    if (!["manual", "threshold", "overflow"].includes(String(value.reason))) throw new Error("Chat Workflow返回了无效压缩原因");
+    if (value.type === "compaction_end" && (typeof value.aborted !== "boolean" || typeof value.willRetry !== "boolean")) throw new Error("Chat Workflow返回了无效压缩结果");
     return value as AgentEventLike;
   }
   throw new Error(`Chat Workflow返回了不支持的Agent事件: ${value.type}`);

@@ -33,6 +33,7 @@ export function PromptResourcesConfig({
   readonly onClose: () => void;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [resources, setResources] = useState<PromptResource[]>([]);
   const [drafts, setDrafts] = useState<PromptResourceDraft[]>([]);
@@ -122,11 +123,11 @@ export function PromptResourcesConfig({
   return (
     <dialog
       ref={dialogRef}
-      className="workflow-agent-dialog"
+      className="workflow-agent-dialog configuration-dialog" aria-label="规则与经验库"
       onCancel={(event) => { event.preventDefault(); close(); }}
       onClick={(event) => { if (event.target === event.currentTarget) close(); }}
     >
-      <div className="workflow-agent-dialog-shell prompt-resource-library">
+      <div className={`workflow-agent-dialog-shell prompt-resource-library${detailOpen ? " prompt-detail-open" : ""}`}>
         <header>
           <div><strong>规则与经验库</strong><small>Personal与当前Project的Agent Prompt资源；草稿不会进入Agent配置。</small></div>
           <button type="button" onClick={close} aria-label="关闭">×</button>
@@ -137,7 +138,7 @@ export function PromptResourcesConfig({
           {drafts.map((draft) => {
             const key = `draft:${promptResourceAddress(draft.target, draft.id)}`;
             return (
-              <button key={key} type="button" className={key === selectedKey ? "active" : ""} onClick={() => setSelectedKey(key)}>
+              <button key={key} type="button" className={key === selectedKey ? "active" : ""} onClick={() => { setSelectedKey(key); setDetailOpen(true); }}>
                 <strong>{draft.title}</strong><small>草稿 · {targetLabel(draft)} · {draft.id}</small>
               </button>
             );
@@ -146,7 +147,7 @@ export function PromptResourcesConfig({
           {resources.map((resource) => {
             const key = `resource:${promptResourceAddress(resource.target, resource.id)}`;
             return (
-              <button key={key} type="button" className={key === selectedKey ? "active" : ""} onClick={() => setSelectedKey(key)}>
+              <button key={key} type="button" className={key === selectedKey ? "active" : ""} onClick={() => { setSelectedKey(key); setDetailOpen(true); }}>
                 <strong>{resource.title}</strong>
                 <small>{targetLabel(resource)} · v{resource.revision} · {resource.status === "active" ? "启用" : "已归档"}</small>
               </button>
@@ -155,6 +156,7 @@ export function PromptResourcesConfig({
           {!loading && drafts.length === 0 && resources.length === 0 && <p>没有匹配的规则、经验或草稿。</p>}
         </nav>
         <main>
+          <button type="button" className="catalog-back workspace-button" onClick={() => setDetailOpen(false)}>返回资源列表</button>
           {error && <p className="workflow-agent-error">{error}</p>}
           {loading && value === undefined ? <p>正在读取规则库…</p> : value && (
             <div className="workflow-agent-inspection prompt-resource-detail">
@@ -170,7 +172,7 @@ export function PromptResourcesConfig({
               </section>
               <section><h3>目的</h3><p>{value.purpose}</p></section>
               <details open><summary>Prompt内容</summary><pre>{value.content}</pre></details>
-              <details open>
+              <details>
                 <summary>来源（{value.sources.length}）</summary>
                 <div className="workflow-agent-detail-list">
                   {value.sources.map((source, index) => (

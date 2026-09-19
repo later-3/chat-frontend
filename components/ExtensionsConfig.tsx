@@ -1,5 +1,9 @@
 "use client";
 
+import { ConfigurationToggle as Toggle } from "./ConfigurationToggle";
+
+import { useDialogFocus } from "@/hooks/useDialogFocus";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { ProviderRequests } from "./ProviderRequests";
@@ -17,72 +21,21 @@ function statusColor(ext: ExtensionInfo): string {
 function buttonStyle(disabled?: boolean, danger?: boolean): React.CSSProperties {
   return {
     padding: "6px 12px",
-    background: danger ? "rgba(239,68,68,0.08)" : "none",
+    background: danger ? "var(--danger-bg)" : "none",
     border: "1px solid var(--border)",
     borderRadius: 6,
-    color: danger ? "#ef4444" : "var(--text-muted)",
+    color: danger ? "var(--danger)" : "var(--text-muted)",
     cursor: disabled ? "not-allowed" : "pointer",
     fontSize: 12,
     opacity: disabled ? 0.5 : 1,
   };
 }
 
-function Toggle({
-  enabled,
-  loading,
-  onToggle,
-  label,
-}: {
-  enabled: boolean;
-  loading: boolean;
-  onToggle: () => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      disabled={loading}
-      title={label}
-      aria-label={label}
-      aria-pressed={enabled}
-      style={{
-        flexShrink: 0,
-        width: 40,
-        height: 22,
-        borderRadius: 11,
-        border: "none",
-        padding: 0,
-        cursor: loading ? "wait" : "pointer",
-        background: enabled ? "var(--accent)" : "var(--border)",
-        position: "relative",
-        transition: "background 0.18s",
-        outline: "none",
-        opacity: loading ? 0.65 : 1,
-      }}
-    >
-      <span
-        style={{
-          position: "absolute",
-          top: 3,
-          left: enabled ? 21 : 3,
-          width: 16,
-          height: 16,
-          borderRadius: "50%",
-          background: "var(--bg)",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.22)",
-          transition: "left 0.18s cubic-bezier(.4,0,.2,1)",
-        }}
-      />
-    </button>
-  );
-}
-
 function ScopeTag({ scope }: { scope: "global" | "project" }) {
   return (
     <span
       style={{
-        fontSize: 10,
+        fontSize: 12,
         padding: "1px 5px",
         borderRadius: 3,
         flexShrink: 0,
@@ -134,7 +87,7 @@ function ExtensionDetail({
           {ext.canToggle ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 10, color: "var(--text-dim)", width: 52, flexShrink: 0 }}>Global</span>
+                <span style={{ fontSize: 12, color: "var(--text-dim)", width: 52, flexShrink: 0 }}>Global</span>
                 <Toggle
                   enabled={enabled}
                   loading={busy}
@@ -144,7 +97,7 @@ function ExtensionDetail({
               </div>
               {sessionId && enabled && (
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontSize: 10, color: "var(--text-dim)", width: 52, flexShrink: 0 }}>Session</span>
+                  <span style={{ fontSize: 12, color: "var(--text-dim)", width: 52, flexShrink: 0 }}>Session</span>
                   <Toggle
                     enabled={!sessionDisabled}
                     loading={sessionBusy || busy}
@@ -158,17 +111,17 @@ function ExtensionDetail({
           <ScopeTag scope={ext.scope} />
           <span
             style={{
-              fontSize: 10,
+              fontSize: 12,
               padding: "1px 5px",
               borderRadius: 3,
               background: ext.origin === "package" ? "rgba(34,197,94,0.12)" : "rgba(120,120,120,0.12)",
-              color: ext.origin === "package" ? "#16a34a" : "var(--text-dim)",
+              color: ext.origin === "package" ? "var(--success)" : "var(--text-dim)",
             }}
           >
             {ext.origin}
           </span>
           {!enabled && (
-            <span style={{ fontSize: 10, padding: "1px 5px", borderRadius: 3, background: "rgba(120,120,120,0.12)", color: "var(--text-dim)" }}>
+            <span style={{ fontSize: 12, padding: "1px 5px", borderRadius: 3, background: "rgba(120,120,120,0.12)", color: "var(--text-dim)" }}>
               disabled
             </span>
           )}
@@ -244,8 +197,8 @@ function ExtensionDetail({
         </div>
       )}
 
-      {actionMessage && <div style={{ fontSize: 12, color: "#16a34a" }}>{actionMessage}</div>}
-      {actionError && <div style={{ fontSize: 12, color: "#ef4444", whiteSpace: "pre-wrap" }}>{actionError}</div>}
+      {actionMessage && <div style={{ fontSize: 12, color: "var(--success)" }}>{actionMessage}</div>}
+      {actionError && <div style={{ fontSize: 12, color: "var(--danger)", whiteSpace: "pre-wrap" }}>{actionError}</div>}
     </div>
   );
 }
@@ -262,6 +215,7 @@ export function ExtensionsConfig({
   onClose: () => void;
   onReloaded?: () => void;
 }) {
+  const modalRef = useDialogFocus(onClose);
   const isMobile = useIsMobile();
   const [data, setData] = useState<ExtensionsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -364,7 +318,7 @@ export function ExtensionsConfig({
   }
 
   return (
-    <div
+    <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label="Extensions" className="configuration-dialog"
       style={{
         position: "fixed",
         inset: 0,
@@ -408,7 +362,7 @@ export function ExtensionsConfig({
             <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Extensions</span>
             <code
               style={{
-                fontSize: 11,
+                fontSize: 12,
                 color: "var(--text-muted)",
                 fontFamily: "var(--font-mono)",
                 overflow: "hidden",
@@ -453,9 +407,9 @@ export function ExtensionsConfig({
               {loading ? (
                 <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>Loading…</div>
               ) : error ? (
-                <div style={{ padding: "10px 8px", fontSize: 11, color: "#ef4444" }}>{error}</div>
+                <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--danger)" }}>{error}</div>
               ) : extensions.length === 0 ? (
-                <div style={{ padding: "10px 8px", fontSize: 11, color: "var(--text-dim)" }}>
+                <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-dim)" }}>
                   No extensions found. Drop a .ts file in ~/.pi/agent/extensions/.
                 </div>
               ) : (
@@ -464,7 +418,7 @@ export function ExtensionsConfig({
                     <div
                       style={{
                         padding: "4px 8px 3px",
-                        fontSize: 10,
+                        fontSize: 12,
                         fontWeight: 600,
                         color: "var(--text-dim)",
                         textTransform: "uppercase",
@@ -523,7 +477,7 @@ export function ExtensionsConfig({
                             </div>
                             <div
                               style={{
-                                fontSize: 10,
+                                fontSize: 12,
                                 color: "var(--text-dim)",
                                 marginTop: 2,
                                 overflow: "hidden",
@@ -587,11 +541,11 @@ export function ExtensionsConfig({
             flexShrink: 0,
           }}
         >
-          <div style={{ minWidth: 0, flex: 1, fontSize: 11, color: "var(--text-dim)", overflow: "hidden" }}>
+          <div style={{ minWidth: 0, flex: 1, fontSize: 12, color: "var(--text-dim)", overflow: "hidden" }}>
             {data?.errors?.length ? (
               <span
                 title={data.errors.map((e) => `${e.path}: ${e.error}`).join("\n")}
-                style={{ color: "#d97706" }}
+                style={{ color: "var(--warning)" }}
               >
                 {data.errors.length} error{data.errors.length === 1 ? "" : "s"}
               </span>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IconPlus, IconRefresh, IconSettings } from "@tabler/icons-react";
+import { useLongAgentPresence } from "@/hooks/useLongAgentPresence";
 import { useI18n } from "@/hooks/useI18n";
 import {
   createChatLongAgent,
@@ -17,6 +18,7 @@ import { LongAgentSettingsPanel } from "./LongAgentSettingsPanel";
 interface Props {
   projectId: string | null;
   selectedSessionId: string | null;
+  selectedLongAgentId?: string;
   visible?: boolean;
   refreshKey?: number;
   onOpenSession: (sessionId: string, projectId: string) => void | Promise<void>;
@@ -27,6 +29,7 @@ interface Props {
 export function ProjectLongAgentSection({
   projectId,
   selectedSessionId,
+  selectedLongAgentId,
   visible = true,
   refreshKey,
   onOpenSession,
@@ -37,6 +40,8 @@ export function ProjectLongAgentSection({
   const [agents, setAgents] = useState<readonly LongAgentSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const openVersion = useRef(0);
+  useEffect(() => { openVersion.current += 1; }, [visible, selectedSessionId]);
   const [openingAgentId, setOpeningAgentId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -45,17 +50,22 @@ export function ProjectLongAgentSection({
   const [createError, setCreateError] = useState<string | null>(null);
 
 
+  const presence = useLongAgentPresence(visible && agents.length > 0, refreshKey ?? 0);
+  const loadVersion = useRef(0);
   const load = useCallback(async (signal?: AbortSignal) => {
+    const version = ++loadVersion.current;
     setLoading(true);
     try {
       const response = await fetchLongAgents(projectId ?? undefined, signal);
+      if (signal?.aborted || version !== loadVersion.current) return;
       setAgents(response.agents);
       setError(null);
     } catch (cause) {
+      if (version !== loadVersion.current) return;
       if (cause instanceof DOMException && cause.name === "AbortError") return;
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      if (!signal?.aborted) setLoading(false);
+      if (!signal?.aborted && version === loadVersion.current) setLoading(false);
     }
   }, [projectId]);
 
@@ -106,6 +116,7 @@ export function ProjectLongAgentSection({
 
   const handleOpen = useCallback(async (agent: LongAgentSummary) => {
     if (openingAgentId !== null || !agent.available) return;
+    const version = ++openVersion.current;
     setOpeningAgentId(agent.id);
     setError(null);
     try {
@@ -114,6 +125,7 @@ export function ProjectLongAgentSection({
       const started = await startProjectLongAgent({ longAgentId: agent.id, projectId: agent.defaultProjectId });
       // start 返回的 projectId 是会话真实归属（共享 daily 入口会重定向到 Agent 自己的
       // Daily Project）；打开时必须用它，否则前端会拿当前项目去查一个不存在的会话。
+      if (version !== openVersion.current) return;
       const sessionProjectId = started.projectId;
       setAgents((current) => current.map((item) => item.id === agent.id
         ? {
@@ -143,7 +155,7 @@ export function ProjectLongAgentSection({
       id="sidebar-long-agents-panel"
       className={styles.section}
       role="tabpanel"
-      aria-labelledby="sidebar-long-agents-tab"
+      aria-labelledby="workspace-coworkers-tab"
     >
       <div className={styles.header}>
         <h2 id="project-long-agent-heading">{t("sidebar.longAgentCoworkers")}</h2>
@@ -189,11 +201,6 @@ export function ProjectLongAgentSection({
       {createOpen && (
         <form className={styles.createForm} onSubmit={(event) => { event.preventDefault(); void submitCreate(); }}>
           <p className={styles.createHelp}>{t("longAgent.createHint")}</p>
-          <label>{t("longAgent.createId")}<input
-            value={createDraft.id}
-            required maxLength={80} pattern={"[a-z0-9][a-z0-9._\\-]*"} disabled={creating}
-            onChange={(event) => setCreateDraft((draft) => ({ ...draft, id: event.target.value }))}
-          /></label>
           <label>{t("longAgent.createName")}<input
             value={createDraft.name}
             required maxLength={200} disabled={creating}
@@ -239,8 +246,10 @@ export function ProjectLongAgentSection({
         <nav aria-label={t("sidebar.longAgentCoworkers")}>
           <ul className={styles.list}>
             {agents.map((agent) => {
+              const state = presence?.agents.find(item => item.id === agent.id)?.status ?? "unknown";
+              const stateLabel = t(`coworkerState.${state}`);
               const primarySessionId = agent.project?.primarySessionId ?? null;
-              const selected = primarySessionId !== null && primarySessionId === selectedSessionId;
+              const selected = agent.id === selectedLongAgentId || (primarySessionId !== null && primarySessionId === selectedSessionId);
               const opening = openingAgentId === agent.id;
               const started = agent.project?.started === true;
               const action = selected
@@ -254,25 +263,24 @@ export function ProjectLongAgentSection({
                     type="button"
                     className={`${styles.agentButton}${selected ? ` ${styles.selected}` : ""}`}
                     onClick={() => void handleOpen(agent)}
-                    disabled={openingAgentId !== null || !agent.available}
+                    disabled={openingAgentId !== null || !agent.available || state === "disabled"}
                     aria-current={selected ? "page" : undefined}
                     aria-label={t("sidebar.longAgentChatWith", { name: agent.name })}
                     title={agent.available
-                      ? `${agent.name} · ${agent.description}`
+                      ? `${agent.name} · ${stateLabel} · ${agent.description}`
                       : t("sidebar.longAgentUnavailable", { name: agent.name })}
                   >
                     <span className={styles.avatarWrap} aria-hidden="true">
                       <LongAgentAvatarView agentId={agent.id} name={agent.name} avatar={agent.avatar} />
-                      <span className={agent.available && agent.channelHostAvailable
-                        ? styles.presenceOnline
-                        : styles.presenceOffline} />
+                      <span className={styles.presence} data-state={state} />
                     </span>
                     <span className={styles.agentText}>
                       <strong>
                         {agent.name}
                         {agent.status === "archived" && <em className={styles.archivedBadge}>{t("longAgent.archivedBadge")}</em>}
                       </strong>
-                      <span>{agent.description}</span>
+                      <span title={agent.description}>{agent.description}</span>
+                      <span className={styles.presenceLabel} data-state={state}>{stateLabel}</span>
                     </span>
                     <span className={`${styles.status}${selected ? ` ${styles.statusActive}` : ""}`}>
                       {opening ? t("sidebar.longAgentOpening") : action}
@@ -290,7 +298,7 @@ export function ProjectLongAgentSection({
     {settingsOpen && agents.length > 0 && (
       <LongAgentSettingsPanel
         agents={agents}
-        initialAgentId={agents.find((agent) => agent.project?.primarySessionId === selectedSessionId)?.id}
+        initialAgentId={selectedLongAgentId ?? agents.find((agent) => agent.project?.primarySessionId === selectedSessionId)?.id}
         onBack={() => setSettingsOpen(false)}
         onSaved={() => void load()}
       />

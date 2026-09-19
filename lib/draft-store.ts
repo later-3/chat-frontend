@@ -11,36 +11,70 @@ export interface ChatDraftImage {
 export interface ChatDraft {
   value: string;
   images: ChatDraftImage[];
+  /** Attachments were memory-only before this page reload. */
+  missingImages?: number;
 }
 
 const drafts = new Map<string, ChatDraft>();
+const STORAGE_PREFIX = "chat:composer:v1:";
+
+function textStorage(): Storage | null {
+  try { return typeof window === "undefined" ? null : window.sessionStorage; }
+  catch { return null; }
+}
+
+function persistDraft(key: string, draft: ChatDraft | null): void {
+  try {
+    const storage = textStorage();
+    if (!draft) storage?.removeItem(STORAGE_PREFIX + key);
+    else storage?.setItem(STORAGE_PREFIX + key, JSON.stringify({
+      schemaVersion: 1, value: draft.value, missingImages: draft.images.length + (draft.missingImages ?? 0),
+    }));
+  } catch {
+    // Quota/private-mode failures never discard the in-memory composer.
+  }
+}
 
 function cloneDraft(draft: ChatDraft): ChatDraft {
   return {
     value: draft.value,
+    ...(draft.missingImages ? { missingImages: draft.missingImages } : {}),
     images: draft.images.map((image) => ({ ...image })),
   };
 }
 
 function isEmptyDraft(draft: ChatDraft): boolean {
-  return !draft.value && draft.images.length === 0;
+  return !draft.value && draft.images.length === 0 && !draft.missingImages;
 }
 
 export function getDraft(key: string): ChatDraft | null {
   const draft = drafts.get(key);
-  return draft ? cloneDraft(draft) : null;
+  if (draft) return cloneDraft(draft);
+  try {
+    const stored: unknown = JSON.parse(textStorage()?.getItem(STORAGE_PREFIX + key) ?? "null");
+    if (!stored || typeof stored !== "object" || Array.isArray(stored)) return null;
+    const record = stored as Record<string, unknown>;
+    if (record.schemaVersion !== 1 || typeof record.value !== "string"
+      || typeof record.missingImages !== "number" || !Number.isSafeInteger(record.missingImages)
+      || record.missingImages < 0) return null;
+    const restored: ChatDraft = { value: record.value, images: [], ...(record.missingImages ? { missingImages: record.missingImages } : {}) };
+    drafts.set(key, restored);
+    return cloneDraft(restored);
+  } catch { return null; }
 }
 
 export function setDraft(key: string, draft: ChatDraft): void {
   if (isEmptyDraft(draft)) {
-    drafts.delete(key);
+    clearDraft(key);
     return;
   }
   drafts.set(key, cloneDraft(draft));
+  persistDraft(key, draft);
 }
 
 export function clearDraft(key: string): void {
   drafts.delete(key);
+  persistDraft(key, null);
 }
 
 export function mergeRestoredSubmissionText(submitted: string, current: string): string {

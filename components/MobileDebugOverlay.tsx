@@ -44,7 +44,7 @@ function getChecks(): CheckResult[] {
   });
 
   // 4. Top bar respects safe area
-  const topBar = document.querySelector(".mobile-session-header, .mobile-topbar");
+  const topBar = document.querySelector(".workspace-context-bar, .mobile-session-header, .mobile-topbar");
   if (topBar) {
     const rect = topBar.getBoundingClientRect();
     const firstControl = topBar.querySelector("button");
@@ -88,7 +88,7 @@ function getChecks(): CheckResult[] {
     const visibleBottom = keyboardOpen
       ? visualBottom
       : Math.max(visualBottom, shellBottom ?? visualBottom);
-    const composerVisible = rect.bottom <= visibleBottom + 2;
+    const composerVisible = rect.height > 0 && rect.bottom <= visibleBottom + 2;
     results.push({
       label: "Composer visible",
       pass: composerVisible,
@@ -100,7 +100,8 @@ function getChecks(): CheckResult[] {
     // 8px gap or the device safe area, plus a small sub-pixel tolerance.
     const safeBottom = parseFloat(safBottom) || 0;
     const bottomGap = Math.max(0, visibleBottom - rect.bottom);
-    const expectedGap = Math.max(8, safeBottom);
+    const navigationHeight = document.querySelector(".workspace-rail")?.getBoundingClientRect().height ?? 0;
+    const expectedGap = Math.max(8, safeBottom) + navigationHeight;
     results.push({
       label: "Composer bottom gap",
       pass: bottomGap <= expectedGap + 4,
@@ -125,7 +126,7 @@ function getChecks(): CheckResult[] {
 
   // 8. Main touch targets >= 44px
   const touchTargets = document.querySelectorAll(
-    ".mobile-session-shell button, .mobile-topbar button, .mobile-composer button, .mobile-message-action, .markdown-code-action",
+    ".workspace-context-bar button, .workspace-rail button, .mobile-session-shell button, .mobile-topbar button, .mobile-composer button, .mobile-message-action, .markdown-code-action",
   );
   let allTouchTargetsOk = true;
   let smallestTarget = 999;
@@ -183,7 +184,7 @@ export function MobileDebugOverlay({ open = false, onClose }: { open?: boolean; 
         border: "1px solid var(--border)",
         borderRadius: 10,
         padding: "8px 12px",
-        fontSize: 11,
+        fontSize: 12,
         fontFamily: "var(--font-mono)",
         color: "var(--text)",
         boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
@@ -201,7 +202,7 @@ export function MobileDebugOverlay({ open = false, onClose }: { open?: boolean; 
       >
         <span style={{ fontWeight: 700 }}>
           Mobile Debug{" "}
-          <span style={{ color: allPass ? "#10b981" : "#ef4444" }}>
+          <span style={{ color: allPass ? "var(--success)" : "var(--danger)" }}>
             {allPass ? "✓ ALL PASS" : "✗ ISSUES"}
           </span>
         </span>
@@ -237,7 +238,7 @@ export function MobileDebugOverlay({ open = false, onClose }: { open?: boolean; 
         >
           <span
             style={{
-              color: check.pass ? "#10b981" : "#ef4444",
+              color: check.pass ? "var(--success)" : "var(--danger)",
               fontWeight: 700,
               flexShrink: 0,
             }}
@@ -249,7 +250,7 @@ export function MobileDebugOverlay({ open = false, onClose }: { open?: boolean; 
             style={{
               color: "var(--text-dim)",
               flexShrink: 0,
-              fontSize: 10,
+              fontSize: 12,
             }}
           >
             {check.detail}

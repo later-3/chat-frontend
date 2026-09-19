@@ -1,5 +1,9 @@
 "use client";
 
+import { ConfigurationToggle as Toggle } from "./ConfigurationToggle";
+
+import { useDialogFocus } from "@/hooks/useDialogFocus";
+
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
@@ -50,56 +54,6 @@ function shortVersion(version?: string): string {
   return version ? version.slice(0, 8) : "unknown";
 }
 
-function Toggle({
-  enabled,
-  loading,
-  onToggle,
-}: {
-  enabled: boolean;
-  loading: boolean;
-  onToggle: () => void;
-}) {
-  const { t } = useI18n();
-  return (
-    <button
-      onClick={onToggle}
-      disabled={loading}
-      title={
-        enabled
-          ? t("i18n.visibleInPrompt")
-          : t("i18n.hiddenFromPrompt")
-      }
-      style={{
-        flexShrink: 0,
-        width: 40,
-        height: 22,
-        borderRadius: 11,
-        border: "none",
-        padding: 0,
-        cursor: loading ? "wait" : "pointer",
-        background: enabled ? "var(--accent)" : "var(--border)",
-        position: "relative",
-        transition: "background 0.18s",
-        outline: "none",
-      }}
-    >
-      <span
-        style={{
-          position: "absolute",
-          top: 3,
-          left: enabled ? 21 : 3,
-          width: 16,
-          height: 16,
-          borderRadius: "50%",
-          background: "var(--bg)",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.22)",
-          transition: "left 0.18s cubic-bezier(.4,0,.2,1)",
-        }}
-      />
-    </button>
-  );
-}
-
 function SkillDetail({
   skill,
   cwd,
@@ -144,7 +98,7 @@ function SkillDetail({
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
           <span
             style={{
-              fontSize: 10,
+              fontSize: 12,
               padding: "1px 5px",
               borderRadius: 3,
               flexShrink: 0,
@@ -161,7 +115,7 @@ function SkillDetail({
           <span
             style={{
               fontFamily: "var(--font-mono)",
-              fontSize: 11,
+              fontSize: 12,
               color: "var(--text-dim)",
               flex: 1,
               overflow: "hidden",
@@ -172,6 +126,7 @@ function SkillDetail({
             {displayPath(skill.filePath)}
           </span>
           <Toggle
+            label={enabled ? t("i18n.visibleInPrompt") : t("i18n.hiddenFromPrompt")}
             enabled={enabled}
             loading={toggling}
             onToggle={() => onToggle(skill)}
@@ -189,7 +144,7 @@ function SkillDetail({
           }}
         >
           {!enabled && (
-            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
+            <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
               {t("i18n.hiddenButInvocable")}
             </span>
           )}
@@ -274,7 +229,7 @@ function SkillDetail({
                   color: "var(--text-muted)",
                   cursor: checkingUpdate || updating ? "not-allowed" : "pointer",
                   opacity: checkingUpdate || updating ? 0.5 : 1,
-                  fontSize: 11,
+                  fontSize: 12,
                 }}
               >
                  {t("i18n.check")}
@@ -285,7 +240,7 @@ function SkillDetail({
                 style={{
                   fontFamily: "var(--font-mono)",
                   fontSize: 12,
-                  color: "#d97706",
+                  color: "var(--warning)",
                 }}
               >
                 {shortVersion(updateStatus.latestVersion)}
@@ -299,9 +254,9 @@ function SkillDetail({
                   color: checkingUpdate
                     ? "var(--accent)"
                     : updateStatus?.state === "up-to-date"
-                      ? "#16a34a"
+                      ? "var(--success)"
                       : updateStatus?.state === "error"
-                          ? "#ef4444"
+                          ? "var(--danger)"
                           : "var(--text-dim)",
                 }}
               >
@@ -323,10 +278,10 @@ function SkillDetail({
                   border: "none",
                   borderRadius: 5,
                   background: "var(--accent)",
-                  color: "#fff",
+                  color: "var(--on-accent)",
                   cursor: updating || checkingUpdate ? "not-allowed" : "pointer",
                   opacity: updating || checkingUpdate ? 0.5 : 1,
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: 600,
                 }}
               >
@@ -335,7 +290,7 @@ function SkillDetail({
             )}
           </div>
           {updateError && (
-            <span style={{ fontSize: 12, color: "#ef4444" }}>{updateError}</span>
+            <span style={{ fontSize: 12, color: "var(--danger)" }}>{updateError}</span>
           )}
         </div>
       )}
@@ -505,7 +460,7 @@ function AddSkillPanel({
               borderRadius: 6,
               border: "none",
               background: "var(--accent)",
-              color: "#fff",
+              color: "var(--on-accent)",
               cursor: searching || !query.trim() ? "not-allowed" : "pointer",
               opacity: searching || !query.trim() ? 0.5 : 1,
               flexShrink: 0,
@@ -620,7 +575,7 @@ function AddSkillPanel({
                     <span
                       style={{
                         fontFamily: "var(--font-mono)",
-                        fontSize: 11,
+                        fontSize: 12,
                         color: "var(--text-dim)",
                       }}
                     >
@@ -669,7 +624,7 @@ function AddSkillPanel({
                         : "pointer",
                     background: isInstalled ? "rgba(34,197,94,0.1)" : "none",
                     color: isInstalled
-                      ? "#16a34a"
+                      ? "var(--success)"
                       : isInstalling
                         ? "var(--accent)"
                         : "var(--text-muted)",
@@ -718,6 +673,7 @@ export function SkillsConfig({
   cwd: string;
   onClose: () => void;
 }) {
+  const modalRef = useDialogFocus(onClose);
   const isMobile = useIsMobile();
   const { t } = useI18n();
   const [skills, setSkills] = useState<Skill[]>([]);
@@ -1027,7 +983,7 @@ export function SkillsConfig({
             alignItems: "center",
             gap: 5,
             padding: "5px 8px 4px",
-            fontSize: 10,
+            fontSize: 12,
             fontWeight: 600,
             color: "var(--text-dim)",
             textTransform: "uppercase",
@@ -1042,10 +998,10 @@ export function SkillsConfig({
           <span>({entries.length})</span>
         </div>
         {open && options.error && (
-          <div style={{ padding: "2px 8px 4px 21px", fontSize: 10, color: "#f87171" }}>{options.error}</div>
+          <div style={{ padding: "2px 8px 4px 21px", fontSize: 12, color: "#f87171" }}>{options.error}</div>
         )}
         {open && entries.length === 0 && options.error === undefined && (
-          <div style={{ padding: "2px 8px 4px 21px", fontSize: 10, color: "var(--text-dim)" }}>{t("skillsTree.empty")}</div>
+          <div style={{ padding: "2px 8px 4px 21px", fontSize: 12, color: "var(--text-dim)" }}>{t("skillsTree.empty")}</div>
         )}
         {open && entries.map(renderTreeSkillRow)}
       </div>
@@ -1078,7 +1034,7 @@ export function SkillsConfig({
                   alignItems: "center",
                   gap: 5,
                   padding: "5px 8px 4px",
-                  fontSize: 10,
+                  fontSize: 12,
                   fontWeight: 600,
                   color: "var(--text-dim)",
                   textTransform: "uppercase",
@@ -1095,12 +1051,12 @@ export function SkillsConfig({
               </div>
               {open && workflow.agents.map((agent) => (
                 <div key={agent.agentId}>
-                  <div style={{ padding: "2px 8px 2px 21px", fontSize: 10, color: "var(--text-muted)" }}>{agent.name}</div>
+                  <div style={{ padding: "2px 8px 2px 21px", fontSize: 12, color: "var(--text-muted)" }}>{agent.name}</div>
                   {agent.error !== undefined && (
-                    <div style={{ padding: "2px 8px 4px 29px", fontSize: 10, color: "#f87171" }}>{agent.error}</div>
+                    <div style={{ padding: "2px 8px 4px 29px", fontSize: 12, color: "#f87171" }}>{agent.error}</div>
                   )}
                   {agent.error === undefined && agent.skills.length === 0 && (
-                    <div style={{ padding: "2px 8px 4px 29px", fontSize: 10, color: "var(--text-dim)" }}>{t("skillsTree.empty")}</div>
+                    <div style={{ padding: "2px 8px 4px 29px", fontSize: 12, color: "var(--text-dim)" }}>{t("skillsTree.empty")}</div>
                   )}
                   <div style={{ paddingLeft: 13 }}>{agent.skills.map(renderTreeSkillRow)}</div>
                 </div>
@@ -1118,7 +1074,7 @@ export function SkillsConfig({
   };
 
   return (
-    <div
+    <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label="Skills" className="configuration-dialog"
       style={{
         position: "fixed",
         inset: 0,
@@ -1166,7 +1122,7 @@ export function SkillsConfig({
             </span>
             <code
               style={{
-                fontSize: 11,
+                fontSize: 12,
                 color: "var(--text-muted)",
                 fontFamily: "var(--font-mono)",
                 maxWidth: 320,
@@ -1211,7 +1167,7 @@ export function SkillsConfig({
           >
             <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
               {treeError !== null && (
-                <div style={{ padding: "4px 8px", fontSize: 10, color: "#f87171" }}>{treeError}</div>
+                <div style={{ padding: "4px 8px", fontSize: 12, color: "#f87171" }}>{treeError}</div>
               )}
               {skillTree !== null ? renderSkillTreeView() : loading ? (
                 <div
@@ -1227,7 +1183,7 @@ export function SkillsConfig({
                 <div
                   style={{
                     padding: "10px 8px",
-                    fontSize: 11,
+                    fontSize: 12,
                     color: "#f87171",
                   }}
                 >
@@ -1237,7 +1193,7 @@ export function SkillsConfig({
                 <div
                   style={{
                     padding: "10px 8px",
-                    fontSize: 11,
+                    fontSize: 12,
                     color: "var(--text-dim)",
                   }}
                 >
@@ -1353,7 +1309,7 @@ export function SkillsConfig({
                             <span
                                title={t("i18n.updateAvailable")}
                               style={{
-                                color: "#d97706",
+                                color: "var(--warning)",
                                 fontSize: 13,
                                 lineHeight: 1,
                                 flexShrink: 0,
@@ -1380,7 +1336,7 @@ export function SkillsConfig({
                           <div
                             style={{
                               padding: "4px 8px 3px",
-                              fontSize: 10,
+                              fontSize: 12,
                               fontWeight: 600,
                               color: "var(--text-dim)",
                               textTransform: "uppercase",
@@ -1404,7 +1360,7 @@ export function SkillsConfig({
                                   alignItems: "center",
                                   gap: 5,
                                   padding: "4px 8px 3px",
-                                  fontSize: 10,
+                                  fontSize: 12,
                                   fontWeight: 600,
                                   color: "var(--text-dim)",
                                   textTransform: "uppercase",
@@ -1521,7 +1477,7 @@ export function SkillsConfig({
               />
             ) : selectedTreeEntry !== null ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
                   {selectedTreeEntry.owner}
                 </div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", fontFamily: "var(--font-mono)" }}>
@@ -1532,10 +1488,10 @@ export function SkillsConfig({
                     {selectedTreeEntry.entry.description}
                   </div>
                 )}
-                <code style={{ fontSize: 11, color: "var(--text-dim)", fontFamily: "var(--font-mono)", wordBreak: "break-all" }}>
+                <code style={{ fontSize: 12, color: "var(--text-dim)", fontFamily: "var(--font-mono)", wordBreak: "break-all" }}>
                   {shortenPath(selectedTreeEntry.entry.filePath)}
                 </code>
-                <div style={{ fontSize: 11, color: "var(--text-dim)", borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+                <div style={{ fontSize: 12, color: "var(--text-dim)", borderTop: "1px solid var(--border)", paddingTop: 10 }}>
                   {t("skillsTree.readOnlyHint")}
                 </div>
               </div>
@@ -1592,7 +1548,7 @@ export function SkillsConfig({
             {Object.values(updateStatuses).filter(
               (status) => status.state === "update-available",
             ).length > 0 && (
-              <span style={{ fontSize: 12, color: "#d97706" }}>
+              <span style={{ fontSize: 12, color: "var(--warning)" }}>
                 {
                   Object.values(updateStatuses).filter(
                     (status) => status.state === "update-available",

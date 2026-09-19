@@ -25,7 +25,7 @@
   border: 0;
   cursor: pointer;
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   transition: color 120ms ease, background 120ms ease;
 }
 
@@ -131,19 +131,19 @@
 .itemStatus {
   color: var(--text-dim);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .error {
   margin: 5px 4px 2px;
-  color: #dc2626;
-  font-size: 10px;
+  color: var(--danger);
+  font-size: 12px;
   line-height: 1.4;
 }
 
 .current {
   color: var(--accent);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
 }
 

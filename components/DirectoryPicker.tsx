@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useI18n } from "@/hooks/useI18n";
 import { browseDirectories, type DirectoryBrowseEntry } from "@/lib/directory-browser";
 
@@ -45,6 +46,8 @@ export function DirectoryPicker({ onCancel, onSelect, busy = false, error }: Pro
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const focusRef = useDialogFocus(() => { if (!busy) onCancel(); }, portalTarget !== null);
+
   const navigateTo = useCallback(async (directory?: string) => {
     setLoading(true);
     setLoadError(null);
@@ -81,7 +84,7 @@ export function DirectoryPicker({ onCancel, onSelect, busy = false, error }: Pro
 
   return createPortal(
     <div
-      className="directory-picker-backdrop"
+      ref={focusRef} tabIndex={-1} className="directory-picker-backdrop configuration-dialog"
       role="dialog"
       aria-modal="true"
       aria-label={t("directoryPicker.selectDirectory")}
@@ -147,7 +150,7 @@ export function DirectoryPicker({ onCancel, onSelect, busy = false, error }: Pro
 
         <div className="directory-picker-list" style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "8px 10px" }}>
           {loading ? (
-            <div style={{ padding: 8, color: "var(--text-dim)", fontSize: 11 }}>{t("directoryPicker.loadingDirectories")}</div>
+            <div style={{ padding: 8, color: "var(--text-dim)", fontSize: 12 }}>{t("directoryPicker.loadingDirectories")}</div>
           ) : drives !== null ? (
             <>
               {drives.length > 0 ? (
@@ -158,14 +161,14 @@ export function DirectoryPicker({ onCancel, onSelect, busy = false, error }: Pro
                     type="button"
                     onClick={() => void navigateTo(drive.path)}
                     title={drive.path}
-                    style={{ width: "100%", minHeight: 34, display: "flex", alignItems: "center", gap: 7, padding: "6px 8px", border: 0, borderRadius: 5, background: "none", color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontFamily: "var(--font-mono)", fontSize: 11 }}
+                    style={{ width: "100%", minHeight: 34, display: "flex", alignItems: "center", gap: 7, padding: "6px 8px", border: 0, borderRadius: 5, background: "none", color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontFamily: "var(--font-mono)", fontSize: 12 }}
                   >
                     <DriveIcon />
                     <span>{drive.name}</span>
                   </button>
                 ))
               ) : (
-                <div style={{ padding: 8, color: "var(--text-dim)", fontSize: 11 }}>{t("directoryPicker.noDrives")}</div>
+                <div style={{ padding: 8, color: "var(--text-dim)", fontSize: 12 }}>{t("directoryPicker.noDrives")}</div>
               )}
             </>
           ) : directories.length > 0 ? (
@@ -176,17 +179,17 @@ export function DirectoryPicker({ onCancel, onSelect, busy = false, error }: Pro
                 type="button"
                 onClick={() => void navigateTo(entry.path)}
                 title={entry.path}
-                style={{ width: "100%", minHeight: 30, display: "flex", alignItems: "center", gap: 7, padding: "5px 8px", border: 0, borderRadius: 5, background: "none", color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontFamily: "var(--font-mono)", fontSize: 11 }}
+                style={{ width: "100%", minHeight: 30, display: "flex", alignItems: "center", gap: 7, padding: "5px 8px", border: 0, borderRadius: 5, background: "none", color: "var(--text-muted)", cursor: "pointer", textAlign: "left", fontFamily: "var(--font-mono)", fontSize: 12 }}
               >
                 <FolderIcon />
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.name}</span>
               </button>
             ))
           ) : (
-            <div style={{ padding: 8, color: "var(--text-dim)", fontSize: 11 }}>{t("directoryPicker.noSubdirectories")}</div>
+            <div style={{ padding: 8, color: "var(--text-dim)", fontSize: 12 }}>{t("directoryPicker.noSubdirectories")}</div>
           )}
           {(loadError ?? error) !== null && (loadError ?? error) !== undefined && (
-            <div style={{ padding: "8px", color: "#dc2626", fontSize: 11 }} role="alert">{loadError ?? error}</div>
+            <div style={{ padding: "8px", color: "var(--danger)", fontSize: 12 }} role="alert">{loadError ?? error}</div>
           )}
         </div>
 
@@ -198,7 +201,7 @@ export function DirectoryPicker({ onCancel, onSelect, busy = false, error }: Pro
             onClick={() => onSelect(currentPath)}
             disabled={!canSelect}
             title={hasUncommittedPath ? t("directoryPicker.openBeforeSelecting") : t("directoryPicker.selectCurrentDirectory")}
-            style={{ padding: "6px 16px", border: 0, borderRadius: 6, background: "var(--accent)", color: "#fff", fontSize: 13, fontWeight: 600, opacity: canSelect ? 1 : 0.6, cursor: canSelect ? "pointer" : "default" }}
+            style={{ padding: "6px 16px", border: 0, borderRadius: 6, background: "var(--accent)", color: "var(--on-accent)", fontSize: 13, fontWeight: 600, opacity: canSelect ? 1 : 0.6, cursor: canSelect ? "pointer" : "default" }}
           >
             {busy ? t("i18n.checking") : t("directoryPicker.selectThisFolder")}
           </button>

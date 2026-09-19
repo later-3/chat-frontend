@@ -87,14 +87,14 @@ export function parseSessionInfo(value: unknown): SessionInfo {
   };
 }
 
-/** Loads one existing Session from its owning Project list and preserves the exact server summary. */
+/** Resolves an exact Session through Backend, including recorded legacy Project aliases. */
 export async function fetchProjectSessionById(
   projectId: string,
   sessionId: string,
   signal?: AbortSignal,
 ): Promise<SessionInfo> {
   const query = new URLSearchParams({ projectId });
-  const response = await fetch(`/api/sessions?${query.toString()}`, {
+  const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}?${query.toString()}`, {
     cache: "no-store",
     credentials: "same-origin",
     signal,
@@ -107,8 +107,9 @@ export async function fetchProjectSessionById(
       : undefined;
     throw new Error(message ?? `读取Session失败: HTTP ${response.status}`);
   }
-  const target = parseSessionListPage(body).sessions.find((session) => session.id === sessionId);
-  if (target === undefined) throw new Error(`当前Project中找不到Session: ${sessionId}`);
+  if (!isRecord(body)) throw new Error("Chat返回了无效的Session响应");
+  const target = parseSessionInfo(body.session);
+  if (target.id !== sessionId) throw new Error(`Chat返回了不匹配的Session: ${sessionId}`);
   return target;
 }
 

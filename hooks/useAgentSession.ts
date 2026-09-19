@@ -1,9 +1,18 @@
 "use client";
 
 import {
+  readFriendCapabilities,
+  acceptFriendMessage,
+  steerFriendExecution,
+  followFriendExecution,
+  cancelFriendExecution,
+  parseFriendExecution,
+  type FriendExecution,
+} from "@/lib/friend-execution";
+
+import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useReducer,
   useRef,
@@ -19,9 +28,13 @@ import type {
   SessionInfo,
   SessionTreeNode,
 } from "@/lib/types";
-import { clearDraft, setDraft } from "@/lib/draft-store";
+import { setDraft } from "@/lib/draft-store";
+import { readPendingSubmission, retainPendingSubmission, clearPendingSubmission } from "@/lib/pending-submission";
 import {
   cancelChatWorkflowRun,
+  workflowRequestSignal,
+  WorkflowTerminalError,
+  type WorkflowConnectionUpdate,
   resumeChatWorkflowRun,
   runChatWorkflowPrompt,
   submitPlanReviewDecision,
@@ -61,14 +74,24 @@ import type { WorkflowCallStatistics } from "@/lib/workflow-call-statistics";
 import type { WorkflowCallTreeNode } from "@/lib/workflow-call-tree";
 import {
   fetchLongAgents,
-  sendLongAgentMessage,
   type LongAgentSummary,
 } from "@/lib/long-agents-browser";
 import { parseSessionInfo } from "@/lib/session-list-browser";
 import { sessionLongAgentId } from "@/lib/session-owner";
 import { forkSession } from "@/lib/session-fork-browser";
+import { getBuiltinSlashCommand } from "@/lib/builtin-slash-commands";
+
+import { createRunActivity, changeRunPhase, reduceRunActivity, type RunActivity, type RunPhase } from "@/lib/run-activity";
+
+import { composerDraftKey as resolveComposerDraftKey } from "@/lib/composer-context";
+import { parseLongAgentActivity, type LongAgentActivity } from "@/lib/long-agent-activity";
+import { parseEntryTimes } from "@/lib/turn-summary";
+import { parseWorkflowOutcome, type WorkflowOutcome } from "@/lib/workflow-outcome";
 
 export interface SessionData {
+  longAgentActivity?: LongAgentActivity;
+  friendExecution?: FriendExecution;
+  workflowOutcome?: WorkflowOutcome;
   session: SessionInfo;
   sessionId: string;
   filePath: string;
@@ -78,6 +101,7 @@ export interface SessionData {
   context: {
     messages: AgentMessage[];
     entryIds: string[];
+    entryTimes?: (number | null)[];
     thinkingLevel: string;
     model: { provider: string; modelId: string } | null;
   };
@@ -162,6 +186,7 @@ export interface NoticeItem {
 interface UseAgentSessionOptions {
   projectId: string;
   /** 顶栏上下文项目（B1）：随消息传给 Long Agent，仅注入提示词。 */
+  deviceId?: string;
   contextProjectId?: string | null;
   session: SessionInfo | null;
   sessionRunning?: boolean;
@@ -315,7 +340,7 @@ async function fetchSessionData(
   const query = new URLSearchParams({ projectId, deferThinking: "1", deferMedia: "1" });
   const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}?${query.toString()}`, {
     cache: "no-store",
-    ...(signal === undefined ? {} : { signal }),
+    signal: workflowRequestSignal(signal),
   });
   const body: unknown = await response.json().catch(() => null);
   const error = isRecord(body) && typeof body.error === "string" ? body.error : `HTTP ${response.status}`;
@@ -329,6 +354,7 @@ async function fetchSessionData(
     || !isRecord(body.context)
     || !Array.isArray(body.context.messages)
     || !Array.isArray(body.context.entryIds)
+    || body.context.messages.length !== body.context.entryIds.length
     || body.context.entryIds.some((entryId) => !isNonEmptyString(entryId))
     || typeof body.context.thinkingLevel !== "string"
     || (body.context.model !== null && (!isRecord(body.context.model)
@@ -343,6 +369,7 @@ async function fetchSessionData(
   }
   const workflowCallProjection = parseWorkflowCallProjection(body, body.sessionId);
   return {
+    workflowOutcome: parseWorkflowOutcome(body.workflowOutcome),
     session: parseSessionInfo(body.session),
     sessionId: body.sessionId,
     filePath: body.filePath,
@@ -352,9 +379,12 @@ async function fetchSessionData(
     context: {
       messages: body.context.messages as AgentMessage[],
       entryIds: body.context.entryIds as string[],
+      entryTimes: parseEntryTimes(body.context.entryTimes, body.context.entryIds.length),
       thinkingLevel: body.context.thinkingLevel,
       model: body.context.model as SessionData["context"]["model"],
     },
+    ...(body.friendExecution === undefined ? {} : { friendExecution: parseFriendExecution(body.friendExecution) }),
+    ...(body.longAgentActivity === undefined ? {} : { longAgentActivity: parseLongAgentActivity(body.longAgentActivity) }),
     workflowConfigurations: parseWorkflowConfigurations(body.workflowConfigurations),
     workflowTurnConfigurations: body.workflowTurnConfigurations.map(parseWorkflowTurnConfiguration),
     ...workflowCallProjection,
@@ -373,15 +403,7 @@ function createNoticeId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function hasLongAgentReply(messages: readonly AgentMessage[], messageId: string, longAgentId: string): boolean {
-  const userIndex = messages.findIndex((message) => message.role === "user"
-    && message.chatLongAgent?.messageId === messageId
-    && message.chatLongAgent.longAgentId === longAgentId);
-  if (userIndex < 0) return false;
-  return messages.slice(userIndex + 1).some((message) => message.role === "assistant"
-    && message.chatLongAgent?.longAgentId === longAgentId
-    && message.chatLongAgent.direction === "out");
-}
+
 
 /**
  * Pi Web在这个分支中只负责页面与Chat Workflow协议适配。
@@ -391,6 +413,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const {
     projectId,
     contextProjectId,
+    deviceId,
     session,
     newSessionCwd,
     newSessionDraftKey,
@@ -406,7 +429,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     onConnectionFailure,
   } = opts;
   const isNew = session === null && newSessionCwd !== null;
-  const composerDraftKey = session?.id ?? newSessionDraftKey ?? undefined;
+  const composerDraftKey = resolveComposerDraftKey(session?.id, session?.owner.type === "long-agent", contextProjectId, newSessionDraftKey, deviceId, projectId);
   const workflowConfigDraftKey = `${projectId}:${composerDraftKey ?? "new"}`;
 
   const [data, setData] = useState<SessionData | null>(null);
@@ -417,9 +440,21 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [entryIds, setEntryIds] = useState<string[]>([]);
+  const [entryTimes, setEntryTimes] = useState<(number | null)[]>([]);
   const [activeLeafId, setActiveLeafId] = useState<string | null>(null);
   const [streamState, dispatch] = useReducer(streamReducer, INITIAL_STREAMING_STATE);
+  const friendExecutionRef = useRef<FriendExecution | null>(null);
+  const [friendExecution, setFriendExecution] = useState<FriendExecution | null>(null);
   const [agentRunning, setAgentRunning] = useState(false);
+  const [activity, setActivity] = useState<RunActivity | null>(null);
+  const stoppingRef = useRef(false);
+  const setRunPhase = useCallback((phase: RunPhase) => {
+    setActivity(current => current === null ? createRunActivity(phase) : changeRunPhase(current, phase));
+  }, []);
+  const handleConnection = useCallback((update: WorkflowConnectionUpdate) => {
+    setActivity(current => current === null ? current : update.kind === "confirmed"
+      ? (update.at - (current.confirmedAt ?? 0) < 3000 && !current.streamLost ? current : { ...current, confirmedAt: update.at, streamLost: false }) : { ...current, streamLost: true });
+  }, []);
   const [agentPhase, setAgentPhase] = useState<AgentPhase>(null);
   const [notices, setNotices] = useState<NoticeItem[]>([]);
   const [workflowId, setWorkflowIdState] = useState<ChatWorkflowId>(DEFAULT_CHAT_WORKFLOW_ID);
@@ -429,6 +464,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }>(() => ({ projectId: null, agents: [] }));
   const longAgents = longAgentCatalog.projectId === projectId ? longAgentCatalog.agents : [];
   const longAgentId = sessionLongAgentId(session);
+  const [friendImages, setFriendImages] = useState(false);
+
   const [agentConfigsByWorkflow, setAgentConfigsByWorkflow] = useState<
     Record<string, Record<string, AgentConfigSelection>>
   >({});
@@ -436,7 +473,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const persistedAgentConfigsByWorkflowRef = useRef<Record<string, Record<string, AgentConfigSelection>>>({});
   const chatRootConfigRef = useRef<ChatRootConfig | null>(null);
   const configSaveChainRef = useRef<Promise<void>>(Promise.resolve());
-  const [promptAnchorActive, setPromptAnchorActive] = useState(false);
   const [activeRunStage, setActiveRunStage] = useState<ChatRunStage | null>(null);
   const [planReview, setPlanReview] = useState<PlanReview | null>(null);
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
@@ -444,13 +480,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const sessionIdRef = useRef<string | null>(session?.id ?? null);
   const sessionLoadAbortRef = useRef<AbortController | null>(null);
   const workflowAbortRef = useRef<AbortController | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const lastUserMsgRef = useRef<HTMLDivElement>(null);
-  const pendingScrollToUserRef = useRef(false);
-  const initialScrollDoneRef = useRef(false);
   const mountedRef = useRef(true);
-  const initialNewSessionDraftKeyRef = useRef(isNew ? newSessionDraftKey : null);
   const handleAgentEventRef = useRef<(event: { type: string; [key: string]: unknown }) => void>(() => {});
   const activeRunStageRef = useRef<ChatRunStage | null>(null);
   const activeWorkflowRunRef = useRef<ChatWorkflowRunReference | null>(null);
@@ -522,8 +552,26 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   ) => {
     sessionIdRef.current = body.sessionId;
     setData(body);
+    if (body.friendExecution) { friendExecutionRef.current = body.friendExecution; setFriendExecution(body.friendExecution); }
+    if (workflowAbortRef.current === null && body.longAgentActivity) {
+      const recovered = body.longAgentActivity;
+      setAgentRunning(recovered.status === "running");
+      if (recovered.status !== "idle") {
+        const phase = recovered.status === "running" ? "long_agent" : recovered.status === "completed" ? "completed" : recovered.status === "cancelled" ? "cancelled" : "failed";
+        setActivity(current => current?.phase === phase && current.error === (recovered.error ?? undefined) ? current : {
+          ...createRunActivity(phase), ...(recovered.error ? { error: recovered.error } : {}),
+        });
+      }
+    }
+
+    if (workflowAbortRef.current === null && body.activeWorkflowRun === undefined && body.workflowOutcome) {
+      const outcome = body.workflowOutcome;
+      setActivity(current => current?.phase === outcome.status && current.error === outcome.error ? current
+        : { ...createRunActivity(outcome.status), ...(outcome.error ? { error: outcome.error } : {}) });
+    }
     setMessages(body.context.messages);
     setEntryIds(body.context.entryIds);
+    setEntryTimes(parseEntryTimes(body.context.entryTimes, body.context.entryIds.length));
     setActiveLeafId(body.leafId);
     const recoveredRun = body.activeWorkflowRun ?? body.activePlanningExecution;
     activeWorkflowRunRef.current = recoveredRun === undefined
@@ -572,6 +620,24 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }, NOTICE_VISIBLE_MS);
   }, []);
 
+  useEffect(() => {
+    setFriendImages(false);
+    if (longAgentId === null) return;
+    const controller = new AbortController();
+    void readFriendCapabilities(longAgentId, controller.signal)
+      .then((value) => {
+        if (!controller.signal.aborted) setFriendImages(value.images);
+      })
+      .catch((cause: unknown) => {
+        if (!controller.signal.aborted)
+          addNotice({
+            type: "warning",
+            message: `Friend能力读取失败，附件暂不可用：${cause instanceof Error ? cause.message : String(cause)}`,
+          });
+      });
+    return () => controller.abort();
+  }, [longAgentId, addNotice]);
+
   const restoreSubmission = useCallback((message: string, images?: AttachedImage[]) => {
     chatInputRef?.current?.restoreSubmission(
       message,
@@ -586,18 +652,20 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, []);
 
   const handleRunEvent = useCallback((runEvent: ChatRunEvent) => {
+    setActivity(current => reduceRunActivity(current ?? createRunActivity("starting"), runEvent));
     const stage = runEvent.stage;
+    const waitingPhase: AgentPhase = stage === undefined ? { kind: "waiting_model" } : { kind: "workflow_stage", stage };
     if (
-      activeRunStageRef.current?.workflowId !== stage.workflowId
+      stage !== undefined && (activeRunStageRef.current?.workflowId !== stage.workflowId
       || activeRunStageRef.current.stageId !== stage.stageId
-      || activeRunStageRef.current.agentId !== stage.agentId
+      || activeRunStageRef.current.agentId !== stage.agentId)
     ) {
       activeRunStageRef.current = stage;
       setActiveRunStage(stage);
     }
     if (runEvent.type === "stage_start") {
       dispatch({ type: "end" });
-      setAgentPhase({ kind: "workflow_stage", stage });
+      setAgentPhase(waitingPhase);
       return;
     }
     if (runEvent.type === "review_required") {
@@ -605,14 +673,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setPlanReview(runEvent.review);
       setReviewSubmitting(false);
       dispatch({ type: "end" });
-      setAgentPhase({ kind: "workflow_stage", stage });
+      setAgentPhase(waitingPhase);
       return;
     }
 
     const event = runEvent.event;
     if (event.type === "agent_start") {
       dispatch({ type: "start" });
-      setAgentPhase({ kind: "workflow_stage", stage });
+      setAgentPhase(waitingPhase);
       return;
     }
     if (event.type === "message_start") {
@@ -635,8 +703,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
     if (event.type === "message_end") {
       const message = event.message as AgentMessage | undefined;
-      if (message !== undefined && message.role !== "user") {
-        const displayedMessage = message.role === "assistant" && stage.agentId !== undefined
+      if (message !== undefined && (message.role !== "user" || stage === undefined)) {
+        const displayedMessage = message.role === "assistant" && stage?.agentId !== undefined
           ? {
               ...message,
               chatWorkflow: {
@@ -649,7 +717,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           : message;
         setMessages((current) => [...current, normalizeToolCalls(displayedMessage)]);
         if (
-          stage.agentId !== "planner"
+          stage?.agentId !== "planner"
           &&
           message.role === "assistant"
           && message.stopReason !== "toolUse"
@@ -688,12 +756,71 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (event.type === "tool_execution_end") {
       const id = typeof event.toolCallId === "string" ? event.toolCallId : "";
       setAgentPhase((current) => {
-        if (current?.kind !== "running_tools") return { kind: "workflow_stage", stage };
+        if (current?.kind !== "running_tools") return waitingPhase;
         const tools = current.tools.filter((tool) => tool.id !== id);
-        return tools.length === 0 ? { kind: "workflow_stage", stage } : { kind: "running_tools", tools };
+        return tools.length === 0 ? waitingPhase : { kind: "running_tools", tools };
       });
     }
   }, [showActiveStage]);
+
+  const observeFriend = useCallback(
+    async (reference: FriendExecution, controller: AbortController) => {
+      friendExecutionRef.current = reference;
+      setFriendExecution(reference);
+      setAgentRunning(true);
+      setActivity(createRunActivity("starting"));
+      let terminal: "completed" | "failed" | "cancelled" | undefined;
+      try {
+        await followFriendExecution(reference, controller.signal, {
+          event: handleRunEvent,
+          connection: handleConnection,
+          status: (next) => {
+            if (!controller.signal.aborted) {
+              friendExecutionRef.current = next;
+              setFriendExecution(next);
+            }
+          },
+          snapshot: (snapshot) => {
+            if (controller.signal.aborted) return;
+            setMessages(snapshot.messages.map(normalizeToolCalls));
+            setEntryIds([]);
+            setEntryTimes([]);
+            dispatch({ type: "end" });
+            handleRunEvent({ type: "agent_event", event: snapshot.phase });
+            if (snapshot.partial?.role === "assistant") dispatch({ type: "snapshot", message: snapshot.partial });
+          },
+        });
+        terminal = "completed";
+      } catch (cause) {
+        if (cause instanceof WorkflowTerminalError) terminal = cause.status;
+        else throw cause;
+        if (terminal !== "cancelled")
+          addNotice({ type: "error", message: cause instanceof Error ? cause.message : String(cause) });
+      } finally {
+        if (!controller.signal.aborted && mountedRef.current) {
+          if (terminal !== undefined) {
+            setRunPhase("syncing");
+            try {
+              const refreshed = await fetchSessionData(reference.sessionId, reference.projectId, controller.signal);
+              if (!controller.signal.aborted) applySessionData(refreshed);
+            } catch (cause) {
+              if (!controller.signal.aborted)
+                addNotice({
+                  type: "warning",
+                  message: `执行已结束，历史同步失败：${cause instanceof Error ? cause.message : String(cause)}`,
+                });
+            }
+            setRunPhase(terminal);
+            onAgentEnd?.();
+          }
+          setAgentRunning(false);
+          setAgentPhase(null);
+          dispatch({ type: "end" });
+        }
+      }
+    },
+    [addNotice, applySessionData, handleConnection, handleRunEvent, onAgentEnd, setRunPhase],
+  );
 
   const loadSession = useCallback(async (sessionId: string) => {
     browsingHistoryRef.current = false;
@@ -732,6 +859,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     if (!response.ok || !body.context) throw new Error(body.error ?? `HTTP ${response.status}`);
     setMessages(body.context.messages);
     setEntryIds(body.context.entryIds);
+    setEntryTimes(parseEntryTimes(body.context.entryTimes, body.context.entryIds.length));
     setActiveLeafId(leafId);
   }, [projectId]);
 
@@ -753,12 +881,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       addNotice({ type: "warning", message: "请先选择工作目录" });
       return;
     }
-    if (images?.length && longAgentId !== null) {
-      restoreSubmission(message, images);
-      addNotice({ type: "warning", message: "当前长期 Agent只接受文本消息" });
-      return;
-    }
-    if (prompt.startsWith("/") || prompt.startsWith("!")) {
+    if (getBuiltinSlashCommand(prompt) || prompt.startsWith("!")) {
       restoreSubmission(message, images);
       addNotice({
         type: "warning",
@@ -777,9 +900,22 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     }
     if (selectedLongAgent !== undefined && !selectedLongAgent.available) {
       restoreSubmission(message, images);
-      addNotice({ type: "error", message: `长期 Agent ${selectedLongAgent.name}当前不在线，请检查 NanoClaw 服务` });
+      addNotice({ type: "error", message: `长期 Agent ${selectedLongAgent.name}已停用，请在同事设置中检查启用状态` });
       return;
     }
+
+    if (composerDraftKey && readPendingSubmission(composerDraftKey)) {
+      restoreSubmission(message, images);
+      addNotice({ type: "warning", message: "上次发送尚未确认，请先核对会话并处理保留的文字，再发送新消息" });
+      return;
+    }
+    // Keep user input until an explicit server acceptance. UI clearing is only visual.
+    const pendingId = composerDraftKey
+      ? retainPendingSubmission(composerDraftKey, message, images?.length ?? 0)
+      : null;
+    const confirmSubmission = () => {
+      if (composerDraftKey && pendingId) clearPendingSubmission(composerDraftKey, pendingId);
+    };
 
     const userMessage: AgentMessage = {
       role: "user",
@@ -798,9 +934,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     };
     setMessages((current) => [...current, userMessage]);
     setAgentRunning(true);
+    setActivity(createRunActivity(longAgentId === null ? "submitting" : "long_agent"));
     setAgentPhase({ kind: "waiting_model" });
-    setPromptAnchorActive(true);
-    pendingScrollToUserRef.current = true;
     dispatch({ type: "start" });
     activeRunStageRef.current = null;
     setActiveRunStage(null);
@@ -811,64 +946,19 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     const controller = new AbortController();
     workflowAbortRef.current = controller;
     let longAgentAccepted = false;
+    let workflowAccepted = false;
     try {
       if (selectedLongAgent !== undefined) {
-        const activeDedicatedSessionId = selectedLongAgent.project?.primarySessionId;
-        const accepted = await sendLongAgentMessage({
-          longAgentId: selectedLongAgent.id,
-          projectId,
-          ...(activeDedicatedSessionId !== null
-            && activeDedicatedSessionId !== undefined
-            && activeDedicatedSessionId === sessionIdRef.current
-            ? { sessionId: activeDedicatedSessionId }
-            : {}),
-          text: message,
-          ...(contextProjectId == null ? {} : { contextProjectId }),
+        const accepted = await acceptFriendMessage(selectedLongAgent.id, {
+          requestId: pendingId ?? crypto.randomUUID(),
+          ...(sessionIdRef.current === null ? {} : { sessionId: sessionIdRef.current }),
+          text: message, contextProjectId: contextProjectId ?? null,
+          ...(images?.length ? { images: images.map(image => ({ type: "image" as const, data:image.data, mimeType:image.mimeType })) } : {}),
         }, controller.signal);
         longAgentAccepted = true;
-        const previousSessionId = sessionIdRef.current;
+        confirmSubmission();
         sessionIdRef.current = accepted.sessionId;
-        if (accepted.isNewSession && newSessionDraftKey !== null) {
-          const now = new Date().toISOString();
-          onSessionCreated?.({
-            path: "",
-            id: accepted.sessionId,
-            cwd: targetCwd,
-            created: now,
-            modified: now,
-            messageCount: 1,
-            firstMessage: message,
-            owner: {
-              type: "long-agent",
-              longAgentId: selectedLongAgent.id,
-              projectLongAgentId: accepted.projectLongAgentId,
-            },
-            projectRoot: targetCwd,
-            projectAvailable: true,
-            projectKey: projectId,
-            projectId,
-            transient: false,
-            sessionSource: "chat",
-            readOnly: false,
-          }, newSessionDraftKey);
-        } else if (previousSessionId !== accepted.sessionId) {
-          await onSessionOpen?.(accepted.sessionId);
-          if (composerDraftKey) clearDraft(composerDraftKey);
-          return;
-        }
-
-        const refreshed = await fetchSessionData(accepted.sessionId, projectId, controller.signal);
-        if (!mountedRef.current) return;
-        applySessionData(refreshed);
-        const replied = hasLongAgentReply(refreshed.context.messages, accepted.messageId, selectedLongAgent.id);
-        if (!replied) {
-          addNotice({
-            type: "warning",
-            message: `长期 Agent ${selectedLongAgent.name}已完成，但Session尚未显示对应回复，请刷新重试`,
-          });
-        }
-        onAgentEnd?.();
-        if (composerDraftKey) clearDraft(composerDraftKey);
+        await observeFriend(accepted, controller);
         return;
       }
 
@@ -900,6 +990,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         controller.signal,
         handleRunEvent,
         (reference) => {
+          workflowAccepted = true;
+          confirmSubmission();
+          setRunPhase("starting");
           activeWorkflowRunRef.current = reference;
           sessionIdRef.current = reference.sessionId;
           if (reference.isNewSession && newSessionDraftKey !== null) {
@@ -923,8 +1016,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             }, newSessionDraftKey);
           }
         },
+        handleConnection,
       );
       if (!mountedRef.current) return;
+      setRunPhase("syncing");
       const model = workflow.result.model;
       activeWorkflowRunRef.current = null;
       setPlanReview(null);
@@ -940,6 +1035,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }
 
       try {
+        setRunPhase("syncing");
         const refreshed = await fetchSessionData(workflow.result.sessionId, projectId);
         if (!mountedRef.current) return;
         applySessionData(
@@ -955,22 +1051,27 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           message: `Workflow已完成，但读取Session失败：${cause instanceof Error ? cause.message : String(cause)}`,
         });
       }
-      if (composerDraftKey) clearDraft(composerDraftKey);
+      setRunPhase("completed");
       onAgentEnd?.();
     } catch (cause) {
       if (!mountedRef.current) return;
-      if (!longAgentAccepted) {
+      if (!longAgentAccepted && !workflowAccepted) {
         setMessages((current) => {
           const index = current.lastIndexOf(userMessage);
           return index < 0 ? current : [...current.slice(0, index), ...current.slice(index + 1)];
         });
         restoreSubmission(message, images);
       }
+      setRunPhase(cause instanceof WorkflowTerminalError ? cause.status
+        : longAgentId !== null && cause instanceof DOMException && cause.name === "AbortError" ? "detached" : "disconnected");
+      if (cause instanceof WorkflowTerminalError) activeWorkflowRunRef.current = null;
       if (cause instanceof DOMException && cause.name === "AbortError") {
         addNotice({
           type: "info",
-          message: longAgentAccepted ? "已停止等待；长期 Agent仍在后台处理，回复会同步到Session" : "已断开Workflow连接",
+          message: longAgentId !== null ? "已停止等待；长期 Agent仍在后台处理，回复会同步到Session" : "已断开Workflow连接",
         });
+      } else if (cause instanceof WorkflowTerminalError) {
+        addNotice({ type: cause.status === "cancelled" ? "info" : "error", message: cause.status === "cancelled" ? "任务已停止" : cause.message });
       } else {
         const availability = await onConnectionFailure?.().catch(() => null);
         if (availability !== false) {
@@ -984,11 +1085,10 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         setAgentPhase(null);
         activeRunStageRef.current = null;
         setActiveRunStage(null);
-        setPromptAnchorActive(false);
         dispatch({ type: "end" });
       }
     }
-  }, [addNotice, agentConfigsByWorkflow, agentRunning, applySessionData, composerDraftKey, handleRunEvent, longAgentId, longAgents, newSessionCwd, newSessionDraftKey, onAgentEnd, onConnectionFailure, onSessionCreated, onSessionOpen, projectId, restoreSubmission, session?.cwd, workflowConfigDraftKey, workflowId]);
+  }, [observeFriend, setRunPhase, handleConnection, addNotice, agentConfigsByWorkflow, agentRunning, applySessionData, composerDraftKey, handleRunEvent, longAgentId, longAgents, newSessionCwd, newSessionDraftKey, onAgentEnd, onConnectionFailure, onSessionCreated, onSessionOpen, projectId, contextProjectId, restoreSubmission, session?.cwd, workflowConfigDraftKey, workflowId]);
 
   const handlePlanReviewDecision = useCallback(async (decision: PlanReviewDecisionInput) => {
     const reference = activeWorkflowRunRef.current;
@@ -1027,15 +1127,31 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   const handleAbort = useCallback(() => {
     const run = activeWorkflowRunRef.current;
+    if (stoppingRef.current) return;
     if (run !== null) {
-      void cancelChatWorkflowRun(run).catch((cause: unknown) => {
-        addNotice({ type: "error", message: cause instanceof Error ? cause.message : String(cause) });
-      });
+      stoppingRef.current = true;
+      setRunPhase("stopping");
+      void cancelChatWorkflowRun(run).then(() => {
+        // Keep following until Runtime confirms its terminal status.
+        addNotice({ type: "info", message: "任务已取消，正在同步结果" });
+      }).catch((cause: unknown) => {
+        if (activeWorkflowRunRef.current?.runId !== run.runId) return;
+        setRunPhase("continuing");
+        addNotice({ type: "error", message: `停止未确认：${cause instanceof Error ? cause.message : String(cause)}` });
+      }).finally(() => { stoppingRef.current = false; });
+      return;
+    }
+    const friend = friendExecutionRef.current;
+    if (friend !== null) {
+      stoppingRef.current = true; setRunPhase("stopping");
+      void cancelFriendExecution(friend).catch((cause:unknown) => {
+        setRunPhase("continuing"); addNotice({type:"error",message:`停止未确认：${cause instanceof Error ? cause.message : String(cause)}`});
+      }).finally(()=>{stoppingRef.current=false;});
+      return;
     }
     workflowAbortRef.current?.abort();
-    activeWorkflowRunRef.current = null;
     setPlanReview(null);
-  }, [addNotice]);
+  }, [addNotice, setRunPhase]);
   const unsupported = useCallback((message: string) => addNotice({ type: "info", message }), [addNotice]);
   const handleFork = useCallback(async (entryId: string) => {
     const currentSessionId = sessionIdRef.current;
@@ -1066,31 +1182,83 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [addNotice, loadContext]);
   const handleCompact = useCallback(async () => unsupported("上下文压缩由Chat Workflow负责"), [unsupported]);
   const handleAbortCompaction = useCallback(async () => {}, []);
-  const handleSteer = useCallback((message: string, images?: AttachedImage[]) => {
-    restoreSubmission(message, images);
-    unsupported("当前Workflow不支持运行中追加消息");
-  }, [restoreSubmission, unsupported]);
-  const handleFollowUp = handleSteer;
-  const handlePromptWithStreamingBehavior = useCallback((message: string, _behavior: "steer" | "followUp", images?: AttachedImage[]) => {
-    handleSteer(message, images);
-  }, [handleSteer]);
-  const handleRecallQueue = useCallback(() => {}, []);
-  const handleBuiltinSlashCommand = useCallback(async (): Promise<BuiltinSlashCommandResult> => ({
-    handled: true,
-    error: longAgentId === null ? "当前Workflow只接受普通文本Prompt" : "当前长期 Agent只接受普通文本消息",
-  }), [longAgentId]);
-  const loadSlashCommands = useCallback(async (): Promise<SlashCommandInfo[]> => [], []);
+  const sendDuringExecution = useCallback(
+    async (message: string, behavior: "steer" | "followUp", images?: AttachedImage[]) => {
+      const reference = friendExecutionRef.current;
+      if (longAgentId === null || reference === null) {
+        restoreSubmission(message, images);
+        unsupported("当前Workflow不支持运行中追加消息");
+        return;
+      }
+      if (behavior === "steer" && images?.length) {
+        restoreSubmission(message, images);
+        unsupported("图片请使用后续消息发送");
+        return;
+      }
+      const pendingId = composerDraftKey
+        ? retainPendingSubmission(composerDraftKey, message, images?.length ?? 0)
+        : crypto.randomUUID();
+      try {
+        if (behavior === "steer") {
+          const result = await steerFriendExecution(reference, {
+            requestId: pendingId,
+            text: message,
+            contextProjectId: contextProjectId ?? null,
+          });
+          addNotice({
+            type: "info",
+            message: result.delivery === "steer" ? "引导已接受，将在下一模型轮次生效" : "当前轮已结束，已转为后续消息",
+          });
+        } else {
+          await acceptFriendMessage(longAgentId, {
+            requestId: pendingId,
+            sessionId: reference.sessionId,
+            text: message,
+            contextProjectId: contextProjectId ?? null,
+            ...(images?.length
+              ? {
+                  images: images.map((image) => ({ type: "image" as const, data: image.data, mimeType: image.mimeType })),
+                }
+              : {}),
+          });
+          addNotice({ type: "info", message: "后续消息已进入队列，当前轮结束后执行" });
+        }
+        if (composerDraftKey) clearPendingSubmission(composerDraftKey, pendingId);
+      } catch (cause) {
+        restoreSubmission(message, images);
+        addNotice({ type: "error", message: cause instanceof Error ? cause.message : String(cause) });
+      }
+    },
+    [addNotice, composerDraftKey, contextProjectId, longAgentId, restoreSubmission, unsupported],
+  );
+  const handleSteer = useCallback(
+    (message: string, images?: AttachedImage[]) => {
+      void sendDuringExecution(message, "steer", images);
+    },
+    [sendDuringExecution],
+  );
+  const handleFollowUp = useCallback(
+    (message: string, images?: AttachedImage[]) => {
+      void sendDuringExecution(message, "followUp", images);
+    },
+    [sendDuringExecution],
+  );
+  const handlePromptWithStreamingBehavior = useCallback(
+    (message: string, behavior: "steer" | "followUp", images?: AttachedImage[]) => {
+      void sendDuringExecution(message, behavior, images);
+    },
+    [sendDuringExecution],
+  );
 
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
-    messagesEndRef.current?.scrollIntoView({ behavior });
-  }, []);
-  const scrollUserMsgToTop = useCallback(() => {
-    const container = scrollContainerRef.current;
-    const message = lastUserMsgRef.current;
-    if (!container || !message) return;
-    const top = message.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop - 16;
-    container.scrollTo({ top: Math.max(0, top), behavior: "auto" });
-  }, []);
+  const handleRecallQueue = useCallback(() => {}, []);
+  const handleBuiltinSlashCommand = useCallback(async (message: string): Promise<BuiltinSlashCommandResult> => {
+    const command = getBuiltinSlashCommand(message);
+    if (!command) return { handled: false };
+    const error = `当前会话不支持 /${command.name} 命令，请改用界面操作或普通文字描述；输入已保留`;
+    addNotice({ type: "warning", message: error });
+    return { handled: true, error };
+  }, [addNotice]);
+  const loadSlashCommands = useCallback(async (): Promise<SlashCommandInfo[]> => [], []);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -1100,8 +1268,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       sessionLoadAbortRef.current = null;
       workflowAbortRef.current?.abort();
       workflowAbortRef.current = null;
-      const initialDraftKey = initialNewSessionDraftKeyRef.current;
-      if (initialDraftKey !== null) clearDraft(initialDraftKey);
     };
   }, []);
 
@@ -1126,6 +1292,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     activeWorkflowRunRef.current = reference;
     setPlanReview(active.review ?? null);
     setAgentRunning(true);
+    setActivity(createRunActivity("starting"));
     setAgentPhase(active.phase === "waiting_review"
       ? {
           kind: "workflow_stage",
@@ -1133,21 +1300,29 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         }
       : { kind: "waiting_model" });
 
-    void resumeChatWorkflowRun(reference, controller.signal, handleRunEvent)
+    void resumeChatWorkflowRun(reference, controller.signal, handleRunEvent, handleConnection)
       .then(async (workflow) => {
         if (!mountedRef.current) return;
         activeWorkflowRunRef.current = null;
         setPlanReview(null);
-        const refreshed = await fetchSessionData(workflow.result.sessionId, projectId);
-        if (!mountedRef.current) return;
-        applySessionData(refreshed);
+        setRunPhase("syncing");
+        try {
+          const refreshed = await fetchSessionData(workflow.result.sessionId, projectId);
+          if (!mountedRef.current) return;
+          applySessionData(refreshed);
+        } catch (cause) {
+          if (!mountedRef.current) return;
+          addNotice({ type: "warning", message: `Workflow已完成，但读取Session失败：${cause instanceof Error ? cause.message : String(cause)}` });
+        }
+        setRunPhase("completed");
         onAgentEnd?.();
       })
       .catch((cause: unknown) => {
         if (!mountedRef.current || (cause instanceof DOMException && cause.name === "AbortError")) return;
-        activeWorkflowRunRef.current = null;
+        setRunPhase(cause instanceof WorkflowTerminalError ? cause.status : "disconnected");
+        if (cause instanceof WorkflowTerminalError) activeWorkflowRunRef.current = null;
         setPlanReview(null);
-        addNotice({ type: "error", message: cause instanceof Error ? cause.message : String(cause) });
+        addNotice({ type: cause instanceof WorkflowTerminalError && cause.status === "cancelled" ? "info" : "error", message: cause instanceof Error ? cause.message : String(cause) });
       })
       .finally(() => {
         if (workflowAbortRef.current === controller) workflowAbortRef.current = null;
@@ -1163,11 +1338,35 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     return () => {
       if (workflowAbortRef.current === controller) controller.abort();
     };
-  }, [addNotice, applySessionData, data?.activeWorkflowRun, data?.activePlanningExecution, handleRunEvent, onAgentEnd, projectId]);
+  }, [setRunPhase, handleConnection, addNotice, applySessionData, data?.activeWorkflowRun, data?.activePlanningExecution, handleRunEvent, onAgentEnd, projectId]);
+
+  useEffect(() => {
+    const active = data?.friendExecution;
+    if (
+      active === undefined ||
+      !["queued", "running"].includes(active.status) ||
+      workflowAbortRef.current !== null ||
+      browsingHistoryRef.current
+    )
+      return;
+    const controller = new AbortController();
+    workflowAbortRef.current = controller;
+    void observeFriend(active, controller)
+      .catch((cause: unknown) => {
+        if (!controller.signal.aborted) {
+          setRunPhase("disconnected");
+          addNotice({ type: "error", message: cause instanceof Error ? cause.message : String(cause) });
+        }
+      })
+      .finally(() => {
+        if (workflowAbortRef.current === controller) workflowAbortRef.current = null;
+      });
+    return () => controller.abort();
+  }, [data?.friendExecution?.id, data?.friendExecution?.status, observeFriend, addNotice, setRunPhase]);
 
   // External clients can create turns while this page is open. Preserve composer drafts and history browsing.
   useEffect(() => {
-    if (!session || longAgentId !== null) return;
+    if (!session) return;
     let stopped = false;
     let refreshFailed = false;
     let timer: ReturnType<typeof setTimeout>;
@@ -1202,18 +1401,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     onBranchDataChange?.(data?.tree ?? [], activeLeafId, handleLeafChange);
   }, [activeLeafId, data?.tree, handleLeafChange, onBranchDataChange]);
 
-  useLayoutEffect(() => {
-    if (!initialScrollDoneRef.current && messages.length > 0) {
-      initialScrollDoneRef.current = true;
-      scrollToBottom("instant");
-    }
-  }, [messages.length, scrollToBottom]);
-
   const sessionStats = useMemo<SessionStatsInfo | null>(() => null, []);
 
   return {
-    data, loading, error, activeLeafId, messages, entryIds, streamState,
-    agentRunning, workflowId, longAgents, longAgentId,
+    data, loading, error, activeLeafId, messages, entryIds, entryTimes, streamState,
+    agentRunning, workflowId, longAgents, longAgentId, friendExecution, friendImages,
     workflowAgentConfigs: agentConfigsByWorkflow[workflowId] ?? {},
     promptResourceProposals: data?.promptResourceProposals ?? [],
     retryInfo: null, contextUsage: null as ContextUsage | null, systemPrompt: null, forkingEntryId,
@@ -1225,15 +1417,14 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     extensionCustomUi: null as Extract<ExtensionUiRequest, { method: "custom" }> | null,
     extensionStatuses: [] as ExtensionStatusItem[], extensionWidgets: [] as ExtensionWidgetItem[],
     respondToExtensionUi: () => {}, sendExtensionCustomInput: () => {},
-    agentPhase, activeRunStage, planReview, reviewSubmitting, isNew, promptAnchorActive,
-    sessionIdRef, messagesEndRef, scrollContainerRef, lastUserMsgRef,
-    pendingScrollToUserRef, initialScrollDoneRef,
+    activity, agentPhase, activeRunStage, planReview, reviewSubmitting, isNew,
+    sessionIdRef,
     handleSend, handleAbort, handlePlanReviewDecision, handleFork, handleNavigate,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior,
     handleAbortCompaction, handleRecallQueue, handleBuiltinSlashCommand,
     loadSlashCommands,
     setWorkflowId, setWorkflowAgentConfigs,
-    setActiveLeafId, setData, setMessages, scrollToBottom, scrollUserMsgToTop,
+    setActiveLeafId, setData, setMessages,
     dispatch, setAgentRunning, setForkingEntryId: () => {},
     bashRunning: false, pendingBash: null as PendingBash | null, handleAgentEventRef,
     onSessionStatsPanelOpen,

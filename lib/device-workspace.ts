@@ -1,4 +1,5 @@
-import { getInitialNavigation, type InitialNavigation } from "./initial-navigation";
+import type { FileViewerState } from "./file-viewer-state";
+import { getInitialNavigation, type InitialNavigation } from "./initial-navigation.ts";
 
 export const DEVICE_WORKSPACE_STORAGE_KEY = "pi-web:device-workspaces:v1";
 export const MAX_DEVICE_WORKSPACE_TABS = 24;
@@ -8,6 +9,8 @@ export interface DeviceWorkspaceFileTab {
   label: string;
   filePath: string;
   sourceSessionId?: string | null;
+  sourceCwd?: string;
+  viewerState?: FileViewerState;
   initialDisplayMode?: "source" | "preview" | "diff";
 }
 
@@ -16,6 +19,7 @@ export interface DeviceWorkspaceSnapshot {
   fileTabs: DeviceWorkspaceFileTab[];
   activeFileTabId: string | null;
   rightPanelOpen: boolean;
+  contextSelection?: { projectId: string; cwd: string };
 }
 
 interface StorageLike {
@@ -45,7 +49,10 @@ export function navigationFromSearch(search: string): InitialNavigation {
 export function workspaceUrlFromNavigation(navigation: InitialNavigation): string {
   const params = new URLSearchParams();
   if (navigation.requestedCwd) params.set("cwd", navigation.requestedCwd);
-  else if (navigation.sessionId) params.set("session", navigation.sessionId);
+  else if (navigation.sessionId) {
+    params.set("session", navigation.sessionId);
+    if (navigation.sessionProjectId) params.set("projectId", navigation.sessionProjectId);
+  }
   const query = params.toString();
   return query ? `/?${query}` : "/";
 }
@@ -63,6 +70,8 @@ function normalizeNavigation(value: unknown): InitialNavigation {
   return {
     requestedCwd,
     sessionId: requestedCwd ? null : boundedString(record.sessionId, 256),
+    ...(!requestedCwd && boundedString(record.sessionId, 256) && boundedString(record.sessionProjectId, 256)
+      ? { sessionProjectId: record.sessionProjectId as string } : {}),
   };
 }
 
@@ -82,11 +91,23 @@ function normalizeFileTab(value: unknown): DeviceWorkspaceFileTab | null {
     ? record.initialDisplayMode as DeviceWorkspaceFileTab["initialDisplayMode"]
     : undefined;
 
+  let viewerState: FileViewerState | undefined;
+  if (record.viewerState && typeof record.viewerState === "object" && !Array.isArray(record.viewerState)) {
+    const state = record.viewerState as Record<string, unknown>;
+    if ((state.displayMode === "source" || state.displayMode === "preview" || state.displayMode === "diff")
+      && typeof state.wrapLines === "boolean" && typeof state.scrollTop === "number"
+      && Number.isFinite(state.scrollTop) && state.scrollTop >= 0 && typeof state.scrollLeft === "number"
+      && Number.isFinite(state.scrollLeft) && state.scrollLeft >= 0) {
+      viewerState = { displayMode: state.displayMode, wrapLines: state.wrapLines, scrollTop: state.scrollTop, scrollLeft: state.scrollLeft };
+    }
+  }
   return {
     id,
     label,
     filePath,
+    ...(viewerState ? { viewerState } : {}),
     ...(sourceSessionId !== undefined ? { sourceSessionId } : {}),
+    ...(boundedString(record.sourceCwd, 4096) ? { sourceCwd: record.sourceCwd as string } : {}),
     ...(initialDisplayMode ? { initialDisplayMode } : {}),
   };
 }
@@ -109,6 +130,11 @@ export function normalizeDeviceWorkspaceSnapshot(value: unknown): DeviceWorkspac
 
   return {
     navigation: normalizeNavigation(record.navigation),
+    ...(record.contextSelection && typeof record.contextSelection === "object"
+      && "projectId" in record.contextSelection && "cwd" in record.contextSelection
+      && typeof record.contextSelection.projectId === "string" && record.contextSelection.projectId.trim()
+      && typeof record.contextSelection.cwd === "string" && record.contextSelection.cwd.trim()
+      ? { contextSelection: { projectId: record.contextSelection.projectId, cwd: record.contextSelection.cwd } } : {}),
     fileTabs,
     activeFileTabId,
     rightPanelOpen: record.rightPanelOpen === true && fileTabs.length > 0,

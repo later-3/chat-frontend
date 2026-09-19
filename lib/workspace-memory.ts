@@ -9,7 +9,7 @@
  * Windows path variants and all worktrees of one repo share one memory slot.
  * Transient and legacy session objects fall back to projectRoot/cwd.
  *
- * Stored in localStorage; best-effort (silently ignored when unavailable).
+ * Stored in sessionStorage; best-effort (silently ignored when unavailable).
  */
 
 const STORAGE_KEY = "pi-web:last-open-by-workspace";
@@ -23,7 +23,7 @@ interface StorageLike {
 function getBrowserStorage(): StorageLike | null {
   if (typeof window === "undefined") return null;
   try {
-    return window.localStorage;
+    return window.sessionStorage;
   } catch {
     return null;
   }

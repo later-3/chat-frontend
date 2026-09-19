@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { IconActivity, IconArrowLeft, IconBrain, IconClock, IconRefresh, IconSettings, IconUsersGroup } from "@tabler/icons-react";
 import { useI18n } from "@/hooks/useI18n";
@@ -72,6 +74,7 @@ interface Draft {
   description: string;
   enabled: boolean;
   defaultProjectId: string;
+  timeZone: string;
   modelKey: string;
   thinkingLevel: string;
   systemPromptMode: "pi-default" | "replace";
@@ -103,6 +106,7 @@ function draftFrom(document: LongAgentConfigurationDocument): Draft {
     description: document.agent.description,
     enabled: document.agent.enabled,
     defaultProjectId: document.agent.defaultProjectId,
+    timeZone: document.agent.timeZone ?? "UTC",
     modelKey: definition.model === null ? "" : `${definition.model.provider}/${definition.model.modelId}`,
     thinkingLevel: definition.thinkingLevel ?? "",
     systemPromptMode: definition.systemPrompt.mode,
@@ -152,6 +156,7 @@ function updateFromDraft(
     description: draft.description.trim(),
     enabled: draft.enabled,
     defaultProjectId: draft.defaultProjectId,
+    timeZone: draft.timeZone,
     definition: {
       schemaVersion: 1,
       id: document.agent.id,
@@ -171,7 +176,7 @@ function updateFromDraft(
 
 export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved }: Props) {
   const { t } = useI18n();
-  const pageRef = useRef<HTMLElement>(null);
+  const pageRef = useDialogFocus<HTMLElement>(() => back());
   const [agentId, setAgentId] = useState(
     initialAgentId && agents.some((agent) => agent.id === initialAgentId)
       ? initialAgentId
@@ -333,39 +338,9 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
     if (hasUnsavedChanges && !window.confirm(t("longAgentSettings.discardConfirm"))) return;
     onBack();
   };
-  useEffect(() => {
-    const previousFocus = window.document.activeElement instanceof HTMLElement
-      ? window.document.activeElement
-      : null;
-    pageRef.current?.querySelector<HTMLElement>("button")?.focus();
-    return () => previousFocus?.focus();
-  }, []);
-
-  const handlePageKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      back();
-      return;
-    }
-    if (event.key !== "Tab" || !pageRef.current) return;
-    const focusable = [...pageRef.current.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-    )].filter((element) => element.offsetParent !== null);
-    if (focusable.length === 0) return;
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (event.shiftKey && window.document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && window.document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  };
-
   const save = async () => {
     if (!document || !draft || saving) return;
-    if (!draft.name.trim() || !draft.description.trim()) {
+    if (!draft.name.trim()) {
       setError(t("longAgentSettings.identityRequired"));
       return;
     }
@@ -486,11 +461,10 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
   return createPortal(
     <section
       ref={pageRef}
-      className={styles.page}
+      className={`${styles.page} configuration-dialog`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="long-agent-settings-title"
-      onKeyDown={handlePageKeyDown}
     >
       <header className={styles.pageHeader}>
         <button type="button" className={styles.backButton} onClick={back}>
@@ -633,6 +607,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                       />
                       <div className={styles.twoColumns}>
                         <label>{t("longAgentSettings.name")}<input value={draft.name} maxLength={80} onChange={(event) => set("name", event.target.value)} /></label>
+                        <label>{t("longAgentSettings.timeZone")}<input value={draft.timeZone} onChange={(event) => set("timeZone", event.target.value)} placeholder="Asia/Shanghai" /><span className={styles.fieldHint}>{t("longAgentSettings.timeZoneHint")}</span></label>
                         <label>{t("longAgentSettings.defaultProject")}<select value={draft.defaultProjectId} onChange={(event) => set("defaultProjectId", event.target.value)}>{!projects.some((project) => project.projectId === draft.defaultProjectId) && <option value={draft.defaultProjectId}>{draft.defaultProjectId}</option>}{projects.map((project) => <option key={project.projectId} value={project.projectId} disabled={!project.available}>{project.cachedName} · {project.projectId}</option>)}</select></label>
                       </div>
                       <label>{t("longAgentSettings.description")}<textarea value={draft.description} rows={3} maxLength={500} onChange={(event) => set("description", event.target.value)} /></label>

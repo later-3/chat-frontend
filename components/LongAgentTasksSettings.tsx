@@ -156,9 +156,9 @@ export function LongAgentTasksSettings({ longAgentId }: Props) {
         <div className={styles.resourcePicker}>
           <h3>{draft.taskId === null ? t("longAgentSettings.taskNew") : t("longAgentSettings.taskEdit")}</h3>
           <p className={styles.help}>{t("longAgentSettings.taskFormHint")}</p>
-          <label>{t("longAgentSettings.taskName")}
-            <input value={draft.name} disabled={draft.taskId !== null} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
-          </label>
+          {draft.taskId === null && <label>{t("longAgentSettings.taskName")}
+            <input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
+          </label>}
           <label>{t("longAgentSettings.taskRecurrence")}
             <input value={draft.recurrence} placeholder="0 8 * * *" onChange={(event) => setDraft({ ...draft, recurrence: event.target.value })} />
           </label>

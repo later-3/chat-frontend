@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { IconArchive, IconRefresh, IconRestore, IconTrash, IconX } from "@tabler/icons-react";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useI18n } from "@/hooks/useI18n";
 import type { ChatProjectSummary } from "@/lib/projects-contract";
 import {
@@ -37,6 +38,7 @@ export function RemovedSessionsPanel({
   const [sessions, setSessions] = useState<readonly RemovedSessionInfo[]>([]);
   const [retentionDays, setRetentionDays] = useState(30);
   const [retentionInput, setRetentionInput] = useState("30");
+  const modalRef = useDialogFocus(onClose);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busySessionId, setBusySessionId] = useState<string | null>(null);
@@ -121,6 +123,7 @@ export function RemovedSessionsPanel({
 
   return (
     <div
+      ref={modalRef} tabIndex={-1} className="configuration-dialog removed-sessions-dialog"
       role="dialog"
       aria-modal="true"
       aria-label={t("removedSessions.title")}
@@ -151,7 +154,7 @@ export function RemovedSessionsPanel({
           <IconArchive size={20} stroke={1.7} color="var(--accent)" aria-hidden="true" />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: 650 }}>{t("removedSessions.title")}</div>
-            <div style={{ marginTop: 2, color: "var(--text-dim)", fontSize: 11 }}>{t("removedSessions.description")}</div>
+            <div style={{ marginTop: 2, color: "var(--text-dim)", fontSize: 12 }}>{t("removedSessions.description")}</div>
           </div>
           <button type="button" onClick={() => void load()} title={t("sidebar.refresh")} style={{ width: 32, height: 32, padding: 0, display: "grid", placeItems: "center", border: "1px solid var(--border)", borderRadius: 7, background: "var(--bg-hover)", color: "var(--text-muted)" }}>
             <IconRefresh size={15} stroke={1.8} aria-hidden="true" />
@@ -162,7 +165,7 @@ export function RemovedSessionsPanel({
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 12, padding: 14, borderBottom: "1px solid var(--border)", background: "var(--bg-hover)" }}>
-          <label style={{ display: "grid", gap: 5, color: "var(--text-dim)", fontSize: 11 }}>
+          <label style={{ display: "grid", gap: 5, color: "var(--text-dim)", fontSize: 12 }}>
             {t("removedSessions.project")}
             <select value={projectId} onChange={(event) => setProjectId(event.target.value)} style={{ height: 34, minWidth: 0, padding: "0 9px", border: "1px solid var(--border)", borderRadius: 7, background: "var(--bg)", color: "var(--text)", fontSize: 12 }}>
               {availableProjects.map((project) => (
@@ -170,7 +173,7 @@ export function RemovedSessionsPanel({
               ))}
             </select>
           </label>
-          <label style={{ display: "grid", gap: 5, color: "var(--text-dim)", fontSize: 11 }}>
+          <label style={{ display: "grid", gap: 5, color: "var(--text-dim)", fontSize: 12 }}>
             {t("removedSessions.retention")}
             <span style={{ display: "flex", gap: 6 }}>
               <input type="number" min={1} max={3650} value={retentionInput} onChange={(event) => setRetentionInput(event.target.value)} style={{ width: 82, height: 34, padding: "0 8px", border: "1px solid var(--border)", borderRadius: 7, background: "var(--bg)", color: "var(--text)" }} />
@@ -181,7 +184,7 @@ export function RemovedSessionsPanel({
           </label>
         </div>
 
-        {error && <div role="alert" style={{ margin: "12px 14px 0", padding: "9px 11px", border: "1px solid rgba(239,68,68,0.35)", borderRadius: 7, background: "rgba(239,68,68,0.07)", color: "#ef4444", fontSize: 12 }}>{error}</div>}
+        {error && <div role="alert" style={{ margin: "12px 14px 0", padding: "9px 11px", border: "1px solid rgba(239,68,68,0.35)", borderRadius: 7, background: "rgba(239,68,68,0.07)", color: "var(--danger)", fontSize: 12 }}>{error}</div>}
 
         <div style={{ flex: 1, minHeight: 160, overflowY: "auto", padding: 14 }}>
           {loading ? (
@@ -194,7 +197,7 @@ export function RemovedSessionsPanel({
               <div key={session.id} style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 66, padding: "9px 10px", borderBottom: "1px solid var(--border)", opacity: busy ? 0.55 : 1 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div title={sessionTitle(session)} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text)", fontSize: 12, fontWeight: 550 }}>{sessionTitle(session)}</div>
-                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 4, color: "var(--text-dim)", fontSize: 10 }}>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 4, color: "var(--text-dim)", fontSize: 12 }}>
                     <span>{t("sidebar.messagesCount", { count: session.messageCount })}</span>
                     <span>{t("removedSessions.removedAt", { time: new Date(session.removedAt).toLocaleString() })}</span>
                     <span>{t("removedSessions.purgeAt", { time: new Date(session.purgeAt).toLocaleString() })}</span>
@@ -202,15 +205,15 @@ export function RemovedSessionsPanel({
                 </div>
                 {confirmPurgeId === session.id ? (
                   <div style={{ display: "flex", gap: 5 }}>
-                    <button type="button" disabled={busy} onClick={() => void purge(session.id)} style={{ height: 30, padding: "0 9px", border: "none", borderRadius: 6, background: "#ef4444", color: "#fff", fontSize: 11 }}>{t("removedSessions.confirmPurge")}</button>
-                    <button type="button" onClick={() => setConfirmPurgeId(null)} style={{ height: 30, padding: "0 9px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)", color: "var(--text-muted)", fontSize: 11 }}>{t("sidebar.cancel")}</button>
+                    <button type="button" disabled={busy} onClick={() => void purge(session.id)} style={{ height: 30, padding: "0 9px", border: "none", borderRadius: 6, background: "var(--danger)", color: "var(--on-accent)", fontSize: 12 }}>{t("removedSessions.confirmPurge")}</button>
+                    <button type="button" onClick={() => setConfirmPurgeId(null)} style={{ height: 30, padding: "0 9px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg)", color: "var(--text-muted)", fontSize: 12 }}>{t("sidebar.cancel")}</button>
                   </div>
                 ) : (
                   <div style={{ display: "flex", gap: 5 }}>
                     <button type="button" disabled={busy} onClick={() => void restore(session.id)} title={t("removedSessions.restore")} style={{ width: 32, height: 32, padding: 0, display: "grid", placeItems: "center", border: "1px solid var(--border)", borderRadius: 7, background: "var(--bg-hover)", color: "var(--accent)" }}>
                       <IconRestore size={16} stroke={1.8} aria-hidden="true" />
                     </button>
-                    <button type="button" disabled={busy} onClick={() => setConfirmPurgeId(session.id)} title={t("removedSessions.purge")} style={{ width: 32, height: 32, padding: 0, display: "grid", placeItems: "center", border: "1px solid var(--border)", borderRadius: 7, background: "var(--bg-hover)", color: "#ef4444" }}>
+                    <button type="button" disabled={busy} onClick={() => setConfirmPurgeId(session.id)} title={t("removedSessions.purge")} style={{ width: 32, height: 32, padding: 0, display: "grid", placeItems: "center", border: "1px solid var(--border)", borderRadius: 7, background: "var(--bg-hover)", color: "var(--danger)" }}>
                       <IconTrash size={16} stroke={1.8} aria-hidden="true" />
                     </button>
                   </div>

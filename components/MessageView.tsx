@@ -1,4 +1,6 @@
 "use client";
+import { useContext } from "react";
+import { ToolActivityContext } from "./RunStatus";
 
 import { memo, useState, useRef, useEffect, useMemo } from "react";
 import { MarkdownBody } from "./MarkdownBody";
@@ -976,6 +978,12 @@ function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
 
 
 function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number }) {
+  const activity = useContext(ToolActivityContext);
+  const liveTool = activity.tools[block.toolCallId];
+  const toolState = result ? (result.isError ? "toolFailed" : "toolCompleted")
+    : liveTool?.status === "running" && activity.busy ? "toolRunning"
+    : block.rawInput !== undefined && activity.busy ? "toolPreparing"
+    : liveTool?.status === "failed" ? "toolFailed" : "toolUnknown";
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const inputStr = getToolCallInputText(block);
@@ -997,8 +1005,8 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
         borderRadius: 7,
         overflow: "hidden",
         fontSize: 12,
-        border: isError ? "1px solid rgba(248,113,113,0.45)" : "1px solid rgba(34,197,94,0.25)",
-        background: isError ? "rgba(248,113,113,0.05)" : "rgba(34,197,94,0.04)",
+        border: isError ? "1px solid rgba(248,113,113,0.45)" : result && !isError ? "1px solid rgba(34,197,94,0.25)" : "1px solid var(--border)",
+        background: isError ? "rgba(248,113,113,0.05)" : result && !isError ? "rgba(34,197,94,0.04)" : "var(--bg-subtle)",
       }}
     >
       {/* ── Tool call header ── */}
@@ -1019,12 +1027,13 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
           minWidth: 0,
         }}
       >
-        <span style={{ color: isError ? "#f87171" : "#16a34a", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
+        <span style={{ color: isError ? "#f87171" : result ? "#16a34a" : "var(--text-muted)", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
           {block.toolName}
         </span>
         <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
           {isStreamingInput ? t("chat.generatingToolInput") : getToolPreview(block)}
         </span>
+        <span style={{ fontSize: 11, flexShrink: 0 }}>{t(`runStatus.${toolState}`)}</span>
         {duration !== undefined && (
           <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{duration}s</span>
         )}

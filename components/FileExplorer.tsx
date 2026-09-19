@@ -991,25 +991,8 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
     return () => { cancelled = true; };
   }, [cwd, isDrilldown, listingDirectory, refreshKey, treeRefreshKey]);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetchGitStatus(cwd)
-      .then((status) => {
-        if (!cancelled) {
-          setGitFiles(status.isGitRepository ? status.files : []);
-          setGitLineStats(status.isGitRepository
-            ? { additions: status.additions, deletions: status.deletions }
-            : { additions: 0, deletions: 0 });
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setGitFiles([]);
-          setGitLineStats({ additions: 0, deletions: 0 });
-        }
-      });
-    return () => { cancelled = true; };
-  }, [cwd, refreshKey, treeRefreshKey]);
+  // Git status is not part of the current Chat Backend contract. The explorer
+  // shows files without requesting an unported upstream endpoint.
 
   useEffect(() => {
     onChangesCountChange?.(gitFiles.length);

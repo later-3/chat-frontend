@@ -1,5 +1,9 @@
 "use client";
 
+import { ConfigurationToggle as Toggle } from "./ConfigurationToggle";
+
+import { useDialogFocus } from "@/hooks/useDialogFocus";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import type { PluginPackageInfo, PluginsResponse } from "@/lib/api-types";
@@ -59,9 +63,9 @@ function findInstalledPackage(
 
 function statusColor(status: PluginPackageInfo["status"]): string {
   if (status === "loaded") return "var(--accent)";
-  if (status === "installed") return "#f59e0b";
+  if (status === "installed") return "var(--warning)";
   if (status === "disabled") return "var(--text-dim)";
-  return "#ef4444";
+  return "var(--danger)";
 }
 
 function ResourceList({ pkg }: { pkg: PluginPackageInfo }) {
@@ -105,7 +109,7 @@ function ResourceList({ pkg }: { pkg: PluginPackageInfo }) {
         >
           <div
             style={{
-              fontSize: 10,
+              fontSize: 12,
               fontWeight: 700,
               color: "var(--text-dim)",
               textTransform: "uppercase",
@@ -132,7 +136,7 @@ function ResourceList({ pkg }: { pkg: PluginPackageInfo }) {
                 </div>
                 <div
                   style={{
-                    fontSize: 10,
+                    fontSize: 12,
                     color: "var(--text-dim)",
                     fontFamily: "var(--font-mono)",
                     overflow: "hidden",
@@ -157,7 +161,7 @@ function ScopeTag({ scope }: { scope: PluginScope }) {
   return (
     <span
       style={{
-        fontSize: 10,
+        fontSize: 12,
         padding: "1px 5px",
         borderRadius: 3,
         flexShrink: 0,
@@ -173,65 +177,14 @@ function ScopeTag({ scope }: { scope: PluginScope }) {
 function buttonStyle(disabled?: boolean, danger?: boolean): React.CSSProperties {
   return {
     padding: "6px 12px",
-    background: danger ? "rgba(239,68,68,0.08)" : "none",
+    background: danger ? "var(--danger-bg)" : "none",
     border: "1px solid var(--border)",
     borderRadius: 6,
-    color: danger ? "#ef4444" : "var(--text-muted)",
+    color: danger ? "var(--danger)" : "var(--text-muted)",
     cursor: disabled ? "not-allowed" : "pointer",
     fontSize: 12,
     opacity: disabled ? 0.5 : 1,
   };
-}
-
-function Toggle({
-  enabled,
-  loading,
-  onToggle,
-  label,
-}: {
-  enabled: boolean;
-  loading: boolean;
-  onToggle: () => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      disabled={loading}
-      title={label}
-      aria-label={label}
-      aria-pressed={enabled}
-      style={{
-        flexShrink: 0,
-        width: 40,
-        height: 22,
-        borderRadius: 11,
-        border: "none",
-        padding: 0,
-        cursor: loading ? "wait" : "pointer",
-        background: enabled ? "var(--accent)" : "var(--border)",
-        position: "relative",
-        transition: "background 0.18s",
-        outline: "none",
-        opacity: loading ? 0.65 : 1,
-      }}
-    >
-      <span
-        style={{
-          position: "absolute",
-          top: 3,
-          left: enabled ? 21 : 3,
-          width: 16,
-          height: 16,
-          borderRadius: "50%",
-          background: "var(--bg)",
-          boxShadow: "0 1px 4px rgba(0,0,0,0.22)",
-          transition: "left 0.18s cubic-bezier(.4,0,.2,1)",
-        }}
-      />
-    </button>
-  );
 }
 
 function SegmentedScope({
@@ -417,7 +370,7 @@ function AddPluginPanel({
                 color: "var(--text-dim)",
                 cursor: "pointer",
                 fontFamily: "var(--font-mono)",
-                fontSize: 11,
+                fontSize: 12,
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = "var(--bg-hover)";
@@ -435,7 +388,7 @@ function AddPluginPanel({
       </div>
 
       {actionError && (
-        <div style={{ fontSize: 12, color: "#ef4444", whiteSpace: "pre-wrap" }}>
+        <div style={{ fontSize: 12, color: "var(--danger)", whiteSpace: "pre-wrap" }}>
           {actionError}
         </div>
       )}
@@ -482,7 +435,7 @@ function PackageDetail({
           {pkg.disabled ? (
             <span
               style={{
-                fontSize: 10,
+                fontSize: 12,
                 padding: "1px 5px",
                 borderRadius: 3,
                 background: "rgba(120,120,120,0.12)",
@@ -494,11 +447,11 @@ function PackageDetail({
           ) : pkg.filtered && (
             <span
               style={{
-                fontSize: 10,
+                fontSize: 12,
                 padding: "1px 5px",
                 borderRadius: 3,
                 background: "rgba(245,158,11,0.12)",
-                color: "#d97706",
+                color: "var(--warning)",
               }}
             >
               {t("i18n.filtered")}
@@ -566,7 +519,7 @@ function PackageDetail({
         <div style={{ color: "var(--text-dim)" }}>{t("i18n.installedPath")}</div>
         <div
           style={{
-            color: pkg.installedPath ? "var(--text-muted)" : "#ef4444",
+            color: pkg.installedPath ? "var(--text-muted)" : "var(--danger)",
             fontFamily: "var(--font-mono)",
             overflowWrap: "anywhere",
           }}
@@ -587,12 +540,12 @@ function PackageDetail({
       </div>
 
       {actionMessage && (
-        <div style={{ fontSize: 12, color: "#16a34a" }}>
+        <div style={{ fontSize: 12, color: "var(--success)" }}>
           {actionMessage}
         </div>
       )}
       {actionError && (
-        <div style={{ fontSize: 12, color: "#ef4444", whiteSpace: "pre-wrap" }}>
+        <div style={{ fontSize: 12, color: "var(--danger)", whiteSpace: "pre-wrap" }}>
           {actionError}
         </div>
       )}
@@ -612,6 +565,11 @@ export function PluginsConfig({
   onClose: () => void;
   onReloaded?: () => void;
 }) {
+  const requestClose = () => {
+    if (installSource.trim() && !window.confirm(t("longAgentSettings.discardConfirm"))) return;
+    onClose();
+  };
+  const modalRef = useDialogFocus(requestClose);
   const isMobile = useIsMobile();
   const { t } = useI18n();
   const [data, setData] = useState<PluginsResponse | null>(null);
@@ -729,7 +687,7 @@ export function PluginsConfig({
   const addBusy = busyKey?.startsWith("install:") ?? false;
 
   return (
-    <div
+    <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label="Plugins" className="configuration-dialog"
       style={{
         position: "fixed",
         inset: 0,
@@ -740,7 +698,7 @@ export function PluginsConfig({
         justifyContent: "center",
       }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) requestClose();
       }}
     >
       <div
@@ -774,7 +732,7 @@ export function PluginsConfig({
             </span>
             <code
               style={{
-                fontSize: 11,
+                fontSize: 12,
                 color: "var(--text-muted)",
                 fontFamily: "var(--font-mono)",
                 overflow: "hidden",
@@ -786,7 +744,7 @@ export function PluginsConfig({
             </code>
           </div>
           <button
-            onClick={onClose}
+            onClick={requestClose}
             style={{
               background: "none",
               border: "none",
@@ -820,11 +778,11 @@ export function PluginsConfig({
                   Loading...
                 </div>
               ) : error ? (
-                <div style={{ padding: "10px 8px", fontSize: 11, color: "#ef4444" }}>
+                <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--danger)" }}>
                   {error}
                 </div>
               ) : packages.length === 0 ? (
-                <div style={{ padding: "10px 8px", fontSize: 11, color: "var(--text-dim)" }}>
+                <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-dim)" }}>
                   No plugins configured
                 </div>
               ) : (
@@ -833,7 +791,7 @@ export function PluginsConfig({
                     <div
                       style={{
                         padding: "4px 8px 3px",
-                        fontSize: 10,
+                        fontSize: 12,
                         fontWeight: 600,
                         color: "var(--text-dim)",
                         textTransform: "uppercase",
@@ -894,7 +852,7 @@ export function PluginsConfig({
                             </div>
                             <div
                               style={{
-                                fontSize: 10,
+                                fontSize: 12,
                                 color: "var(--text-dim)",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
@@ -907,7 +865,7 @@ export function PluginsConfig({
                             {(pkg.version || pkg.configuredVersion) && (
                               <div
                                 style={{
-                                  fontSize: 10,
+                                  fontSize: 12,
                                   color: "var(--text-dim)",
                                   overflow: "hidden",
                                   textOverflow: "ellipsis",
@@ -1024,11 +982,11 @@ export function PluginsConfig({
             flexShrink: 0,
           }}
         >
-          <div style={{ minWidth: 0, flex: 1, fontSize: 11, color: "var(--text-dim)", overflow: "hidden" }}>
+          <div style={{ minWidth: 0, flex: 1, fontSize: 12, color: "var(--text-dim)", overflow: "hidden" }}>
             {data?.diagnostics.length ? (
               <span
                 title={data.diagnostics.map((d) => `${d.type}: ${d.source ? `${d.source}: ` : ""}${d.message}`).join("\n")}
-                style={{ color: data.diagnostics.some((d) => d.type === "error") ? "#ef4444" : "#d97706" }}
+                style={{ color: data.diagnostics.some((d) => d.type === "error") ? "var(--danger)" : "var(--warning)" }}
               >
                 {data.diagnostics.length} diagnostic{data.diagnostics.length === 1 ? "" : "s"}
               </span>
@@ -1041,7 +999,7 @@ export function PluginsConfig({
           <button onClick={() => void loadPlugins()} disabled={loading || busyKey !== null} style={buttonStyle(loading || busyKey !== null)}>
              {t("i18n.refresh")}
           </button>
-          <button onClick={onClose} style={buttonStyle(false)}>
+          <button onClick={requestClose} style={buttonStyle(false)}>
              {t("i18n.close")}
           </button>
         </div>

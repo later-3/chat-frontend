@@ -49,6 +49,7 @@ export function useGlobalKeyboardShortcuts(
   useEffect(() => {
     if (!enabled) return;
     const handler = (e: KeyboardEvent): void => {
+      if (e.defaultPrevented || document.querySelector("dialog[open], [role=dialog][aria-modal=true]")) return;
       // ---- Esc: stop agent ----
       if (e.key === "Escape") {
         if (!globalAbortHandler) return;

@@ -70,6 +70,15 @@ export function useDeviceWorkspace(
   }, [directory, workspace.deviceId, workspace.directory]);
   const currentDeviceId = workspace.deviceId ?? effectiveDirectory?.currentDeviceId ?? null;
 
+  const restoredSnapshot = useMemo(() => {
+    if (workspace.deviceId || !currentDeviceId) return workspace.snapshot;
+    try {
+      const saved = loadDeviceWorkspaceSnapshot(window.sessionStorage, currentDeviceId);
+      if (!saved) return workspace.snapshot;
+      return { ...saved, navigation: initialNavigation.sessionId || initialNavigation.requestedCwd ? initialNavigation : saved.navigation };
+    } catch { return workspace.snapshot; }
+  }, [currentDeviceId, initialNavigation, workspace]);
+
   const saveSnapshot = useCallback((snapshot: DeviceWorkspaceSnapshot) => {
     if (!currentDeviceId || typeof window === "undefined") return;
     saveDeviceWorkspaceSnapshot(window.sessionStorage, currentDeviceId, {
@@ -151,7 +160,7 @@ export function useDeviceWorkspace(
     currentDeviceId,
     directory: effectiveDirectory,
     workspaceEpoch: workspace.epoch,
-    workspaceSnapshot: workspace.snapshot,
+    workspaceSnapshot: restoredSnapshot,
     transition,
     switchError,
     dismissSwitchError: () => setSwitchError(null),

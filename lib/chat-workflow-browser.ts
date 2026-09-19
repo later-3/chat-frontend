@@ -1,17 +1,31 @@
+import { consumeExecutionStream } from "./execution-stream.ts";
 import {
   parseChatWorkflowRunAccepted,
   parseChatWorkflowPromptResult,
   type ChatWorkflowPromptInput,
   type ChatWorkflowPromptResult,
-} from "./chat-workflow-contract";
+} from "./chat-workflow-contract.ts";
 import {
   parseChatRunEvent,
   parsePlanReview,
   type ChatRunEvent,
   type PlanReview,
-} from "./chat-workflow-events";
+} from "./chat-workflow-events.ts";
 
 const WORKFLOW_POLL_INTERVAL_MS = 300;
+export type WorkflowConnectionUpdate =
+  | { kind: "confirmed"; at: number }
+  | { kind: "stream_lost"; at: number };
+export class WorkflowTerminalError extends Error {
+  readonly status: "failed" | "cancelled";
+  constructor(status: "failed" | "cancelled", message: string) { super(message); this.status = status; }
+}
+
+/** Timeout limits a network request, never the duration of a model/tool execution. */
+export function workflowRequestSignal(signal?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(10_000);
+  return signal === undefined ? timeout : AbortSignal.any([signal, timeout]);
+}
 
 export interface ChatWorkflowRunReference {
   readonly runId: string;
@@ -48,9 +62,9 @@ function waitForNextPoll(signal?: AbortSignal): Promise<void> {
       signal?.removeEventListener("abort", abort);
       resolve();
     };
-    const timer = window.setTimeout(finish, WORKFLOW_POLL_INTERVAL_MS);
+    const timer = globalThis.setTimeout(finish, WORKFLOW_POLL_INTERVAL_MS);
     const abort = () => {
-      window.clearTimeout(timer);
+      globalThis.clearTimeout(timer);
       reject(new DOMException("Workflow连接已断开", "AbortError"));
     };
     signal?.addEventListener("abort", abort, { once: true });
@@ -72,24 +86,7 @@ async function consumeRunEvents(
     const body: unknown = await response.json().catch(() => null);
     throw responseError(response.status, body);
   }
-  if (response.body === null) throw new Error("Chat Workflow没有返回过程事件流");
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffered = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    buffered += decoder.decode(value, { stream: !done });
-    let newline = buffered.indexOf("\n");
-    while (newline !== -1) {
-      const line = buffered.slice(0, newline).trim();
-      buffered = buffered.slice(newline + 1);
-      if (line !== "") onEvent(parseChatRunEvent(JSON.parse(line) as unknown));
-      newline = buffered.indexOf("\n");
-    }
-    if (done) break;
-  }
-  if (buffered.trim() !== "") onEvent(parseChatRunEvent(JSON.parse(buffered) as unknown));
+  await consumeExecutionStream(response, signal, value => onEvent(parseChatRunEvent(value)));
 }
 
 async function followChatWorkflowRun(
@@ -97,21 +94,25 @@ async function followChatWorkflowRun(
   signal?: AbortSignal,
   onEvent?: (event: ChatRunEvent) => void,
   startIndex?: number,
+  onConnection?: (update: WorkflowConnectionUpdate) => void,
 ): Promise<ChatWorkflowPromptResult> {
   const streamController = new AbortController();
   const abortStream = () => streamController.abort();
   signal?.addEventListener("abort", abortStream, { once: true });
+  let following = true;
   const seenReviews = new Set<string>();
   const deliverEvent = (event: ChatRunEvent) => {
+    if (!following) return;
     if (event.type === "review_required") seenReviews.add(event.review.reviewId);
     onEvent?.(event);
   };
-  let streamError: unknown;
+
   const streamPromise = onEvent === undefined
     ? Promise.resolve()
     : consumeRunEvents(reference.runId, deliverEvent, streamController.signal, startIndex)
         .catch((error: unknown) => {
-          if (!(error instanceof DOMException && error.name === "AbortError")) streamError = error;
+          if (following && !streamController.signal.aborted) onConnection?.({ kind: "stream_lost", at: Date.now() });
+          void error;
         });
 
   try {
@@ -123,12 +124,16 @@ async function followChatWorkflowRun(
       });
       const statusResponse = await fetch(
         `/runs/${encodeURIComponent(reference.runId)}?${query.toString()}`,
-        { cache: "no-store", signal },
+        { cache: "no-store", signal: workflowRequestSignal(signal) },
       );
       const statusBody: unknown = await statusResponse.json().catch(() => null);
       if (!statusResponse.ok) throw responseError(statusResponse.status, statusBody);
       if (!statusBody || typeof statusBody !== "object") throw new Error("Chat返回了无效Workflow状态");
       const statusRecord = statusBody as { status?: unknown; review?: unknown; error?: unknown };
+      if (!["pending", "running", "completed", "failed", "cancelled"].includes(String(statusRecord.status))) {
+        throw new Error("Chat返回了无效Workflow状态");
+      }
+      onConnection?.({ kind: "confirmed", at: Date.now() });
       if (statusRecord.review !== undefined) {
         const review = parsePlanReview(statusRecord.review);
         if (!seenReviews.has(review.reviewId)) {
@@ -140,15 +145,18 @@ async function followChatWorkflowRun(
         }
       }
       if (statusRecord.status === "completed") {
-        await streamPromise;
-        if (streamError !== undefined) console.error("Chat Workflow过程事件流中断：", streamError);
+        // Drain already arriving chunks briefly, but terminal Runtime status wins
+        // over a stream that never closes. The caller reloads the durable Session.
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        await Promise.race([streamPromise, new Promise<void>((resolve) => { timer = setTimeout(resolve, 200); })]);
+        if (timer !== undefined) clearTimeout(timer);
         return parseChatWorkflowPromptResult(statusBody);
       }
       if (statusRecord.status === "failed" || statusRecord.status === "cancelled") {
         // The backend exposes the original step failure (e.g. the selected
         // model rejects image input) so the composer can surface it verbatim.
         const failure = statusRecord.error;
-        throw new Error(
+        throw new WorkflowTerminalError(statusRecord.status,
           typeof failure === "string" && failure.trim() !== ""
             ? failure
             : `Workflow ${statusRecord.status}`,
@@ -157,6 +165,7 @@ async function followChatWorkflowRun(
       await waitForNextPoll(signal);
     }
   } finally {
+    following = false;
     streamController.abort();
     signal?.removeEventListener("abort", abortStream);
   }
@@ -168,12 +177,13 @@ export async function runChatWorkflowPrompt(
   signal?: AbortSignal,
   onEvent?: (event: ChatRunEvent) => void,
   onAccepted?: (reference: ChatWorkflowAcceptedRunReference) => void,
+  onConnection?: (update: WorkflowConnectionUpdate) => void,
 ): Promise<ChatWorkflowPromptResult> {
   const startResponse = await fetch("/runs", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
-    signal,
+    signal: workflowRequestSignal(signal),
   });
   const startBody: unknown = await startResponse.json().catch(() => null);
   if (!startResponse.ok) throw responseError(startResponse.status, startBody);
@@ -183,7 +193,7 @@ export async function runChatWorkflowPrompt(
     projectId: input.projectId,
   };
   onAccepted?.(reference);
-  return followChatWorkflowRun(reference, signal, onEvent);
+  return followChatWorkflowRun(reference, signal, onEvent, undefined, onConnection);
 }
 
 /** Reattaches to a durable Run after navigation or page refresh. */
@@ -191,8 +201,9 @@ export function resumeChatWorkflowRun(
   reference: ChatWorkflowRunReference,
   signal?: AbortSignal,
   onEvent?: (event: ChatRunEvent) => void,
+  onConnection?: (update: WorkflowConnectionUpdate) => void,
 ): Promise<ChatWorkflowPromptResult> {
-  return followChatWorkflowRun(reference, signal, onEvent, -1);
+  return followChatWorkflowRun(reference, signal, onEvent, -1, onConnection);
 }
 
 export async function cancelChatWorkflowRun(reference: ChatWorkflowRunReference): Promise<void> {
@@ -203,8 +214,13 @@ export async function cancelChatWorkflowRun(reference: ChatWorkflowRunReference)
   const response = await fetch(`/runs/${encodeURIComponent(reference.runId)}?${query.toString()}`, {
     method: "DELETE",
     keepalive: true,
+    signal: workflowRequestSignal(),
   });
-  if (!response.ok) throw responseError(response.status, await response.json().catch(() => null));
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) throw responseError(response.status, body);
+  if (!body || typeof body !== "object" || !("status" in body) || body.status !== "cancelled") {
+    throw new Error("未收到任务停止确认，请重试");
+  }
 }
 
 export async function submitPlanReviewDecision(

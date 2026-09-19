@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { SessionInfo } from "@/lib/types";
 import { loadExplorerOpen, saveExplorerOpen } from "@/lib/file-explorer-state";
 import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
@@ -17,7 +18,7 @@ import { IconArchive, IconPhoto, IconDotsVertical, IconPencil, IconX } from "@ta
 import { removeSession, renameSession } from "@/lib/session-removal-browser";
 import { overlaySelectedSession } from "@/lib/session-summary";
 import { buildSidebarSessionTree, type SidebarSessionTreeNode } from "@/lib/session-tree";
-import { parseSessionListPage } from "@/lib/session-list-browser";
+import { fetchProjectSessionById, parseSessionListPage } from "@/lib/session-list-browser";
 import { ProjectLongAgentSection } from "./ProjectLongAgentSection";
 import modeStyles from "./SessionSidebarModes.module.css";
 
@@ -91,6 +92,11 @@ function ToolbarIconButton({
 }
 
 interface Props {
+  contentPanel: SidebarContentPanel;
+  onContentPanelChange: (panel: SidebarContentPanel) => void;
+  projectSlot: HTMLElement | null;
+  filesSlot: HTMLElement | null;
+
   momentsActive?: boolean;
   onOpenMoments?: () => void;
   selectedSession: SessionInfo | null;
@@ -100,6 +106,7 @@ interface Props {
   onOpenSessionById?: (sessionId: string, projectId: string) => void | Promise<void>;
   onNewSession?: (sessionId: string, cwd: string) => void;
   initialSessionId?: string | null;
+  initialSessionProjectId?: string;
   skipInitialProjectSelection?: boolean;
   onInitialRestoreDone?: () => void;
   onReady?: () => void;
@@ -368,11 +375,10 @@ function PiWebTitle() {
   );
 }
 
-export function SessionSidebar({ momentsActive = false, onOpenMoments, selectedSession, selectedSessionId, newSessionDraftKey, onSelectSession, onOpenSessionById, onNewSession, initialSessionId, skipInitialProjectSelection, onInitialRestoreDone, onReady, refreshKey, onSessionRemoved, selectedCwd: selectedCwdProp, selectedProjectId, onCwdChange, onOpenFile, explorerRefreshKey, onExplorerRefresh, onAtMention, onAtMentions, mobileView = "sessions", onMobileViewChange, onRequestClose, onBackgroundTaskDone, onRunningSessionIdsChange }: Props) {
+export function SessionSidebar({ contentPanel, onContentPanelChange: setContentPanel, projectSlot, filesSlot, momentsActive = false, onOpenMoments, selectedSession, selectedSessionId, newSessionDraftKey, onSelectSession, onOpenSessionById, onNewSession, initialSessionId, initialSessionProjectId, skipInitialProjectSelection, onInitialRestoreDone, onReady, refreshKey, onSessionRemoved, selectedCwd: selectedCwdProp, selectedProjectId, onCwdChange, onOpenFile, explorerRefreshKey, onExplorerRefresh, onAtMention, onAtMentions, mobileView = "sessions", onMobileViewChange, onRequestClose, onBackgroundTaskDone, onRunningSessionIdsChange }: Props) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
-  const [contentPanel, setContentPanel] = useState<SidebarContentPanel>("sessions");
   const [registeredProjects, setRegisteredProjects] = useState<ChatProjectSummary[]>([]);
   const [sessionFilter, setSessionFilter] = useState("");
   const [loading, setLoading] = useState(true);
@@ -561,6 +567,7 @@ export function SessionSidebar({ momentsActive = false, onOpenMoments, selectedS
   }, []);
 
   const restoredRef = useRef(false);
+  const userNavigatedRef = useRef(false);
   const defaultLongAgentTriedRef = useRef(false);
 
   const projectSelection = useCallback((root: string, key: string, kind?: string): ProjectSelection => ({
@@ -600,7 +607,7 @@ export function SessionSidebar({ momentsActive = false, onOpenMoments, selectedS
   // cwd, so notify when either changes. The parent treats same-cwd key changes
   // as identity hydration rather than a workspace switch.
   const lastNotifiedProjectRef = useRef<{ cwd: string | null; key: string | null } | null>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const project = projectFor(selectedCwd);
     const previous = lastNotifiedProjectRef.current;
     // 长期同事会话的 workspace 是它的 home，不是上下文切换：不通知父级，顶栏保持用户所选上下文项目。
@@ -626,64 +633,41 @@ export function SessionSidebar({ momentsActive = false, onOpenMoments, selectedS
     }
   }, [selectedCwdProp]);
 
-  // Load worktrees for the current effective cwd
   const [wtRefreshKey, setWtRefreshKey] = useState(0);
-  useLayoutEffect(() => {
-    if (!selectedCwd) {
-      setWorktreeState(null);
-      setWorktreeLoadingCwd(null);
-      return;
-    }
-    let cancelled = false;
-    setWorktreeLoadingCwd(selectedCwd);
-    fetch(`/api/worktrees?cwd=${encodeURIComponent(selectedCwd)}`)
-      .then((r) => r.json())
-      .then((d: { projectRoot?: string; projectKey?: string; isGit?: boolean; isTopLevel?: boolean; currentWorktreePath?: string | null; worktrees?: WorktreeEntry[]; error?: string }) => {
-        if (cancelled) return;
-        setWorktreeLoadingCwd(null);
-        if (d.error || !d.projectRoot) {
-          setWorktreeState(null);
-          return;
-        }
-        setWorktreeState({
-          forCwd: selectedCwd,
-          projectRoot: d.projectRoot,
-          projectKey: d.projectKey ?? d.projectRoot,
-          isGit: d.isGit ?? false,
-          isTopLevel: d.isTopLevel ?? false,
-          currentWorktreePath: d.currentWorktreePath ?? null,
-          worktrees: d.worktrees ?? [],
-        });
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setWorktreeLoadingCwd(null);
-          setWorktreeState(null);
-        }
-      });
-    return () => { cancelled = true; };
-  }, [selectedCwd, wtRefreshKey, refreshKey]);
+  // Backend does not expose the upstream Worktree API. No speculative requests.
 
   // Auto-select cwd and restore session from URL on first load
   useEffect(() => {
     // registeredProjects is populated before the parallel Session requests
     // finish. Do not classify a deep-link as missing against that transient
     // empty list or remove ?session= before its Session can arrive.
-    if (loading || registeredProjects.length === 0 || skipInitialProjectSelection) return;
+    if (loading || registeredProjects.length === 0 || skipInitialProjectSelection || userNavigatedRef.current) return;
 
-    if (selectedCwd === null) {
-      // If restoring a session, set cwd to match that session
-      if (initialSessionId && !restoredRef.current) {
-        restoredRef.current = true;
-        const target = allSessions.find((s) => s.id === initialSessionId);
-        if (target) {
-          setSelectedCwd(target.cwd);
+    // Restore an explicit Session even when this window remembered a separate
+    // coworker context project. Session ownership comes from the backend list.
+    if (initialSessionId && !restoredRef.current) {
+      restoredRef.current = true;
+      if (initialSessionProjectId) {
+        // The Backend resolves exact legacy aliases; a failed explicit Project must not
+        // silently select a same-ID Session from another Project's list.
+        void fetchProjectSessionById(initialSessionProjectId, initialSessionId).then(target => {
+          if (userNavigatedRef.current) return;
+          if (target.owner.type === "ordinary" || selectedCwd === null) setSelectedCwd(target.cwd);
           onSelectSession(target, true);
-          return;
-        }
-        // Session not found — notify parent so it can show the placeholder
-        onInitialRestoreDone?.();
+        }).catch(() => { if (!userNavigatedRef.current) onInitialRestoreDone?.(); });
+        return;
       }
+      const target = allSessions.find(session => session.id === initialSessionId);
+      if (target) {
+        if (target.owner.type === "ordinary" || selectedCwd === null) setSelectedCwd(target.cwd);
+        onSelectSession(target, true);
+        return;
+      }
+      onInitialRestoreDone?.();
+    }
+    if (selectedCwd === null) {
+      // An invalid explicit link must never silently choose a different recipient.
+      if (initialSessionId) return;
       // 归一后没有“默认 daily 项目”：默认落点是 Long Agent 的会话（优先 nexus）。
       // 用户明确选择项目时仍走项目路径；这里只在首屏无任何恢复目标时触发一次。
       if (!defaultLongAgentTriedRef.current) {
@@ -694,12 +678,12 @@ export function SessionSidebar({ momentsActive = false, onOpenMoments, selectedS
             const { agents } = await fetchLongAgents(undefined);
             const preferred = agents.find((agent) => agent.id === "nexus" && agent.available)
               ?? agents.find((agent) => agent.available);
-            if (preferred === undefined) return;
+            if (preferred === undefined || userNavigatedRef.current) return;
             const started = await startProjectLongAgent({
               longAgentId: preferred.id,
               projectId: preferred.defaultProjectId,
             });
-            if (!started.primarySessionId) return;
+            if (!started.primarySessionId || userNavigatedRef.current) return;
             setContentPanel("long-agents");
             if (onOpenSessionById !== undefined) {
               await onOpenSessionById(started.primarySessionId, started.projectId ?? preferred.defaultProjectId);
@@ -713,7 +697,7 @@ export function SessionSidebar({ momentsActive = false, onOpenMoments, selectedS
       const project = registeredProjects.find((candidate) => candidate.kind === "project" && candidate.available);
       if (project) setSelectedCwd(project.path);
     }
-  }, [loading, allSessions, registeredProjects, selectedCwd, initialSessionId, skipInitialProjectSelection, onSelectSession, onInitialRestoreDone]);
+  }, [loading, allSessions, registeredProjects, selectedCwd, initialSessionId, initialSessionProjectId, skipInitialProjectSelection, onSelectSession, onInitialRestoreDone]);
 
   // Prefer an exact UI selection while a refetch is in flight. Once the
   // response catches up, the server-resolved path handles Windows case and
@@ -911,41 +895,6 @@ export function SessionSidebar({ momentsActive = false, onOpenMoments, selectedS
     : displayedSessions;
   const filteredSessions = projectSessions.filter((session) => session.owner.type === "ordinary");
 
-  // Automatically choose a panel once for each newly opened/restored Session.
-  // Manual tab changes do not alter the central Session and are not overwritten
-  // until a different Session is opened.
-  const lastClassifiedSessionKeyRef = useRef<string | null>(null);
-  useEffect(() => {
-    const ownerKey = selectedSession?.owner.type === "long-agent"
-      ? `${selectedSession.owner.longAgentId}:${selectedSession.owner.projectLongAgentId}`
-      : selectedSession?.owner.type ?? "ordinary";
-    const classificationKey = `${activeProjectId ?? "none"}:${selectedSessionId ?? newSessionDraftKey ?? "empty"}:${ownerKey}`;
-    if (lastClassifiedSessionKeyRef.current === classificationKey) return;
-    if (selectedSessionId === null) {
-      lastClassifiedSessionKeyRef.current = classificationKey;
-      // Initial Project discovery must not close first-use coworker setup.
-      // Explicit new-session actions already select the sessions panel.
-      return;
-    }
-    lastClassifiedSessionKeyRef.current = classificationKey;
-    setContentPanel(selectedSession?.owner.type === "long-agent" ? "long-agents" : "sessions");
-  }, [activeProjectId, newSessionDraftKey, selectedSession, selectedSessionId]);
-
-  const handleContentPanelKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
-    const panels: readonly SidebarContentPanel[] = ["sessions", "long-agents"];
-    const currentIndex = panels.indexOf(contentPanel);
-    let nextIndex: number | null = null;
-    if (event.key === "ArrowRight" || event.key === "ArrowDown") nextIndex = (currentIndex + 1) % panels.length;
-    else if (event.key === "ArrowLeft" || event.key === "ArrowUp") nextIndex = (currentIndex - 1 + panels.length) % panels.length;
-    else if (event.key === "Home") nextIndex = 0;
-    else if (event.key === "End") nextIndex = panels.length - 1;
-    if (nextIndex === null) return;
-    event.preventDefault();
-    const nextPanel = panels[nextIndex];
-    setContentPanel(nextPanel);
-    const tabs = event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
-    tabs?.[nextIndex]?.focus();
-  };
   const showWorktreeSwitcher = Boolean(
     worktreeState?.isGit
     && worktreeState.isTopLevel
@@ -988,7 +937,7 @@ export function SessionSidebar({ momentsActive = false, onOpenMoments, selectedS
   const explorerCwd = selectedCwd ?? selectedCwdProp;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+    <div onPointerDownCapture={() => { userNavigatedRef.current = true; }} onKeyDownCapture={() => { userNavigatedRef.current = true; }} style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       {removedSessionsOpen && (
         <RemovedSessionsPanel
           projects={registeredProjects.filter((project) => project.kind === "project")}
@@ -1008,153 +957,12 @@ export function SessionSidebar({ momentsActive = false, onOpenMoments, selectedS
           onSelect={(path) => void commitCustomPath(path)}
         />
       )}
-      {/* Header */}
-      <div
-        className={isMobile ? "mobile-workspace-browser-header" : undefined}
-        style={{
-          padding: isMobile ? "0 12px 12px" : "12px 10px 10px",
-          borderBottom: "1px solid var(--border)",
-          flexShrink: 0,
-        }}
-      >
-        {isMobile ? (
-          <>
-            <div className="mobile-workspace-browser-titlebar">
-              <div>
-                <strong>{t("mobile.workspace")}</strong>
-                {explorerCwd && <PathLabel text={displayCwd(explorerCwd, homeDir)} />}
-              </div>
-              <div style={{ display: "flex", gap: 4 }}>
-                <button type="button" className="mobile-icon-button" onClick={() => setRemovedSessionsOpen(true)} aria-label={t("removedSessions.title")}>
-                  <IconArchive size={20} stroke={1.8} aria-hidden="true" />
-                </button>
-                <button type="button" className="mobile-icon-button" onClick={onRequestClose} aria-label={t("mobile.closeWorkspace")}>
-                  <IconX size={22} stroke={1.8} aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-            <div className="mobile-workspace-tabs" role="tablist" aria-label={t("mobile.workspace")}>
-              {(["sessions", "files"] as MobileWorkspaceView[]).map((view) => (
-                <button
-                  key={view}
-                  type="button"
-                  role="tab"
-                  aria-selected={mobileView === view}
-                  className={mobileView === view ? "is-active" : undefined}
-                  onClick={() => onMobileViewChange?.(view)}
-                >
-                  {view === "sessions" ? t("mobile.sessions") : t("mobile.files")}
-                </button>
-              ))}
-            </div>
-          </>
-        ) : (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-            <PiWebTitle />
-            <div style={{ display: "flex", gap: 6 }}>
-              <button
-                onClick={() => setRemovedSessionsOpen(true)}
-                title={t("removedSessions.title")}
-                aria-label={t("removedSessions.title")}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 32, height: 32, padding: 0,
-                  border: "1px solid var(--border)", borderRadius: 7,
-                  background: "var(--bg-hover)", color: "var(--text-muted)", cursor: "pointer",
-                }}
-              >
-                <IconArchive size={16} stroke={1.8} aria-hidden="true" />
-              </button>
-              <button
-              onClick={handleNewSession}
-              disabled={!selectedCwd}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                background: "var(--bg-hover)",
-                border: "1px solid var(--border)",
-                color: selectedCwd ? "var(--text-muted)" : "var(--text-dim)",
-                cursor: selectedCwd ? "pointer" : "not-allowed",
-                height: 32,
-                paddingLeft: 10,
-                paddingRight: 12,
-                borderRadius: 7,
-                fontSize: 12,
-                fontWeight: 500,
-                letterSpacing: "-0.01em",
-                flexShrink: 0,
-                transition: "background 0.12s, color 0.12s, border-color 0.12s",
-              }}
-             title={selectedCwd ? t("sidebar.newSessionTitle", { path: selectedCwd }) : t("sidebar.selectProject")}
-              onMouseEnter={(e) => {
-                if (!selectedCwd) return;
-                e.currentTarget.style.background = "var(--bg-selected)";
-                e.currentTarget.style.color = "var(--accent)";
-                e.currentTarget.style.borderColor = "rgba(37,99,235,0.35)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "var(--bg-hover)";
-                e.currentTarget.style.color = selectedCwd ? "var(--text-muted)" : "var(--text-dim)";
-                e.currentTarget.style.borderColor = "var(--border)";
-              }}
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                <line x1="6" y1="1" x2="6" y2="11" />
-                <line x1="1" y1="6" x2="11" y2="6" />
-              </svg>
-              {t("sidebar.new")}
-            </button>
-            <button
-              onClick={() => loadSessions(false, true)}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                background: sessionRefreshDone ? "rgba(74,222,128,0.18)" : "var(--bg-hover)",
-                border: `1px solid ${sessionRefreshDone ? "rgba(74,222,128,0.4)" : "var(--border)"}`,
-                color: sessionRefreshDone ? "#4ade80" : "var(--text-muted)",
-                cursor: "pointer",
-                width: 32, height: 32,
-                borderRadius: 7,
-                padding: 0,
-                flexShrink: 0,
-                transition: "background 0.3s, color 0.3s, border-color 0.3s",
-              }}
-              onMouseEnter={(e) => {
-                if (sessionRefreshDone) return;
-                e.currentTarget.style.background = "var(--bg-selected)";
-                e.currentTarget.style.color = "var(--accent)";
-                e.currentTarget.style.borderColor = "rgba(37,99,235,0.35)";
-              }}
-              onMouseLeave={(e) => {
-                if (sessionRefreshDone) return;
-                e.currentTarget.style.background = "var(--bg-hover)";
-                e.currentTarget.style.color = "var(--text-muted)";
-                e.currentTarget.style.borderColor = "var(--border)";
-              }}
-               title={t("sidebar.refresh")}
-            >
-              {sessionRefreshDone ? (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              ) : (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                  <path d="M3 3v5h5" />
-                </svg>
-              )}
-            </button>
-          </div>
-          </div>
-        )}
-
-        {onOpenMoments && (
-          <nav className={modeStyles.globalNavigation} aria-label={t("social.navigation")}>
-            <button type="button" className={modeStyles.momentsLink} onClick={onOpenMoments} aria-current={momentsActive ? "page" : undefined}>
-              <IconPhoto size={20} stroke={1.7} aria-hidden="true" />
-              <span>{t("longAgentSettings.socialHeading")}</span>
-            </button>
-          </nav>
-        )}
-
+      {contentPanel === "sessions" && <div className="workspace-list-heading">
+        <h2>{t("sidebar.sessionsPanel")}</h2>
+        <button type="button" className="workspace-icon" onClick={() => setRemovedSessionsOpen(true)} title={t("removedSessions.title")} aria-label={t("removedSessions.title")}><IconArchive size={18} /></button>
+        <button type="button" className="workspace-icon" onClick={handleNewSession} disabled={!selectedCwd} title={t("i18n.newSession")} aria-label={t("i18n.newSession")}>＋</button>
+      </div>}
+      {projectSlot && createPortal(<div className="workspace-project-controls">
         {/* CWD picker */}
         <div ref={dropdownRef} style={{ position: "relative" }}>
           <button
@@ -1178,16 +986,10 @@ export function SessionSidebar({ momentsActive = false, onOpenMoments, selectedS
           >
             {selectedCwd ? (
               <PathLabel
-                text={displayCwd(
-                  selectedSession?.owner?.type === "long-agent" && selectedProject?.kind === "agent"
-                    ? registeredProjects.find((project) => project.kind === "share")?.path ?? selectedProject.root
-                    : selectedProject?.root ?? selectedCwd,
-                  homeDir,
-                )}
+                text={registeredProjects.find((project) => project.projectId === selectedProject?.key)?.cachedName ?? displayCwd(selectedProject?.root ?? selectedCwd, homeDir)}
                 style={{
                   flex: 1,
-                  fontFamily: "var(--font-mono)",
-                  fontSize: isMobile ? 13 : 11,
+                  fontSize: 14,
                   color: "var(--text)",
                 }}
               />
@@ -1296,7 +1098,10 @@ export function SessionSidebar({ momentsActive = false, onOpenMoments, selectedS
                       </svg>
                     )}
                     {project.key !== selectedProject?.key && <span style={{ width: 10, flexShrink: 0 }} />}
-                    <PathLabel text={displayCwd(project.root, homeDir)} style={{ flex: 1 }} />
+                    <span className="workspace-project-option">
+                      <strong>{registeredProjects.find(item => item.projectId === project.key)?.cachedName ?? displayCwd(project.root, homeDir)}</strong>
+                      <PathLabel text={displayCwd(project.root, homeDir)} />
+                    </span>
                     {projectAvailability.get(project.key) === false && (
                       <span style={{ flexShrink: 0, color: "var(--text-dim)", fontSize: 10 }}>
                         {t("sidebar.unavailable")}
@@ -1691,31 +1496,12 @@ export function SessionSidebar({ momentsActive = false, onOpenMoments, selectedS
             <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{inactiveWorktreeSelector.label}</span>
           </button>
         )}
-        {(!isMobile || mobileView === "sessions") && (
-          <div className={modeStyles.tabs} role="tablist" aria-label={t("sidebar.contentPanels")}>
-            {(["sessions", "long-agents"] as const).map((panel) => (
-              <button
-                key={panel}
-                type="button"
-                role="tab"
-                className={modeStyles.tab}
-                id={`sidebar-${panel}-tab`}
-                aria-controls={`sidebar-${panel}-panel`}
-                aria-selected={contentPanel === panel}
-                tabIndex={contentPanel === panel ? 0 : -1}
-                onClick={() => setContentPanel(panel)}
-                onKeyDown={handleContentPanelKeyDown}
-              >
-                {panel === "sessions" ? t("sidebar.sessionsPanel") : t("sidebar.longAgentsPanel")}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      </div>, projectSlot)}
 
       {(!isMobile || mobileView === "sessions") && onOpenSessionById && (
         <ProjectLongAgentSection
-          projectId={activeProjectId}
+          projectId={null}
+          selectedLongAgentId={selectedSession?.owner.type === "long-agent" ? selectedSession.owner.longAgentId : undefined}
           selectedSessionId={selectedSessionId}
           visible={contentPanel === "long-agents"}
           refreshKey={refreshKey}
@@ -1732,7 +1518,7 @@ export function SessionSidebar({ momentsActive = false, onOpenMoments, selectedS
       {(!isMobile || mobileView === "sessions") && contentPanel === "sessions" && <div
         id="sidebar-sessions-panel"
         role="tabpanel"
-        aria-labelledby="sidebar-sessions-tab"
+        aria-labelledby="workspace-projects-tab"
         className={isMobile ? "mobile-workspace-session-list" : undefined}
         style={{ flex: isMobile ? "1 1 auto" : explorerOpen && explorerCwd ? "1 1 0" : "1 1 auto", overflowY: "auto", padding: "0", minHeight: 80 }}
       >
@@ -1780,15 +1566,16 @@ export function SessionSidebar({ momentsActive = false, onOpenMoments, selectedS
         ))}
       </div>}
 
+      {filesSlot && createPortal(<div className="workspace-file-browser">
       {/* File Explorer section */}
-      {explorerCwd && (!isMobile || mobileView === "files") && (
+      {explorerCwd && (
         <div
           className={isMobile ? "mobile-workspace-file-browser" : undefined}
           style={{
             borderTop: "1px solid var(--border)",
             display: "flex",
             flexDirection: "column",
-            flex: isMobile || explorerOpen ? "1 1 0" : "0 0 auto",
+            flex: "1 1 0",
             minHeight: 0,
             overflow: "hidden",
           }}
@@ -1970,7 +1757,7 @@ export function SessionSidebar({ momentsActive = false, onOpenMoments, selectedS
               )}
             </ToolbarIconButton>
           </div>}
-          {(isMobile || explorerOpen) && (
+          {(filesSlot || isMobile || explorerOpen) && (
             <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
               <FileExplorer
                 ref={fileExplorerRef}
@@ -1990,6 +1777,8 @@ export function SessionSidebar({ momentsActive = false, onOpenMoments, selectedS
           )}
         </div>
       )}
+      {!explorerCwd && <p className="workspace-empty">{t("workspace.selectProject")}</p>}
+      </div>, filesSlot)}
       {isMobile && mobileView === "files" && !explorerCwd && (
         <div className="mobile-workspace-empty-state">{t("workspace.selectProject")}</div>
       )}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   ProviderRequestDetail,
@@ -26,9 +27,9 @@ function fmtSize(n: number): string {
 const ROLE_COLORS: Record<string, string> = {
   system: "var(--text-dim)",
   user: "var(--accent)",
-  assistant: "#16a34a",
-  tool: "#d97706",
-  developer: "#7c3aed",
+  assistant: "var(--success)",
+  tool: "var(--warning)",
+  developer: "var(--accent)",
 };
 
 function roleColor(role: string): string {
@@ -95,7 +96,7 @@ function JsonBlock({ value, maxHeight = 320 }: { value: unknown; maxHeight?: num
         borderRadius: 6,
         overflow: "auto",
         maxHeight,
-        fontSize: 11,
+        fontSize: 12,
         lineHeight: 1.5,
         fontFamily: "var(--font-mono)",
         color: "var(--text-muted)",
@@ -178,7 +179,7 @@ function TextPart({ text }: { text: string }) {
             border: "none",
             cursor: "pointer",
             color: "var(--accent)",
-            fontSize: 11,
+            fontSize: 12,
             padding: 0,
           }}
         >
@@ -208,7 +209,7 @@ function MessagePart({ part }: { part: unknown }) {
     const name = (p as { name?: string }).name ?? "(unknown)";
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <div style={{ fontSize: 12, color: "#d97706", fontFamily: "var(--font-mono)" }}>
+        <div style={{ fontSize: 12, color: "var(--warning)", fontFamily: "var(--font-mono)" }}>
           tool_use: {name}
         </div>
         <JsonBlock value={parseMaybeJson(p.input ?? p.arguments)} maxHeight={240} />
@@ -218,7 +219,7 @@ function MessagePart({ part }: { part: unknown }) {
   if (norm === "tool_result" || norm === "function_call_output") {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <div style={{ fontSize: 12, color: "#d97706", fontFamily: "var(--font-mono)" }}>
+        <div style={{ fontSize: 12, color: "var(--warning)", fontFamily: "var(--font-mono)" }}>
           tool_result
         </div>
         <JsonBlock value={parseMaybeJson(p.content ?? p.output)} maxHeight={240} />
@@ -246,7 +247,7 @@ function MessageView({ message }: { message: unknown }) {
               color: roleColor(role),
               fontWeight: 700,
               textTransform: "uppercase",
-              fontSize: 10,
+              fontSize: 12,
               fontFamily: "var(--font-mono)",
               flexShrink: 0,
             }}
@@ -254,11 +255,11 @@ function MessageView({ message }: { message: unknown }) {
             {role}
           </span>
           {toolCalls && toolCalls.length > 0 && (
-            <span style={{ fontSize: 10, color: "#d97706", fontFamily: "var(--font-mono)", flexShrink: 0 }}>
+            <span style={{ fontSize: 12, color: "var(--warning)", fontFamily: "var(--font-mono)", flexShrink: 0 }}>
               {toolCalls.length} tool_call{toolCalls.length === 1 ? "" : "s"}
             </span>
           )}
-          <span style={{ color: "var(--text-dim)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+          <span style={{ color: "var(--text-dim)", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
             {summary}
           </span>
         </span>
@@ -278,7 +279,7 @@ function MessageView({ message }: { message: unknown }) {
           const name = typeof fn.name === "string" ? fn.name : "(unknown)";
           return (
             <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <div style={{ fontSize: 12, color: "#d97706", fontFamily: "var(--font-mono)" }}>
+              <div style={{ fontSize: 12, color: "var(--warning)", fontFamily: "var(--font-mono)" }}>
                 tool_call: {name}
               </div>
               <JsonBlock value={parseMaybeJson(fn.arguments)} maxHeight={240} />
@@ -301,7 +302,7 @@ function ToolView({ tool }: { tool: unknown }) {
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", fontFamily: "var(--font-mono)" }}>{name}</span>
         {typeof t.type === "string" && (
-          <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{t.type}</span>
+          <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{t.type}</span>
         )}
       </div>
       {desc && <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>{desc}</div>}
@@ -360,7 +361,7 @@ function Detail({ detail }: { detail: ProviderRequestDetail }) {
                   <span
                     key={role}
                     style={{
-                      fontSize: 11,
+                      fontSize: 12,
                       padding: "1px 6px",
                       borderRadius: 4,
                       background: "var(--bg-panel)",
@@ -468,6 +469,7 @@ const headerBtnStyle: React.CSSProperties = {
 };
 
 export function ProviderRequests({ cwd, onClose }: { cwd: string; onClose: () => void }) {
+  const modalRef = useDialogFocus(onClose);
   const [list, setList] = useState<ProviderRequestSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -557,7 +559,7 @@ export function ProviderRequests({ cwd, onClose }: { cwd: string; onClose: () =>
         />
       )}
 
-      <div style={overlayStyle}>
+      <div ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Provider Requests" className="configuration-dialog provider-requests-dialog" style={overlayStyle}>
         {/* Header */}
         <div
           style={{
@@ -574,7 +576,7 @@ export function ProviderRequests({ cwd, onClose }: { cwd: string; onClose: () =>
           </span>
           <code
             style={{
-              fontSize: 11,
+              fontSize: 12,
               color: "var(--text-muted)",
               fontFamily: "var(--font-mono)",
               overflow: "hidden",
@@ -660,9 +662,9 @@ export function ProviderRequests({ cwd, onClose }: { cwd: string; onClose: () =>
               {loading ? (
                 <div style={{ padding: 12, fontSize: 12, color: "var(--text-muted)" }}>Loading…</div>
               ) : error ? (
-                <div style={{ padding: 12, fontSize: 11, color: "#ef4444" }}>{error}</div>
+                <div style={{ padding: 12, fontSize: 12, color: "var(--danger)" }}>{error}</div>
               ) : list.length === 0 ? (
-                <div style={{ padding: 12, fontSize: 11, color: "var(--text-dim)", lineHeight: 1.7 }}>
+                <div style={{ padding: 12, fontSize: 12, color: "var(--text-dim)", lineHeight: 1.7 }}>
                   No recorded provider requests yet.
                   <div style={{ marginTop: 6 }}>
                     Enable the{" "}
@@ -696,7 +698,7 @@ export function ProviderRequests({ cwd, onClose }: { cwd: string; onClose: () =>
                     >
                       <div
                         style={{
-                          fontSize: 11,
+                          fontSize: 12,
                           fontFamily: "var(--font-mono)",
                           color: isSelected ? "var(--text)" : "var(--text-muted)",
                           overflow: "hidden",
@@ -708,15 +710,15 @@ export function ProviderRequests({ cwd, onClose }: { cwd: string; onClose: () =>
                       </div>
                       <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
                         {r.model && (
-                          <span style={{ fontSize: 10, color: "var(--accent)", fontFamily: "var(--font-mono)" }}>
+                          <span style={{ fontSize: 12, color: "var(--accent)", fontFamily: "var(--font-mono)" }}>
                             {r.model}
                           </span>
                         )}
-                        <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{r.messageCount} msg</span>
-                        <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{r.toolCount} tools</span>
-                        <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{fmtSize(r.size)}</span>
+                        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{r.messageCount} msg</span>
+                        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{r.toolCount} tools</span>
+                        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{fmtSize(r.size)}</span>
                       </div>
-                      <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 3 }}>
+                      <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 3 }}>
                         {fmtTime(r.mtime)}
                       </div>
                     </button>
@@ -731,7 +733,7 @@ export function ProviderRequests({ cwd, onClose }: { cwd: string; onClose: () =>
             {detailLoading ? (
               <div style={{ padding: 12, fontSize: 12, color: "var(--text-muted)" }}>Loading payload…</div>
             ) : detailError ? (
-              <div style={{ padding: 12, fontSize: 11, color: "#ef4444" }}>{detailError}</div>
+              <div style={{ padding: 12, fontSize: 12, color: "var(--danger)" }}>{detailError}</div>
             ) : detail ? (
               <Detail detail={detail} />
             ) : (

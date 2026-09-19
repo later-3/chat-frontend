@@ -1,52 +1,32 @@
-export const MOBILE_MAX_WIDTH = 640;
+export const MOBILE_MAX_WIDTH = 768;
 export const SPLIT_PANEL_MIN_WIDTH = 960;
-
-export const SIDEBAR_DEFAULT_WIDTH = 260;
-export const SIDEBAR_MIN_WIDTH = 180;
-export const SIDEBAR_MAX_WIDTH = 480;
-
-export const RIGHT_PANEL_FALLBACK_WIDTH = 560;
-export const RIGHT_PANEL_MIN_WIDTH = 300;
-export const RIGHT_PANEL_MAX_WIDTH = 1200;
-
-const COMPACT_CHAT_MIN_WIDTH = 320;
-const DESKTOP_CHAT_MIN_WIDTH = 420;
+export const NAVIGATION_WIDTH = 64;
+export const CHAT_MIN_WIDTH = 480;
+export const SIDEBAR_DEFAULT_WIDTH = 280;
+export const SIDEBAR_MIN_WIDTH = 224;
+export const SIDEBAR_MAX_WIDTH = 360;
+export const RIGHT_PANEL_FALLBACK_WIDTH = 360;
+export const RIGHT_PANEL_MIN_WIDTH = 320;
+export const RIGHT_PANEL_MAX_WIDTH = 720;
 
 export function clampPanelWidth(width: number, minWidth: number, maxWidth: number): number {
-  const finiteWidth = Number.isFinite(width) ? width : minWidth;
-  const effectiveMax = Math.max(minWidth, maxWidth);
-  return Math.round(Math.max(minWidth, Math.min(effectiveMax, finiteWidth)));
+  return Math.round(Math.max(minWidth, Math.min(Math.max(minWidth, maxWidth), Number.isFinite(width) ? width : minWidth)));
 }
-
-export function getDefaultRightPanelWidth(viewportWidth: number): number {
-  return clampPanelWidth(viewportWidth * 0.42, 360, 640);
+export function getDefaultRightPanelWidth(_viewportWidth: number): number { return RIGHT_PANEL_FALLBACK_WIDTH; }
+export function isRightPanelOverlay(viewportWidth: number, sidebarOpen: boolean): boolean {
+  return viewportWidth < SPLIT_PANEL_MIN_WIDTH
+    || viewportWidth - NAVIGATION_WIDTH - (sidebarOpen ? SIDEBAR_MIN_WIDTH + 1 : 0) - RIGHT_PANEL_MIN_WIDTH - 1 < CHAT_MIN_WIDTH;
 }
-
-export function getSidebarMaxWidth(options: {
-  viewportWidth: number;
-  rightPanelOpen: boolean;
-  rightPanelWidth: number;
+export function getSidebarMaxWidth({ viewportWidth, rightPanelOpen }: {
+  viewportWidth: number; rightPanelOpen: boolean; rightPanelWidth: number;
 }): number {
-  const { viewportWidth, rightPanelOpen, rightPanelWidth } = options;
-  if (viewportWidth <= MOBILE_MAX_WIDTH) return SIDEBAR_MAX_WIDTH;
-
-  const compact = viewportWidth < SPLIT_PANEL_MIN_WIDTH;
-  const chatWidth = compact ? COMPACT_CHAT_MIN_WIDTH : DESKTOP_CHAT_MIN_WIDTH;
-  const visibleRightPanelWidth = !compact && rightPanelOpen ? rightPanelWidth : 0;
-  return Math.min(SIDEBAR_MAX_WIDTH, viewportWidth - chatWidth - visibleRightPanelWidth);
+  if (viewportWidth < SPLIT_PANEL_MIN_WIDTH) return SIDEBAR_MAX_WIDTH;
+  const right = rightPanelOpen && !isRightPanelOverlay(viewportWidth, true) ? RIGHT_PANEL_MIN_WIDTH + 1 : 0;
+  return Math.min(SIDEBAR_MAX_WIDTH, viewportWidth - NAVIGATION_WIDTH - CHAT_MIN_WIDTH - 1 - right);
 }
-
-export function getRightPanelMaxWidth(options: {
-  viewportWidth: number;
-  sidebarOpen: boolean;
-  sidebarWidth: number;
+export function getRightPanelMaxWidth({ viewportWidth, sidebarOpen, sidebarWidth }: {
+  viewportWidth: number; sidebarOpen: boolean; sidebarWidth: number;
 }): number {
-  const { viewportWidth, sidebarOpen, sidebarWidth } = options;
-  if (viewportWidth < SPLIT_PANEL_MIN_WIDTH) return RIGHT_PANEL_MAX_WIDTH;
-
-  const visibleSidebarWidth = sidebarOpen ? sidebarWidth : 0;
-  return Math.min(
-    RIGHT_PANEL_MAX_WIDTH,
-    viewportWidth - DESKTOP_CHAT_MIN_WIDTH - visibleSidebarWidth,
-  );
+  if (isRightPanelOverlay(viewportWidth, sidebarOpen)) return Math.min(RIGHT_PANEL_MAX_WIDTH, viewportWidth - 48);
+  return Math.min(RIGHT_PANEL_MAX_WIDTH, viewportWidth - NAVIGATION_WIDTH - CHAT_MIN_WIDTH - 1 - (sidebarOpen ? sidebarWidth + 1 : 0));
 }

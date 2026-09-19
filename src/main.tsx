@@ -2,8 +2,6 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "katex/dist/katex.min.css";
 import "./styles.css";
-import { AuthGate } from "@/components/AuthGate";
-import { AuthSessionMonitor } from "@/components/AuthSessionMonitor";
 import { DeviceWorkspaceRoot } from "@/components/DeviceWorkspaceRoot";
 import { PwaRegistration } from "@/components/PwaRegistration";
 import { I18nProvider } from "@/hooks/useI18n";
@@ -15,10 +13,7 @@ createRoot(root).render(
   <StrictMode>
     <I18nProvider>
       <PwaRegistration />
-      <AuthGate>
-        <AuthSessionMonitor />
-        <DeviceWorkspaceRoot />
-      </AuthGate>
+      <DeviceWorkspaceRoot />
     </I18nProvider>
   </StrictMode>,
 );

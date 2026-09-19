@@ -82,6 +82,7 @@ export interface LongAgentConfigurationDocument {
     readonly avatar: LongAgentAvatar;
     readonly enabled: boolean;
     readonly defaultProjectId: string;
+    readonly timeZone?: string;
     /** 回复模板；null 表示使用默认（project 尾注）。 */
     readonly responseTemplate: string | null;
     readonly effective: LongAgentEffectiveConfig;
@@ -117,6 +118,7 @@ export interface LongAgentConfigurationUpdate {
   readonly avatar?: { readonly kind: "auto" } | { readonly kind: "emoji"; readonly emoji: string };
   readonly enabled: boolean;
   readonly defaultProjectId: string;
+  readonly timeZone?: string;
   readonly definition: LongAgentConfigurationDocument["agent"]["definition"];
 }
 
@@ -289,13 +291,16 @@ function parseEffective(value: unknown): LongAgentEffectiveConfig {
 function parseLongAgentConfiguration(value: unknown): LongAgentConfigurationDocument {
   if (!isRecord(value) || value.schemaVersion !== 1 || !nonEmpty(value.revision)
     || !/^[a-f0-9]{64}$/.test(value.revision) || !isRecord(value.agent)
-    || !nonEmpty(value.agent.id) || !nonEmpty(value.agent.name) || !nonEmpty(value.agent.description)
+    || !nonEmpty(value.agent.id) || !nonEmpty(value.agent.name) || typeof value.agent.description !== "string"
+    || (value.agent.responseTemplate !== undefined && value.agent.responseTemplate !== null
+      && (typeof value.agent.responseTemplate !== "string" || value.agent.responseTemplate.length > 2_000))
+    || (value.agent.timeZone !== undefined && !nonEmpty(value.agent.timeZone))
     || !isRecord(value.agent.avatar)
     || !isRecord(value.agent.effective)
     || typeof value.agent.enabled !== "boolean" || !nonEmpty(value.agent.defaultProjectId)
     || !isRecord(value.agent.definition) || value.agent.definition.schemaVersion !== 1
     || value.agent.definition.id !== value.agent.id || value.agent.definition.name !== value.agent.name
-    || value.agent.definition.description !== value.agent.description
+    || value.agent.definition.description !== (value.agent.description || "Chat Long Agent")
     || !isRecord(value.agent.definition.systemPrompt)
     || !Array.isArray(value.agent.definition.customInstructions)
     || (value.channel !== null
@@ -342,10 +347,9 @@ function parseLongAgentConfiguration(value: unknown): LongAgentConfigurationDocu
       description: value.agent.description,
       avatar: parseAvatar(value.agent.avatar),
       enabled: value.agent.enabled,
-    responseTemplate: value.agent.responseTemplate === null || value.agent.responseTemplate === undefined
-      ? null
-      : (value.agent.responseTemplate as string),
+      responseTemplate: typeof value.agent.responseTemplate === "string" ? value.agent.responseTemplate : null,
       defaultProjectId: value.agent.defaultProjectId,
+      ...(typeof value.agent.timeZone === "string" ? { timeZone: value.agent.timeZone } : {}),
       effective: parseEffective(value.agent.effective),
       definition: {
         schemaVersion: 1,
@@ -401,9 +405,10 @@ export async function fetchLongAgents(projectId?: string, signal?: AbortSignal):
 }
 
 export async function sendLongAgentMessage(input: {
+  readonly requestId?: string;
   readonly longAgentId: string;
-  /** 用户在顶栏选择的上下文项目（B1）；只注入提示词，不改变会话归属。 */
-  readonly contextProjectId?: string;
+  /** 本轮项目上下文；决定规则、工作目录和默认Memory目标，不改变Session存储归属。 */
+  readonly contextProjectId?: string | null;
   readonly projectId: string;
   readonly sessionId?: string;
   readonly text: string;
@@ -413,6 +418,7 @@ export async function sendLongAgentMessage(input: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       projectId: input.projectId,
+      requestId: input.requestId ?? crypto.randomUUID(),
       ...(input.contextProjectId === undefined ? {} : { contextProjectId: input.contextProjectId }),
       ...(input.sessionId === undefined ? {} : { sessionId: input.sessionId }),
       text: input.text,
@@ -578,6 +584,7 @@ export async function saveLongAgentConfiguration(
       ...(update.avatar === undefined ? {} : { avatar: update.avatar }),
       enabled: update.enabled,
       defaultProjectId: update.defaultProjectId,
+      ...(update.timeZone === undefined ? {} : { timeZone: update.timeZone }),
       definition,
     }),
     credentials: "same-origin",

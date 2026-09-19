@@ -10,6 +10,7 @@ import {
 import { splitFinalAssistantBlocks } from "@/lib/message-display";
 import type { AgentMessage, AssistantMessage, TextContent, UserMessage } from "@/lib/types";
 import styles from "./ChatMinimap.module.css";
+import { useI18n } from "@/hooks/useI18n";
 
 interface Props {
   messages: AgentMessage[];
@@ -233,7 +234,7 @@ export function ChatMinimap({
   messageRefs,
   onRevealHistory,
 }: Props) {
-  const [visible, setVisible] = useState(false);
+  const { t } = useI18n();
   const [allNodes, setAllNodes] = useState<NodeInfo[]>([]);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [minimapHeight, setMinimapHeight] = useState(600);
@@ -306,9 +307,7 @@ export function ChatMinimap({
   const updateScroll = useCallback(() => {
     const scrollEl = scrollContainer.current;
     if (!scrollEl) return;
-    const scrollable = scrollEl.scrollHeight - scrollEl.clientHeight;
     const currentNodes = allNodesRef.current;
-    setVisible(scrollable > 20);
     syncActiveNode(scrollEl, currentNodes);
   }, [scrollContainer, syncActiveNode]);
 
@@ -360,7 +359,6 @@ export function ChatMinimap({
       setMinimapHeight(minimapEl.clientHeight);
       allNodesRef.current = nextNodes;
       setAllNodes(nextNodes);
-      setVisible(scrollEl.scrollHeight - scrollEl.clientHeight > 20);
       syncActiveNode(scrollEl, nextNodes);
 
       const pendingNavigation = pendingNavigationRef.current;
@@ -549,8 +547,6 @@ export function ChatMinimap({
   useEffect(() => () => cancelPreviewHide(), [cancelPreviewHide]);
 
   const handleMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (!visible) return;
-
     draggingRef.current = true;
     showPreview();
     const rect = event.currentTarget.getBoundingClientRect();
@@ -576,7 +572,7 @@ export function ChatMinimap({
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
-  }, [findNearestNode, scrollToNode, showPreview, visible]);
+  }, [findNearestNode, scrollToNode, showPreview]);
 
   const nearestNode = mouseYRatio === null ? null : findNearestNode(mouseYRatio);
   const nearestNodeIndex = nearestNode?.index ?? null;
@@ -591,7 +587,9 @@ export function ChatMinimap({
     previewBox.scrollTop = Math.max(0, targetTop);
   }, [allNodes, minimapHovered, nearestNodeIndex]);
 
-  if (!visible) return null;
+  // The outline is useful even when every turn fits on screen. Mount the rail
+  // before measuring it; scroll overflow must not decide whether it exists.
+  if (!allMessages.some(message => message.role === "user")) return null;
 
   const lastNodeTop = positionedNodes.length > 0
     ? positionedNodes[positionedNodes.length - 1].topRatio * minimapHeight
@@ -601,6 +599,19 @@ export function ChatMinimap({
   return (
     <div
       ref={containerRef}
+      role="navigation"
+      aria-label={t("chat.nodes")}
+      data-chat-minimap=""
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) schedulePreviewHide();
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.stopPropagation();
+          cancelPreviewHide();
+          setMinimapHovered(false);
+        }
+      }}
       onMouseDown={handleMouseDown}
       onMouseEnter={showPreview}
       onMouseLeave={schedulePreviewHide}
@@ -637,8 +648,14 @@ export function ChatMinimap({
         const isActive = activeIndex === node.index;
 
         return (
-          <div
+          <button
+            type="button"
             key={node.index}
+            aria-label={t("chat.locateTurn", { number: node.index + 1 })}
+            aria-current={isActive ? "location" : undefined}
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={() => scrollToNode(node, "smooth")}
+            onFocus={showPreview}
             data-minimap-node-index={node.index}
             data-minimap-node-active={isActive ? "" : undefined}
             style={{
@@ -647,11 +664,15 @@ export function ChatMinimap({
               transform: "translateY(-50%)",
               left: 0,
               right: 0,
-              height: Math.max(1, nodeGap),
+              height: Math.max(1, Math.min(32, nodeGap)),
+              width: "100%",
+              padding: 0,
+              border: 0,
+              background: "transparent",
+              cursor: "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              pointerEvents: "none",
               zIndex: 2,
             }}
           >
@@ -667,7 +688,7 @@ export function ChatMinimap({
                 transform: isNearest ? "scale(1.25)" : "scale(1)",
               }}
             />
-          </div>
+          </button>
         );
       })}
 
@@ -720,8 +741,8 @@ export function ChatMinimap({
                         className={styles.assistantJump}
                         data-minimap-preview-assistant={`${node.index}-${assistantIndex}`}
                         onClick={() => scrollToAssistant(node, assistantIndex)}
-                        aria-label="Locate assistant message"
-                        title="Locate assistant message"
+                        aria-label={t("chat.locateAnswer")}
+                        title={t("chat.locateAnswer")}
                       >
                         A
                       </button>

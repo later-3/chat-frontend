@@ -10,6 +10,7 @@ export interface Tab {
   label: string;
   filePath: string;
   sourceSessionId?: string | null;
+  sourceCwd?: string;
   initialDisplayMode?: FileViewerDisplayMode;
   viewerState?: FileViewerState;
   viewerRevision?: number;

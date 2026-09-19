@@ -1,5 +1,7 @@
 "use client";
 
+import { useDialogFocus } from "@/hooks/useDialogFocus";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   IconBrain,
@@ -128,6 +130,23 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
   const [editing, setEditing] = useState<MemoryRecord | null | undefined>(undefined);
   const [draft, setDraft] = useState<MemoryDraft>(() => draftFor(null));
   const [draftTargetKey, setDraftTargetKey] = useState("personal");
+  const editorDirty = editing !== undefined && JSON.stringify(draft) !== JSON.stringify(draftFor(editing));
+  const closeEditor = () => {
+    if (busy || (editorDirty && !window.confirm(t("longAgentSettings.discardConfirm")))) return;
+    setEditing(undefined);
+  };
+  const closeManager = () => {
+    if (busy || (editorDirty && !window.confirm(t("longAgentSettings.discardConfirm")))) return;
+    onClose();
+  };
+  const managerRef = useDialogFocus<HTMLElement>(closeManager);
+  const editorRef = useDialogFocus(closeEditor, editing !== undefined);
+  useEffect(() => {
+    if (!editorDirty) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [editorDirty]);
 
   const loadTree = useCallback(async (signal?: AbortSignal) => {
     setTreeError(null);
@@ -300,7 +319,7 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
   );
 
   return (
-    <section className={styles.overlay} role="dialog" aria-modal="true" aria-label={t("memory.title")}>
+    <section ref={managerRef} tabIndex={-1} className={`${styles.overlay} configuration-dialog`} role="dialog" aria-modal="true" aria-label={t("memory.title")}>
       <header className={styles.header}>
         <div className={styles.titleGroup}>
           <IconBrain size={22} stroke={1.7} aria-hidden="true" />
@@ -311,7 +330,7 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
             <IconDatabase size={16} stroke={1.8} aria-hidden="true" /><span>{t("memory.rebuild")}</span>
           </button>
           <button type="button" className={styles.iconButton} onClick={refresh} disabled={loading || busy} aria-label={t("common.refresh")}><IconRefresh size={17} stroke={1.8} aria-hidden="true" /></button>
-          <button type="button" className={styles.iconButton} onClick={onClose} aria-label={t("common.close")}><IconX size={19} stroke={1.8} aria-hidden="true" /></button>
+          <button type="button" className={styles.iconButton} onClick={closeManager} aria-label={t("common.close")}><IconX size={19} stroke={1.8} aria-hidden="true" /></button>
         </div>
       </header>
 
@@ -431,9 +450,9 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
         </div>
       </div>
 
-      {editing !== undefined && <div className={styles.editorBackdrop} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setEditing(undefined); }}>
-        <div className={styles.editor} role="dialog" aria-modal="true" aria-label={editing === null ? t("memory.add") : t("memory.edit")}>
-          <div className={styles.editorHeader}><h2>{editing === null ? t("memory.add") : t("memory.edit")}</h2><button type="button" className={styles.iconButton} onClick={() => setEditing(undefined)} disabled={busy} aria-label={t("common.close")}><IconX size={18} stroke={1.8} aria-hidden="true" /></button></div>
+      {editing !== undefined && <div className={styles.editorBackdrop} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) closeEditor(); }}>
+        <div ref={editorRef} tabIndex={-1} className={styles.editor} role="dialog" aria-modal="true" aria-label={editing === null ? t("memory.add") : t("memory.edit")}>
+          <div className={styles.editorHeader}><h2>{editing === null ? t("memory.add") : t("memory.edit")}</h2><button type="button" className={styles.iconButton} onClick={closeEditor} disabled={busy} aria-label={t("common.close")}><IconX size={18} stroke={1.8} aria-hidden="true" /></button></div>
           <div className={styles.form}>
             <div className={styles.field}><label htmlFor="memory-text">{t("memory.text")}</label><textarea id="memory-text" className={styles.textarea} value={draft.text} maxLength={50_000} autoFocus onChange={(event) => setDraft((value) => ({ ...value, text: event.target.value }))} /></div>
             <div className={styles.formRow}>
@@ -444,7 +463,7 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
                 {projects.map((project) => <option key={project.projectId} value={`project:${project.projectId}`}>{project.cachedName}</option>)}
               </select> : <div className={styles.input}>{editing.scope === "personal" ? t("memory.scope.personal") : editing.projectId}</div>}</div>
             </div>
-            <div className={styles.editorActions}><button type="button" className={styles.button} onClick={() => setEditing(undefined)} disabled={busy}>{t("common.cancel")}</button><button type="button" className={styles.primaryButton} onClick={() => void saveDraft()} disabled={busy}>{busy ? t("common.saving") : t("common.save")}</button></div>
+            <div className={styles.editorActions}><button type="button" className={styles.button} onClick={closeEditor} disabled={busy}>{t("common.cancel")}</button><button type="button" className={styles.primaryButton} onClick={() => void saveDraft()} disabled={busy}>{busy ? t("common.saving") : t("common.save")}</button></div>
           </div>
         </div>
       </div>}

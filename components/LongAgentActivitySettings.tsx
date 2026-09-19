@@ -8,6 +8,7 @@ import {
   type LongAgentActivityDay,
   type LongAgentFeedPost,
 } from "@/lib/long-agents-browser";
+import { FriendDailyStatus } from "./FriendDailyStatus";
 import styles from "./LongAgentSettingsPanel.module.css";
 
 interface Props {
@@ -55,6 +56,7 @@ export function LongAgentActivitySettings({ longAgentId }: Props) {
   return (
     <section className={styles.section} aria-label={t("longAgentSettings.activityTab")}>
       {error && <div className={styles.error} role="alert">{error}</div>}
+      <FriendDailyStatus key={longAgentId} longAgentId={longAgentId} />
       <h3>{t("longAgentSettings.activityHeading")}</h3>
       <p className={styles.help}>{t("longAgentSettings.activityHint")}</p>
       {days === null && <small>{t("longAgentSettings.inspectionLoading")}</small>}
