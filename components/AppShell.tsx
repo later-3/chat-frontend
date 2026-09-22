@@ -10,6 +10,7 @@ import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionSidebar, type MobileWorkspaceView } from "./SessionSidebar";
 import { ChatWindow } from "./ChatWindow";
 import { LongAgentFeedView } from "./LongAgentFeedView";
+import { LongAgentGroupChatView } from "./LongAgentGroupChatView";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useWorkspaceView } from "@/hooks/useWorkspaceView";
 import { FileViewer } from "./FileViewer";
@@ -34,7 +35,15 @@ import { DeviceSwitcher } from "./DeviceSwitcher";
 import { useAudio } from "@/hooks/useAudio";
 import { copyText } from "@/lib/clipboard";
 import { getFileName } from "@/lib/file-paths";
-import { fetchChatProjects, openChatProject } from "@/lib/projects-contract";
+import { fetchChatProjects, openChatProject, type ChatProjectSummary } from "@/lib/projects-contract";
+import {
+  fetchFriendInteractionProject,
+  friendProjectSendState,
+  isFriendInteractionResponseCurrent,
+  saveFriendInteractionProject,
+  type FriendInteractionProject,
+} from "@/lib/friend-interaction-project";
+import { FriendProjectContext } from "./FriendProjectContext";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
 import {
   claimExtensionAttentionNotification,
@@ -119,7 +128,7 @@ export function AppShell({
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
   }, []);
-  const { view: workspaceView, openMoments, showChat: activateChat, goBack: returnFromMoments } = useWorkspaceView();
+  const { view: workspaceView, openMoments, openGroups, showChat: activateChat, goBack: returnFromMoments } = useWorkspaceView();
   const { preference, toggleTheme } = useTheme();
   const themeLabelKey =
     preference === "light" ? "theme.light" : preference === "dark" ? "theme.dark" : "theme.auto";
@@ -498,7 +507,72 @@ export function AppShell({
   const [activeProjectId, setActiveProjectId] = useState<string | null>(initialWorkspaceSnapshot.contextSelection?.projectId ?? null);
   // 用户显式选择的上下文项目（顶部栏）；Long Agent 会话不覆盖它。
   const [contextCwd, setContextCwd] = useState<string | null>(initialWorkspaceSnapshot.contextSelection?.cwd ?? null);
+  // LA6 A: the selected Friend's own collaboration-project association. It is independent of the
+  // global workspace context project, so switching Friends never leaks a project into another one.
+  const [friendInteraction, setFriendInteraction] = useState<FriendInteractionProject | null>(null);
+  const [friendProjects, setFriendProjects] = useState<readonly ChatProjectSummary[]>([]);
+  const [friendProjectBusy, setFriendProjectBusy] = useState(false);
+  const [friendProjectError, setFriendProjectError] = useState<string | null>(null);
   const activeProjectKeyRef = useRef<string | null>(null);
+  const selectedLongAgentId = selectedSession?.owner.type === "long-agent" ? selectedSession.owner.longAgentId : null;
+  // A response or save from an earlier Friend must never overwrite the current Friend's state.
+  const selectedLongAgentIdRef = useRef<string | null>(null);
+  selectedLongAgentIdRef.current = selectedLongAgentId;
+  const friendProjectGenerationRef = useRef(0);
+  useEffect(() => {
+    friendProjectGenerationRef.current += 1;
+    const generation = friendProjectGenerationRef.current;
+    const controller = new AbortController();
+    // Clear immediately on switch so a slow response cannot be shown for the previous Friend.
+    setFriendInteraction(null);
+    setFriendProjectBusy(false);
+    setFriendProjectError(null);
+    if (selectedLongAgentId === null) return () => controller.abort();
+    void fetchFriendInteractionProject(selectedLongAgentId, controller.signal)
+      .then((value) => { if (!controller.signal.aborted && generation === friendProjectGenerationRef.current && isFriendInteractionResponseCurrent(selectedLongAgentId, selectedLongAgentIdRef.current)) setFriendInteraction(value); })
+      .catch((cause) => { if (!controller.signal.aborted && generation === friendProjectGenerationRef.current) { setFriendInteraction(null); setFriendProjectError(cause instanceof Error ? cause.message : String(cause)); } });
+    return () => controller.abort();
+  }, [selectedLongAgentId]);
+  useEffect(() => {
+    if (selectedLongAgentId === null || friendProjects.length > 0) return;
+    const controller = new AbortController();
+    void fetchChatProjects(controller.signal)
+      .then((projects) => { if (!controller.signal.aborted) setFriendProjects(projects.filter((project) => project.kind === "project")); })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [selectedLongAgentId, friendProjects.length]);
+  const saveFriendProject = useCallback(async (agentId: string, projectId: string | null) => {
+    if (friendInteraction === null || selectedLongAgentIdRef.current !== agentId) return;
+    const generation = friendProjectGenerationRef.current;
+    setFriendProjectBusy(true);
+    setFriendProjectError(null);
+    try {
+      const next = await saveFriendInteractionProject(agentId, { projectId, expectedRevision: friendInteraction.revision });
+      if (generation === friendProjectGenerationRef.current) setFriendInteraction(next);
+    } catch (cause) {
+      if (generation !== friendProjectGenerationRef.current) return;
+      setFriendProjectError(cause instanceof Error ? cause.message : String(cause));
+      try {
+        const refreshed = await fetchFriendInteractionProject(agentId);
+        if (generation === friendProjectGenerationRef.current) setFriendInteraction(refreshed);
+      } catch { /* keep the reported error */ }
+    } finally {
+      if (generation === friendProjectGenerationRef.current) setFriendProjectBusy(false);
+    }
+  }, [friendInteraction]);
+  // Same-source inputs: for a Friend the file browser/resource panel and the send target all come
+  // from that Friend's association, never from the globally selected workspace project.
+  const selectedFriendProject = selectedLongAgentId === null
+    ? null
+    : friendProjects.find((project) => project.projectId === friendInteraction?.effective.projectId) ?? null;
+  const friendContextProjectId = selectedLongAgentId === null ? null : friendInteraction?.effective.projectId ?? null;
+  const friendContextCwd = selectedLongAgentId === null ? null : (selectedFriendProject?.path ?? selectedSession?.cwd ?? null);
+  const friendSendState = friendProjectSendState(friendInteraction);
+  const friendProjectBlockedReason = selectedLongAgentId === null || friendSendState === "ready"
+    ? null
+    : friendSendState === "loading"
+      ? (friendProjectError ?? translate("friendProject.loading"))
+      : (friendInteraction?.effective.reason ?? translate("friendProject.unavailable"));
   useEffect(() => {
     if (!contextCwd || !activeProjectId) return;
     workspaceSnapshotRef.current = { ...workspaceSnapshotRef.current, contextSelection: { cwd: contextCwd, projectId: activeProjectId } };
@@ -1010,13 +1084,19 @@ export function AppShell({
     activeNewSessionDraftKeyRef.current = newSessionDraftKey;
   }, [newSessionDraftKey]);
   const showChat = Boolean(currentProjectId && (selectedSession !== null || effectiveNewSessionCwd !== null));
-  const resourceCwd = contextCwd ?? selectedSession?.cwd ?? effectiveNewSessionCwd;
-  const resourceProjectId = activeProjectId ?? currentProjectId;
+  const resourceCwd = selectedLongAgentId !== null
+    ? friendContextCwd
+    : (contextCwd ?? selectedSession?.cwd ?? effectiveNewSessionCwd);
+  const resourceProjectId = selectedLongAgentId !== null
+    ? friendContextProjectId
+    : (activeProjectId ?? currentProjectId);
   // While restoring initial session from URL, don't show the placeholder
   const showPlaceholder = (contentPanel === "long-agents" && selectedSession?.owner.type !== "long-agent") || (initialSessionRestored && !showChat);
 
   const activeFileTab = fileTabs.find((tab) => tab.id === activeFileTabId) ?? null;
-  const activeCwdName = activeCwd ? getFileName(activeCwd) || activeCwd : null;
+  // The window title follows the same source as the file browser: the Friend's association.
+  const titleCwd = selectedLongAgentId !== null ? friendContextCwd : activeCwd;
+  const activeCwdName = titleCwd ? getFileName(titleCwd) || titleCwd : null;
   const windowTitle = activeCwdName && activeCwdName !== "Chat" ? `${activeCwdName} - Chat` : "Chat";
 
   useEffect(() => {
@@ -1052,10 +1132,10 @@ export function AppShell({
         onSessionRemoved={handleSessionRemoved}
         selectedCwd={selectedSession === null
           ? (newSessionCwd ?? contextCwd)
-          : selectedSession.owner?.type === "long-agent"
-            ? (contextCwd ?? selectedSession.cwd)
+          : selectedLongAgentId !== null
+            ? friendContextCwd
             : selectedSession.cwd}
-        selectedProjectId={activeProjectId}
+        selectedProjectId={selectedLongAgentId !== null ? friendContextProjectId : activeProjectId}
         onCwdChange={handleCwdChange}
         onOpenFile={handleOpenFile}
         explorerRefreshKey={explorerRefreshKey}
@@ -1489,6 +1569,7 @@ export function AppShell({
     setSettingsVisible(section === "settings");
     if (section === "settings") return;
     if (section === "moments") { openMoments(); setSidebarOpen(false); return; }
+    if (section === "groups") { openGroups(); setSidebarOpen(false); return; }
     activateChat();
     setSidebarOpen(true);
     setMobileWorkspaceView("sessions");
@@ -1537,9 +1618,9 @@ export function AppShell({
       }
     `}</style>
     <div className={`workspace-app${wideContent ? " workspace-wide-content" : ""}`}>
-      <WorkspaceNavigation section={settingsVisible ? "settings" : workspaceView === "moments" ? "moments" : contentPanel === "long-agents" ? "coworkers" : "projects"} onSelect={handleNavigateSection} />
+      <WorkspaceNavigation section={settingsVisible ? "settings" : workspaceView === "moments" ? "moments" : workspaceView === "groups" ? "groups" : contentPanel === "long-agents" ? "coworkers" : "projects"} onSelect={handleNavigateSection} />
       <div className="workspace-stage">
-        <header className="workspace-context-bar" hidden={workspaceView === "moments" || settingsVisible} style={workspaceView === "moments" || settingsVisible ? { display: "none" } : undefined}>
+        <header className="workspace-context-bar" hidden={workspaceView !== "chat" || settingsVisible} style={workspaceView !== "chat" || settingsVisible ? { display: "none" } : undefined}>
           <button type="button" className="workspace-icon" onClick={handleSidebarToggle} aria-label={translate("layout.toggleList")} aria-expanded={sidebarOpen} aria-controls="session-sidebar"><IconLayoutSidebar size={20} /></button>
           <span className="workspace-context-label">{translate("workspaceNav.context")}</span>
           <div ref={setProjectSlot} className="workspace-project-slot" />
@@ -1906,7 +1987,7 @@ export function AppShell({
           <DeviceSwitcher variant="desktop" directory={deviceDirectory} onNavigate={onDeviceNavigate} />
           <button type="button" className="workspace-icon" onClick={() => { setSettingsVisible(false); activateChat(); setDetailsMode("files"); setRightPanelOpen(open => detailsMode !== "files" || !open); if (isMobile || viewportWidth < 960) setSidebarOpen(false); }} aria-label={translate("workspaceNav.files")} aria-expanded={rightPanelOpen}><IconFolder size={20} /></button>
         </header>
-    <div className={`app-shell-root workspace-body${viewportWidth < 960 && !isMobile ? " workspace-medium" : ""}${rightPanelOverlay ? " workspace-right-overlay" : ""}${settingsVisible || workspaceView === "moments" ? " workspace-global-view" : ""}`}>
+    <div className={`app-shell-root workspace-body${viewportWidth < 960 && !isMobile ? " workspace-medium" : ""}${rightPanelOverlay ? " workspace-right-overlay" : ""}${settingsVisible || workspaceView !== "chat" ? " workspace-global-view" : ""}`}>
 
       {/* Mobile overlay backdrop */}
       <div
@@ -1958,6 +2039,8 @@ export function AppShell({
         />
       )}
 
+      {!settingsVisible && workspaceView === "groups" && <LongAgentGroupChatView onBack={returnFromMoments} />}
+
       {!settingsVisible && workspaceView === "moments" && <LongAgentFeedView onBack={returnFromMoments} />}
 
       {/* Keep ChatWindow mounted while browsing Moments: draft, scroll and live Run remain owned by the same Session. */}
@@ -1965,11 +2048,23 @@ export function AppShell({
         {/* Chat content */}
         <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
           {navigationError ? <div className="workspace-navigation-error" role="alert">{navigationError}</div> : showChat && currentProjectId && (contentPanel === "sessions" || selectedSession?.owner.type === "long-agent") ? (
+            <>
+            {selectedLongAgentId !== null && <FriendProjectContext
+              agentId={selectedLongAgentId}
+              interaction={friendInteraction}
+              projects={friendProjects}
+              busy={friendProjectBusy}
+              contextCwd={friendContextCwd}
+              error={friendProjectError}
+              onSave={(projectId) => void saveFriendProject(selectedLongAgentId, projectId)}
+            />}
             <ChatWindow
               key={sessionKey}
               projectId={currentProjectId}
               deviceId={deviceId}
-              contextProjectId={activeProjectId}
+              contextProjectId={selectedLongAgentId !== null ? friendInteraction?.effective.projectId ?? null : activeProjectId}
+              interactionRevision={selectedLongAgentId !== null ? friendInteraction?.revision : undefined}
+              contextBlockedReason={friendProjectBlockedReason}
               session={selectedSession}
               sessionRunning={Boolean(selectedSession && runningSessionIds.has(selectedSession.id))}
               newSessionCwd={effectiveNewSessionCwd}
@@ -1993,6 +2088,7 @@ export function AppShell({
               playDoneSound={playDoneSound}
               unlockAudio={unlockAudio}
             />
+            </>
           ) : initialCwdStatus === "validating" ? (
             <div
               role="status"

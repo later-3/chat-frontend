@@ -1,0 +1,26 @@
+.root {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8rem;
+  border-bottom: 1px solid var(--border, #2a2a2a);
+}
+
+.label {
+  color: var(--muted, #8a8a8a);
+}
+
+.select {
+  max-width: 16rem;
+  padding: 0.15rem 0.35rem;
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 0.4rem;
+  background: transparent;
+  color: inherit;
+}
+
+.unavailable,
+.error {
+  color: #d9534f;
+}

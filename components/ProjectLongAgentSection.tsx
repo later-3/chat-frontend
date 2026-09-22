@@ -11,12 +11,14 @@ import {
   startProjectLongAgent,
   type LongAgentSummary,
 } from "@/lib/long-agents-browser";
+import { FriendWorkPanel } from "./FriendWorkPanel";
 import styles from "./ProjectLongAgentSection.module.css";
 import { LongAgentAvatarView } from "./LongAgentAvatar";
 import { LongAgentSettingsPanel } from "./LongAgentSettingsPanel";
 
 interface Props {
   projectId: string | null;
+  contextProjectId: string | null;
   selectedSessionId: string | null;
   selectedLongAgentId?: string;
   visible?: boolean;
@@ -28,6 +30,7 @@ interface Props {
 
 export function ProjectLongAgentSection({
   projectId,
+  contextProjectId,
   selectedSessionId,
   selectedLongAgentId,
   visible = true,
@@ -147,6 +150,7 @@ export function ProjectLongAgentSection({
     }
   }, [closeAfterOpen, onOpenSession, onRequestClose, openingAgentId, projectId]);
 
+  const activeAgent = agents.find(agent => agent.id === selectedLongAgentId || agent.project?.primarySessionId === selectedSessionId);
   if (!visible) return null;
 
   return (
@@ -208,7 +212,7 @@ export function ProjectLongAgentSection({
           /></label>
           <label>{t("longAgent.createDescription")}<input
             value={createDraft.description}
-            disabled={creating}
+            disabled={creating} maxLength={500}
             onChange={(event) => setCreateDraft((draft) => ({ ...draft, description: event.target.value }))}
           /></label>
           {createError && <p className={styles.inlineError} role="alert">{createError}</p>}
@@ -292,6 +296,12 @@ export function ProjectLongAgentSection({
           </ul>
         </nav>
       )}
+
+      {activeAgent && selectedSessionId && <FriendWorkPanel key={activeAgent.id} agentId={activeAgent.id}
+        sessionId={selectedSessionId} projectId={contextProjectId} onOpenSession={async (id, ownerProjectId) => {
+          await onOpenSession(id, ownerProjectId);
+          if (closeAfterOpen) onRequestClose?.();
+        }} />}
 
       {error && agents.length > 0 && <p className={styles.inlineError} role="status">{error}</p>}
     </section>

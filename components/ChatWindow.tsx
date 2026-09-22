@@ -38,6 +38,10 @@ interface Props {
   /** 顶栏上下文项目（B1）：只注入 Long Agent 提示词，不改变会话归属。 */
   deviceId?: string;
   contextProjectId?: string | null;
+  /** Per-Friend collaboration-project association revision (LA6 A). */
+  interactionRevision?: number;
+  /** Non-null when a new Friend private turn must be refused (association loading/unavailable). */
+  contextBlockedReason?: string | null;
   session: SessionInfo | null;
   sessionRunning?: boolean;
   newSessionCwd: string | null;
@@ -228,7 +232,7 @@ function PlanReviewCard({
   );
 }
 
-export function ChatWindow({ projectId, deviceId, contextProjectId, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onConnectionFailure, soundEnabled = true, onSoundToggle, playDoneSound = () => {}, unlockAudio }: Props) {
+export function ChatWindow({ projectId, deviceId, contextProjectId, interactionRevision, contextBlockedReason, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onConnectionFailure, soundEnabled = true, onSoundToggle, playDoneSound = () => {}, unlockAudio }: Props) {
   const { t, locale } = useI18n();
   const { pushStatus, onPushToggle } = usePushNotifications(locale);
   const isMobile = useIsMobile();
@@ -272,7 +276,7 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, session, ses
     loadSlashCommands,
     setWorkflowId, setWorkflowAgentConfigs,
   } = useAgentSession({
-    projectId, deviceId, contextProjectId, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd: wrappedOnAgentEnd, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked,
+    projectId, deviceId, contextProjectId, interactionRevision, contextBlockedReason, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd: wrappedOnAgentEnd, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked,
     chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsPanelOpen,
     onConnectionFailure,
   });
@@ -458,7 +462,7 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, session, ses
       onAbort={handleAbort}
       stopLabel={activity?.phase === "stopping" ? t("runStatus.stopping") : undefined}
       stopping={activity?.phase === "stopping"}
-      onSteer={agentRunning && longAgentId !== null && friendExecution?.capabilities.steer && friendExecution.contextProjectId === (contextProjectId ?? null) ? handleSteer : undefined}
+      onSteer={agentRunning && longAgentId !== null && friendExecution?.capabilities.steer && (friendExecution.workId !== undefined || friendExecution.contextProjectId === (contextProjectId ?? null)) ? handleSteer : undefined}
       onFollowUp={agentRunning && longAgentId !== null && friendExecution?.capabilities.followUp ? handleFollowUp : undefined}
       onPromptWithStreamingBehavior={agentRunning && longAgentId !== null ? handlePromptWithStreamingBehavior : undefined}
       isStreaming={sessionBusy}

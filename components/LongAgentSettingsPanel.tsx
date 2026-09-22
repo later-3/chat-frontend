@@ -4,7 +4,7 @@ import { useDialogFocus } from "@/hooks/useDialogFocus";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { IconActivity, IconArrowLeft, IconBrain, IconClock, IconRefresh, IconSettings, IconUsersGroup } from "@tabler/icons-react";
+import { IconActivity, IconArrowLeft, IconBook2, IconBrain, IconClock, IconMessages, IconRefresh, IconSend, IconSettings, IconUsersGroup } from "@tabler/icons-react";
 import { useI18n } from "@/hooks/useI18n";
 import { fetchChatModelCatalog, type ChatModelCatalog } from "@/lib/chat-workflows-browser";
 import {
@@ -39,7 +39,10 @@ import { LongAgentAvatarEditor } from "./LongAgentAvatarEditor";
 import { LongAgentGroupSettings } from "./LongAgentGroupSettings";
 import { LongAgentMemorySettings } from "./LongAgentMemorySettings";
 import { LongAgentTasksSettings } from "./LongAgentTasksSettings";
+import { LongAgentDeliverablesSettings } from "./LongAgentDeliverablesSettings";
+import { LongAgentDutiesSettings } from "./LongAgentDutiesSettings";
 import { LongAgentActivitySettings } from "./LongAgentActivitySettings";
+import { LongAgentConversationsPanel } from "./LongAgentConversationsPanel";
 
 /**
  * 可选系统Tool清单只来自Backend `/api/tools`；这里只提供已知地址的本地化标签，
@@ -91,7 +94,7 @@ interface Draft {
   pluginSourcesText: string;
 }
 
-type SettingsTab = "runtime" | "tasks" | "activity" | "agent-group" | "agent-memory";
+type SettingsTab = "runtime" | "tasks" | "duties" | "deliverables" | "activity" | "conversations" | "agent-group" | "agent-memory";
 
 function lines(value: string): string[] {
   return [...new Set(value.split("\n").map((item) => item.trim()).filter(Boolean))];
@@ -434,7 +437,10 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
   const tabs = [
     { id: "runtime", label: t("longAgentSettings.runtimeTab"), icon: IconSettings },
     { id: "tasks", label: t("longAgentSettings.tasksTab"), icon: IconClock },
+    { id: "duties", label: t("longAgentSettings.dutiesTab"), icon: IconBook2 },
+    { id: "deliverables", label: t("longAgentSettings.deliverablesTab"), icon: IconSend },
     { id: "activity", label: t("longAgentSettings.activityTab"), icon: IconActivity },
+    { id: "conversations", label: t("longAgentSettings.conversationsTab"), icon: IconMessages },
     { id: "agent-group", label: t("longAgentSettings.agentGroupTab"), icon: IconUsersGroup },
     { id: "agent-memory", label: t("longAgentSettings.agentMemoryTab"), icon: IconBrain },
   ] as const;
@@ -813,7 +819,10 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                   </section>
                 )}
                 {activeTab === "tasks" && <LongAgentTasksSettings longAgentId={document.agent.id} />}
+                {activeTab === "duties" && <LongAgentDutiesSettings longAgentId={document.agent.id} />}
+                {activeTab === "deliverables" && <LongAgentDeliverablesSettings longAgentId={document.agent.id} />}
                 {activeTab === "activity" && <LongAgentActivitySettings longAgentId={document.agent.id} />}
+                {activeTab === "conversations" && <LongAgentConversationsPanel longAgentId={document.agent.id} agents={agents.map((agent) => ({ id: agent.id, name: agent.name }))} />}
                 {activeTab === "agent-group" && <LongAgentGroupSettings longAgentId={document.agent.id} onDirtyChange={setTabDirty} />}
                 {activeTab === "agent-memory" && <LongAgentMemorySettings longAgentId={document.agent.id} onDirtyChange={setTabDirty} />}
               </div>

@@ -188,6 +188,10 @@ interface UseAgentSessionOptions {
   /** 顶栏上下文项目（B1）：随消息传给 Long Agent，仅注入提示词。 */
   deviceId?: string;
   contextProjectId?: string | null;
+  /** Per-Friend collaboration-project association revision; sent on new private turns. */
+  interactionRevision?: number;
+  /** Non-null when a new Friend private turn must be refused (association loading/unavailable). */
+  contextBlockedReason?: string | null;
   session: SessionInfo | null;
   sessionRunning?: boolean;
   newSessionCwd: string | null;
@@ -413,6 +417,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const {
     projectId,
     contextProjectId,
+    interactionRevision,
+    contextBlockedReason,
     deviceId,
     session,
     newSessionCwd,
@@ -904,6 +910,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       return;
     }
 
+    // A new private turn needs the loaded association; refuse instead of degrading to a no-revision
+    // send that the Backend would reject. Work-session continuations keep their frozen target.
+    if (selectedLongAgent !== undefined
+      && friendExecutionRef.current?.workId === undefined
+      && (contextBlockedReason ?? null) !== null) {
+      restoreSubmission(message, images);
+      addNotice({ type: "error", message: String(contextBlockedReason) });
+      return;
+    }
+
     if (composerDraftKey && readPendingSubmission(composerDraftKey)) {
       restoreSubmission(message, images);
       addNotice({ type: "warning", message: "上次发送尚未确认，请先核对会话并处理保留的文字，再发送新消息" });
@@ -952,7 +968,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         const accepted = await acceptFriendMessage(selectedLongAgent.id, {
           requestId: pendingId ?? crypto.randomUUID(),
           ...(sessionIdRef.current === null ? {} : { sessionId: sessionIdRef.current }),
-          text: message, contextProjectId: contextProjectId ?? null,
+          text: message, ...(friendExecutionRef.current?.workId
+            ? { contextProjectId: friendExecutionRef.current.contextProjectId }
+            : { contextProjectId: contextProjectId ?? null, ...(interactionRevision === undefined ? {} : { interactionRevision }) }),
           ...(images?.length ? { images: images.map(image => ({ type: "image" as const, data:image.data, mimeType:image.mimeType })) } : {}),
         }, controller.signal);
         longAgentAccepted = true;
@@ -1203,7 +1221,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           const result = await steerFriendExecution(reference, {
             requestId: pendingId,
             text: message,
-            contextProjectId: contextProjectId ?? null,
+            ...(friendExecutionRef.current?.workId
+              ? { contextProjectId: friendExecutionRef.current.contextProjectId }
+              : { contextProjectId: contextProjectId ?? null, ...(interactionRevision === undefined ? {} : { interactionRevision }) }),
           });
           addNotice({
             type: "info",
@@ -1214,7 +1234,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             requestId: pendingId,
             sessionId: reference.sessionId,
             text: message,
-            contextProjectId: contextProjectId ?? null,
+            ...(friendExecutionRef.current?.workId
+              ? { contextProjectId: friendExecutionRef.current.contextProjectId }
+              : { contextProjectId: contextProjectId ?? null, ...(interactionRevision === undefined ? {} : { interactionRevision }) }),
             ...(images?.length
               ? {
                   images: images.map((image) => ({ type: "image" as const, data: image.data, mimeType: image.mimeType })),

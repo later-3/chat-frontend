@@ -41,7 +41,7 @@ Fork 通过 `lib/session-fork-browser.ts` 调用 `POST /api/sessions/:id/fork`�
 
 Session列表与Session详情中的`session.owner`是导航和发送链共用的唯一归属事实。Frontend运行时合同必须接受且严格校验`{ type: "ordinary" }`或`{ type: "long-agent", longAgentId, projectLongAgentId }`，并直接用该值选择面板与发送API。Long Agent列表只用于展示 Friend 和配置/运行状态，不得异步用`primarySessionId`反推Session归属；也不得根据消息内容猜测，或在Hook/组件中维护第二份映射。`owner`缺失、非法或无法解析时必须停止发送并告警/重新加载，不得默认当成Workflow Session继续执行。
 
-全局“Friend”的设置及右侧“Friend 资料 → 管理这位 Friend”打开同一个 Long Agent 配置页，管理的是跨Project持续的Personal `LongAgent`与其一对一映射的NanoClaw Agent Group；`ProjectLongAgent`为当前 Home 日历会话投影，历史归属另由完整日历与迁移记录提供。配置的三个核心标签页来源如下；另外提供任务与活动标签，分别读取既有任务与活动/动态 API：
+全局“Friend”的设置及右侧“Friend 资料 → 管理这位 Friend”打开同一个 Long Agent 配置页，管理的是跨Project持续的Personal `LongAgent`与其一对一映射的NanoClaw Agent Group；`ProjectLongAgent`为当前 Home 日历会话投影，历史归属另由完整日历与迁移记录提供。配置的三个核心标签页来源如下；另外提供任务与活动标签，任务使用 `friend-tasks.ts` 的 schema 2 同源 API，活动读取既有活动/动态 API：
 
 1. “运行策略”编辑Chat Personal配置中的显示别名、列表摘要、全局启停、默认Project、Model、Thinking Level、System Prompt/自定义Prompt、Tools和Resources；这里的别名不是Agent运行身份。
 2. “Agent Group”编辑NanoClaw拥有的运行身份名称和Standing Instructions，并只读展示稳定Group ID、Workspace安全摘要、核心Memory快照、revision和stale状态。
@@ -220,3 +220,13 @@ Friend 发送只等耐久 202 后清理待确认输入，随后按引用观察�
 ## 旧链接与历史（P5）
 
 初始导航和设备快照保留可选 sessionProjectId，对应 URL 的 projectId，区别于浏览器选择的协作项目。携带 Project 的旧链接直接读取精确 Session API，并严格校验返回的 owner、readOnly 与 Session ID；迁移位置由 Backend 决定。未知链接显示失败，不改选其他项目。历史 Friend 由公共 ChatWindow 显示只读说明，点击 Friend 进入今天，不让历史落入普通 Workflow 发送链。
+
+## Friend 后台工作（LA1）
+
+`FriendWorkPanel` 是侧栏工作入口，`lib/friend-work.ts` 严格校验 HTTP v1 绑定及执行归属；身份、Session、workId、固定项目必须一致。列表每 3 秒刷新，隐藏页面不轮询，卸载取消读请求。创建的未确认请求由 `friend-work-draft.ts` 保存到本标签页 sessionStorage，显式重试沿用原 ID 和原项目；实际工作状态从 Backend 恢复。
+
+工作会话继续使用 `useAgentSession` 和 `friend-execution.ts`，没有单独聊天渲染器。FriendExecution.workId 表示固定项目工作，后续消息/引导使用执行记录的 contextProjectId，不跟随顶部项目选择；日常交流仍按下一条消息选择项目。列表提供停止单个执行、打开原生 Session、返回今日主聊。新增文案同时覆盖中英文；回归为 `lib/friend-work.test.mjs`，浏览器还须验证流式、刷新、跨项目及移动布局。
+
+LA2 任务页区分定义修订、调度应用状态和执行历史；不在浏览器计算 cron。create/run 未确认请求在 sessionStorage 保留同一 ID，重试沿用原命令；事实刷新仍来自 Backend。每次执行链接到 LA1 原生工作会话，继续使用公共实时聊天组件。
+
+Friend 项目关联的异步状态按所选 Friend 管理：切换时同时清理旧关联、错误和忙碌标志；旧读取/保存响应按请求代次失效，不得重新污染新 Friend。真实浏览器门禁覆盖慢 GET 快切和挂起 PUT 后切换，后者必须验证新 Friend 的控件仍可操作。

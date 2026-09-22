@@ -15,6 +15,7 @@ export interface FriendExecution {
   projectId: string;
   sessionId: string;
   contextProjectId: string | null;
+  workId?: string;
   status: "queued" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
   error: string | null;
   acceptedAt: string;
@@ -35,6 +36,7 @@ export function parseFriendExecution(v: unknown): FriendExecution {
     !record(v) ||
     v.schemaVersion !== 1 ||
     v.kind !== "friend" ||
+    (v.workId !== undefined && (typeof v.workId !== "string" || !/^work-[a-f0-9]{32}$/.test(v.workId))) ||
     ![v.id, v.longAgentId, v.projectId, v.sessionId].every((x) => typeof x === "string" && x.length > 0) ||
     !(v.contextProjectId === null || typeof v.contextProjectId === "string") ||
     !["queued", "running", "completed", "failed", "cancelled", "interrupted"].includes(String(v.status)) ||
@@ -81,7 +83,9 @@ export async function acceptFriendMessage(
   input: {
     requestId: string;
     sessionId?: string;
-    contextProjectId: string | null;
+    contextProjectId?: string | null;
+    /** Association revision the client last read; the Backend freezes the project from it. */
+    interactionRevision?: number;
     text: string;
     images?: { type: "image"; data: string; mimeType: string }[];
   },

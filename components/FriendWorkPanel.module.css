@@ -1,0 +1,22 @@
+.panel { border-top: 1px solid var(--border); padding: 12px; font-size: 13px; color: var(--text); }
+.panel header, .panel li { display: flex; align-items: center; gap: 8px; }
+.panel header { justify-content: space-between; }
+.panel h3 { font-size: 13px; font-weight: 600; margin: 0; }
+.panel p { font-size: 12px; color: var(--text-muted); line-height: 1.5; overflow-wrap: anywhere; }
+.panel button { border: 1px solid var(--border-control); border-radius: 8px; background: var(--bg-panel); color: var(--text); min-height: 32px; padding: 6px 8px; cursor: pointer; }
+.panel button:hover { background: var(--bg-hover); }
+.panel button:active { background: var(--bg-selected); }
+.panel button:disabled { opacity: .5; cursor: default; }
+.panel :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.panel form { display: grid; gap: 12px; margin: 12px 0; }
+.panel label { display: grid; gap: 6px; }
+.panel input, .panel textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--border-control); border-radius: 8px; padding: 8px; background: var(--bg); color: var(--text); font: inherit; }
+.panel ul { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 8px; }
+.panel .work { display: grid; text-align: left; flex: 1; min-width: 0; gap: 4px; border-color: transparent; }
+.panel .work strong { font-weight: 500; overflow-wrap: anywhere; }
+.panel .work span { font-size: 12px; color: var(--text-muted); }
+.panel .work[aria-current=page] { background: var(--bg-selected); border-color: var(--accent); }
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .panel button { min-height: 44px; min-width: 44px; }
+  .panel input, .panel textarea { font-size: 16px; }
+}

@@ -1253,3 +1253,11 @@
 @media (max-width: 768px), (pointer: coarse) {
   .dailyHead a { display: inline-flex; align-items: center; min-height: 44px; }
 }
+
+/* Task commands belong to their form/row, never to the settings fixed footer. */
+.taskActions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.taskHead strong { font-family:inherit; font-size:14px; }
+
+.taskOccurrence { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.taskOccurrence p { flex-basis:100%; margin:0; }
+.taskOccurrence a { color:var(--accent); font-size:13px; }
