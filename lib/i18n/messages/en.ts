@@ -798,6 +798,8 @@ export const enLocale: LocalePlugin = {
     "groups.external": "external",
     "groups.mention": "@ mention",
     "groups.startRound": "Start a round",
+    "groups.memberHistory": "{name} · Full history",
+    "groups.publicHistory": "Group · Full history",
     "groups.modelCalls": "model calls",
     "friendProject.label": "Collaboration project",
     "friendProject.none": "No collaboration project",

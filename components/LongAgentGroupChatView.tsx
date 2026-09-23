@@ -20,6 +20,7 @@ import {
 } from "@/lib/friend-conversations";
 import { LongAgentAvatarView } from "./LongAgentAvatar";
 import { MessageView } from "./MessageView";
+import { FullHistoryDialog } from "./FullHistoryDialog";
 import styles from "./LongAgentGroupChatView.module.css";
 
 type RoundPolicy = "mention" | "round-robin" | "parallel" | "moderator" | "free";
@@ -61,6 +62,7 @@ export function LongAgentGroupChatView({ onBack }: { onBack: () => void }) {
   const [roundPolicy, setRoundPolicy] = useState<RoundPolicy>("mention");
   const [works, setWorks] = useState<ConversationWork[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [historyMember, setHistoryMember] = useState<{ projectId: string; sessionId: string; longAgentId: string } | null>(null);
   const streamRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
@@ -157,6 +159,16 @@ export function LongAgentGroupChatView({ onBack }: { onBack: () => void }) {
           <div className={styles.groupHeader}>
             <strong>{detail.conversation.title}</strong>
             <span>{activeMembers.map((id) => nameOf(id)).join("、")}</span>
+            {detail.conversation.members.filter((member) => member.active && member.sessionId !== null).map((member) => (
+              <button key={member.longAgentId} type="button" className={styles.chip} data-group-history={member.longAgentId}
+                onClick={() => setHistoryMember({ projectId: detail.conversation.storageProjectId, sessionId: member.sessionId as string, longAgentId: member.longAgentId })}>
+                {t("groups.memberHistory", { name: nameOf(member.longAgentId) })}
+              </button>
+            ))}
+            <button type="button" className={styles.chip} data-group-history-public
+              onClick={() => setHistoryMember({ projectId: detail.conversation.storageProjectId, sessionId: detail.conversation.publicSessionId, longAgentId: "" })}>
+              {t("groups.publicHistory")}
+            </button>
           </div>
           <ol className={styles.messages} aria-live="polite">
             {messages.map((message) => <li key={message.entryId} className={message.authorLongAgentId === "user" ? styles.userRow : styles.agentRow}>
@@ -206,5 +218,6 @@ export function LongAgentGroupChatView({ onBack }: { onBack: () => void }) {
       </section>
     </div>
     {error !== null && <p role="alert" className={styles.error}>{error}</p>}
+    {historyMember !== null && <FullHistoryDialog projectId={historyMember.projectId} sessionId={historyMember.sessionId} onClose={() => setHistoryMember(null)} />}
   </div>;
 }

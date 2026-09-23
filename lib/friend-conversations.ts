@@ -15,6 +15,8 @@ export interface ConversationMemberSummary {
   joinedAt: string;
   revokedAt: string | null;
   hasParticipationSession: boolean;
+  /** Owner-facing only: the member's participation Session, openable as read-only full history. */
+  sessionId: string | null;
   grants: { systemToolAddresses: string[]; nativeTools: string[]; extensionTools: string[] };
 }
 
@@ -24,6 +26,8 @@ export interface ConversationSummary {
   title: string;
   storageProjectId: string;
   collaborationProjectId: string | null;
+  /** The group's public root Session: raw record holds user messages plus publication references. */
+  publicSessionId: string;
   lifecycle: "active" | "archived";
   revision: number;
   authorizationRevision: number;
@@ -98,6 +102,7 @@ export function parseConversationSummary(value: unknown): ConversationSummary {
     title: text(body.title, "群名称"),
     storageProjectId: text(body.storageProjectId, "存储 Project"),
     collaborationProjectId: nullableText(body.collaborationProjectId, "协作项目"),
+    publicSessionId: text(body.publicSessionId, "公共根 Session"),
     lifecycle: body.lifecycle === "archived" ? "archived" : "active",
     revision: integer(body.revision, "群 revision"),
     authorizationRevision: integer(body.authorizationRevision, "授权修订"),
@@ -117,6 +122,7 @@ export function parseConversationSummary(value: unknown): ConversationSummary {
         joinedAt: text(record.joinedAt, "加入时间"),
         revokedAt: nullableText(record.revokedAt, "退出时间"),
         hasParticipationSession: record.hasParticipationSession === true,
+        sessionId: record.sessionId === undefined ? null : nullableText(record.sessionId, "成员 Session"),
         grants: {
           systemToolAddresses: strings(grants.systemToolAddresses ?? [], "系统 Tool 授权"),
           nativeTools: strings(grants.nativeTools ?? [], "原生 Tool 授权"),

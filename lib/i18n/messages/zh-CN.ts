@@ -798,6 +798,8 @@ export const zhCNLocale: LocalePlugin = {
     "groups.external": "外部",
     "groups.mention": "@ 指定发言人",
     "groups.startRound": "开始一轮",
+    "groups.memberHistory": "{name} · 完整历史",
+    "groups.publicHistory": "群聊 · 完整历史",
     "groups.modelCalls": "次模型调用",
     "friendProject.label": "协作项目",
     "friendProject.none": "无协作项目",
