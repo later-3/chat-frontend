@@ -1,4 +1,22 @@
-import type { AssistantContentBlock, AssistantMessage, ThinkingContent, ToolCallContent } from "./types";
+import type { AgentMessage, AssistantContentBlock, AssistantMessage, ThinkingContent, ToolCallContent } from "./types";
+
+export function isSessionMemoryResponse(message: AgentMessage): boolean {
+  return message.role === "assistant" && message.chatWorkflow?.workflowId === "session-memory"
+    && message.chatWorkflow.stageId === "remember";
+}
+
+/** Memory bookkeeping must not replace the answer to the user's question after a refresh. */
+export function findFinalAssistantIndex(messages: AgentMessage[], userIdx: number, endIdx: number): number {
+  for (const requireAnswer of [true, false]) {
+    for (let index = endIdx - 1; index > userIdx; index--) {
+      const message = messages[index];
+      if (message.role !== "assistant" || isSessionMemoryResponse(message)) continue;
+      if (!requireAnswer || splitFinalAssistantBlocks(message).answerBlocks.some(block =>
+        block.type === "image" || (block.type === "text" && block.text.trim().length > 0))) return index;
+    }
+  }
+  return -1;
+}
 
 interface DisplayOptions {
   isStreaming?: boolean;

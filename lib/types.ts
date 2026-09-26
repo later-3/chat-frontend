@@ -57,6 +57,16 @@ export interface UserMessage {
   chatWorkflow?: ChatWorkflowMessageProvenance;
   /** Chat projection identity for a message synchronized through a LongAgent. */
   chatLongAgent?: ChatLongAgentMessageProvenance;
+  /** Chat-only provenance for a user message relayed into a topic node by another session. */
+  chatTopicRelay?: ChatTopicRelayProvenance;
+}
+
+export interface ChatTopicRelayProvenance {
+  requestId: string;
+  targetNodeId: string;
+  relayedByLongAgentId?: string;
+  source: "relay";
+  textDigest: string;
 }
 
 export interface ChatWorkflowMessageProvenance {

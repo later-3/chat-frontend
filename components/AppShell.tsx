@@ -11,6 +11,7 @@ import { SessionSidebar, type MobileWorkspaceView } from "./SessionSidebar";
 import { ChatWindow } from "./ChatWindow";
 import { LongAgentFeedView } from "./LongAgentFeedView";
 import { LongAgentGroupChatView } from "./LongAgentGroupChatView";
+import { LongAgentTopicsView } from "./LongAgentTopicsView";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useWorkspaceView } from "@/hooks/useWorkspaceView";
 import { FileViewer } from "./FileViewer";
@@ -128,7 +129,7 @@ export function AppShell({
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
   }, []);
-  const { view: workspaceView, openMoments, openGroups, showChat: activateChat, goBack: returnFromMoments } = useWorkspaceView();
+  const { view: workspaceView, openMoments, openGroups, openTopics, showChat: activateChat, goBack: returnFromMoments } = useWorkspaceView();
   const { preference, toggleTheme } = useTheme();
   const themeLabelKey =
     preference === "light" ? "theme.light" : preference === "dark" ? "theme.dark" : "theme.auto";
@@ -586,6 +587,8 @@ export function AppShell({
   // Guards the async workspace restore so a slow response from an earlier
   // switch cannot resurrect a session into a project the user already left.
   const workspaceRestoreTokenRef = useRef(0);
+  /** The (session, storage project) this window most recently navigated to; a repeat is not a navigation. */
+  const openedSessionRef = useRef<{ readonly sessionId: string; readonly projectId: string } | null>(null);
 
   const invalidateWorkspaceRestore = useCallback(() => {
     workspaceRestoreTokenRef.current += 1;
@@ -942,9 +945,20 @@ export function AppShell({
 
   const handleOpenExistingSession = useCallback(async (sessionId: string, projectId: string) => {
     const token = ++workspaceRestoreTokenRef.current;
+    // Re-opening the session that is ALREADY open is not a navigation: the default-landing path and a
+    // Friend-card click both resolve the same primary Session, and the second one must reuse the open
+    // state instead of downloading the whole Session again (handleSelectSession would no-op after it).
+    const open = openedSessionRef.current;
+    if (open !== null && open.sessionId === sessionId && open.projectId === projectId && selectedSession?.id === sessionId) {
+      // The chat may be mounted behind Topics/Settings. Reuse its data but still perform the visible
+      // navigation (including closing a mobile drawer); the shared selector avoids a remount itself.
+      handleSelectSession(selectedSession);
+      return;
+    }
     const target = await fetchProjectSessionById(projectId, sessionId);
+    openedSessionRef.current = { sessionId, projectId };
     if (workspaceRestoreTokenRef.current === token) handleSelectSession(target);
-  }, [handleSelectSession]);
+  }, [handleSelectSession, selectedSession?.id]);
 
   useEffect(() => {
     const restore = () => {
@@ -1125,7 +1139,7 @@ export function AppShell({
         onNewSession={handleNewSession}
         initialSessionId={initialSessionId}
         initialSessionProjectId={initialNavigation.sessionProjectId}
-        skipInitialProjectSelection={initialNavigation.requestedCwd !== null}
+        skipInitialProjectSelection={initialNavigation.requestedCwd !== null || workspaceView !== "chat"}
         onInitialRestoreDone={handleInitialRestoreDone}
         onReady={onWorkspaceReady}
         refreshKey={refreshKey}
@@ -1570,6 +1584,7 @@ export function AppShell({
     if (section === "settings") return;
     if (section === "moments") { openMoments(); setSidebarOpen(false); return; }
     if (section === "groups") { openGroups(); setSidebarOpen(false); return; }
+    if (section === "topics") { openTopics(); setSidebarOpen(false); return; }
     activateChat();
     setSidebarOpen(true);
     setMobileWorkspaceView("sessions");
@@ -1618,7 +1633,7 @@ export function AppShell({
       }
     `}</style>
     <div className={`workspace-app${wideContent ? " workspace-wide-content" : ""}`}>
-      <WorkspaceNavigation section={settingsVisible ? "settings" : workspaceView === "moments" ? "moments" : workspaceView === "groups" ? "groups" : contentPanel === "long-agents" ? "coworkers" : "projects"} onSelect={handleNavigateSection} />
+      <WorkspaceNavigation section={settingsVisible ? "settings" : workspaceView === "moments" ? "moments" : workspaceView === "groups" ? "groups" : workspaceView === "topics" ? "topics" : contentPanel === "long-agents" ? "coworkers" : "projects"} onSelect={handleNavigateSection} />
       <div className="workspace-stage">
         <header className="workspace-context-bar" hidden={workspaceView !== "chat" || settingsVisible} style={workspaceView !== "chat" || settingsVisible ? { display: "none" } : undefined}>
           <button type="button" className="workspace-icon" onClick={handleSidebarToggle} aria-label={translate("layout.toggleList")} aria-expanded={sidebarOpen} aria-controls="session-sidebar"><IconLayoutSidebar size={20} /></button>
@@ -2040,6 +2055,7 @@ export function AppShell({
       )}
 
       {!settingsVisible && workspaceView === "groups" && <LongAgentGroupChatView onBack={returnFromMoments} />}
+      {!settingsVisible && workspaceView === "topics" && <LongAgentTopicsView onBack={returnFromMoments} />}
 
       {!settingsVisible && workspaceView === "moments" && <LongAgentFeedView onBack={returnFromMoments} />}
 

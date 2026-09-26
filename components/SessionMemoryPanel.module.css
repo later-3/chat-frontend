@@ -1,0 +1,15 @@
+.section { display: flex; flex-direction: column; gap: 10px; font-size: 12px; }
+.group { display: flex; flex-direction: column; gap: 6px; }
+.group h5 { margin: 0; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; opacity: 0.7; }
+.entry { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--border, rgba(127,127,127,0.28)); border-radius: 8px; }
+.author { font-size: 10px; padding: 1px 6px; border-radius: 6px; background: rgba(127,127,127,0.16); }
+.content { flex-basis: 100%; white-space: pre-wrap; line-height: 1.5; }
+.action { border: 1px solid var(--border, rgba(127,127,127,0.28)); background: transparent; border-radius: 6px; padding: 1px 8px; font-size: 11px; cursor: pointer; }
+.primary { border: 1px solid transparent; background: var(--accent, #4a7dff); color: #fff; border-radius: 6px; padding: 2px 10px; font-size: 11px; cursor: pointer; }
+.primary:disabled { opacity: 0.5; cursor: default; }
+.edit { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; border-top: 1px dashed var(--border, rgba(127,127,127,0.28)); }
+.edit select, .edit textarea { width: 100%; font: inherit; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--border, rgba(127,127,127,0.28)); background: transparent; color: inherit; }
+.label { font-size: 11px; opacity: 0.75; }
+.actions { display: flex; gap: 8px; }
+.hint { opacity: 0.6; }
+.error { margin: 0; color: #e5484d; }

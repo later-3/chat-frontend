@@ -31,11 +31,11 @@ export function RunStatus({ activity, busy }: { activity: RunActivity | null; bu
     : label;
   const Icon = warning ? IconAlertCircle : waitingHuman || phase === "cancelled" || phase === "detached" ? IconPlayerPause : busy ? IconLoader2 : IconCheck;
   return (
-    <div data-run-status style={{ maxWidth: 820, margin: "0 auto", padding: "8px 16px", fontSize: 13, color: "var(--text-muted)" }}>
+    <div data-run-status data-round-phase={busy ? activity.roundPhase : undefined} style={{ maxWidth: 820, margin: "0 auto", padding: "8px 16px", fontSize: 13, color: "var(--text-muted)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <Icon size={16} aria-hidden className={busy && !waitingHuman && !warning ? "animate-spin motion-reduce:animate-none" : undefined} style={{ flexShrink: 0 }} />
-        <span aria-hidden>{label}</span>
-        <span role="status" aria-live="polite" className="sr-only">{announcement}</span>
+        <span aria-hidden>{busy && activity.roundPhase === "remember" ? `${t("topics.rememberRunning")} · ${label}` : label}</span>
+        <span role="status" aria-live="polite" className="sr-only">{busy && activity.roundPhase === "remember" ? `${t("topics.rememberRunning")} · ${announcement}` : announcement}</span>
         {busy && !waitingHuman && <span aria-hidden style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{t("runStatus.elapsed", { seconds: Math.max(0, Math.floor((now - activity.since) / 1000)) })}</span>}
       </div>
       {activity.error && <div style={{ marginTop: 4, fontSize: 12 }}>{activity.error}</div>}

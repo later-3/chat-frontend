@@ -21,6 +21,7 @@ export function useWorkspaceView() {
 
   const openMoments = useCallback(() => openView("moments"), [openView]);
   const openGroups = useCallback(() => openView("groups"), [openView]);
+  const openTopics = useCallback(() => openView("topics"), [openView]);
 
   const showChat = useCallback(() => {
     window.history.replaceState(null, "", workspaceViewUrl(window.location.href, "chat"));
@@ -32,5 +33,5 @@ export function useWorkspaceView() {
     else showChat();
   }, [showChat]);
 
-  return { view, openMoments, openGroups, showChat, goBack };
+  return { view, openMoments, openGroups, openTopics, showChat, goBack };
 }

@@ -1,5 +1,6 @@
 import type { SessionInfo } from "./types";
 
+import { stashProjectSessionPayload } from "./session-preload.ts";
 export interface SessionListPage {
   sessions: SessionInfo[];
   runningSessionIds: string[];
@@ -88,12 +89,65 @@ export function parseSessionInfo(value: unknown): SessionInfo {
 }
 
 /** Resolves an exact Session through Backend, including recorded legacy Project aliases. */
+/**
+ * Request coalescing for ONE navigation.
+ *
+ * Opening a session can resolve the same deep-link from more than one place (the click handler and the
+ * sidebar's restore effect), which used to download the whole session twice in the same instant. Scope:
+ * one in-flight request per project+session plus a very short (1.5s) reuse of its result, so a second
+ * caller in the SAME navigation shares the first response. Invalidation: a different session replaces it,
+ * an error clears it immediately, and the TTL ends the reuse — the chat still reads the session through
+ * the payload hand-off and its own live sync, so nothing is served from this beyond the navigation burst.
+ */
+const NAVIGATION_REUSE_MS = 1_500;
+/**
+ * The coalescing store lives on globalThis: bundlers can instantiate a module twice (different specifier
+ * spellings), and two instances would otherwise each start their own request for the same navigation.
+ */
+interface NavigationBurst {
+  readonly inFlight: Map<string, Promise<SessionInfo>>;
+  readonly reuse: Map<string, { readonly at: number; readonly info: SessionInfo }>;
+}
+const navigationBurst: NavigationBurst = ((globalThis as { __chatNavigationBurst?: NavigationBurst }).__chatNavigationBurst ??= {
+  inFlight: new Map(),
+  reuse: new Map(),
+});
+
+/**
+ * Owner-facing navigation read: resolves the REAL session (server-side owner + storage project) and keeps
+ * the SAME response for the chat loader, so opening a session downloads its body only once.
+ * The payload is validated here (a session must be present) and the chat validates the body it consumes.
+ */
 export async function fetchProjectSessionById(
   projectId: string,
   sessionId: string,
   signal?: AbortSignal,
 ): Promise<SessionInfo> {
-  const query = new URLSearchParams({ projectId });
+  const key = `${projectId}\u0000${sessionId}`;
+  const reused = navigationBurst.reuse.get(key);
+  if (reused !== undefined && Date.now() - reused.at < NAVIGATION_REUSE_MS) return reused.info;
+  const inFlight = navigationBurst.inFlight.get(key);
+  if (inFlight !== undefined) return await inFlight;
+  const promise = requestProjectSessionById(projectId, sessionId, signal);
+  navigationBurst.inFlight.set(key, promise);
+  try {
+    const info = await promise;
+    navigationBurst.reuse.set(key, { at: Date.now(), info });
+    return info;
+  } catch (error) {
+    navigationBurst.reuse.delete(key);
+    throw error;
+  } finally {
+    if (navigationBurst.inFlight.get(key) === promise) navigationBurst.inFlight.delete(key);
+  }
+}
+
+async function requestProjectSessionById(
+  projectId: string,
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<SessionInfo> {
+  const query = new URLSearchParams({ projectId, deferThinking: "1", deferMedia: "1" });
   const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}?${query.toString()}`, {
     cache: "no-store",
     credentials: "same-origin",
@@ -110,6 +164,8 @@ export async function fetchProjectSessionById(
   if (!isRecord(body)) throw new Error("Chat返回了无效的Session响应");
   const target = parseSessionInfo(body.session);
   if (target.id !== sessionId) throw new Error(`Chat返回了不匹配的Session: ${sessionId}`);
+  // Hand the very same response to the chat loader: the navigation load already paid for it.
+  stashProjectSessionPayload(projectId, sessionId, body);
   return target;
 }
 

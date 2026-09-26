@@ -5,6 +5,7 @@ export type RunPhase = "submitting" | "starting" | "waiting" | "thinking" | "res
   | "completed" | "cancelled" | "failed" | "disconnected" | "detached" | "long_agent";
 export interface RunActivity {
   phase: RunPhase;
+  roundPhase?: "work" | "remember";
   since: number;
   lastEventAt: number;
   confirmedAt?: number;

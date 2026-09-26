@@ -1897,6 +1897,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             } as React.CSSProperties}
           >
           <textarea
+            data-chat-composer
             ref={textareaRef}
             value={value}
             onChange={(e) => {
@@ -2137,6 +2138,35 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           {!isMobile && <div style={{ flex: 1 }} />}
 
           {/* RIGHT: thinking + tools preset + compact + sound (idle) | Stop + sound (streaming) */}
+            {isStreaming && (
+              <button
+                data-chat-stop
+                onClick={onAbort}
+                disabled={stopping}
+                 title={stopLabel ?? t("chat.stopAgent")}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: isMobile ? "12px 16px" : "8px 14px",
+                  height: 44,
+                  background: "rgba(239,68,68,0.08)",
+                  border: "1px solid rgba(239,68,68,0.3)",
+                  borderRadius: 9,
+                  color: "#ef4444",
+                  cursor: "pointer",
+                  fontSize: 12, fontWeight: 600,
+                  whiteSpace: "nowrap", letterSpacing: "-0.01em",
+                  transition: "background 0.12s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(239,68,68,0.16)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
+              >
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <rect x="1.5" y="1.5" width="7" height="7" rx="1.5" fill="currentColor" />
+                </svg>
+                 {stopLabel ?? t("chat.stop")}
+              </button>
+            )}
+
           <div ref={controlsMenuRef} style={{
             flex: "0 0 auto",
             display: "flex",
@@ -2306,34 +2336,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               </div>
             )}
 
-            {isStreaming && (
-              <button
-                className={isMobile ? "mobile-settings-tile" : undefined}
-                onClick={onAbort}
-                disabled={stopping}
-                 title={stopLabel ?? t("chat.stopAgent")}
-                style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  padding: isMobile ? "12px 16px" : "8px 14px",
-                  height: isMobile ? 44 : 32,
-                  background: "rgba(239,68,68,0.08)",
-                  border: "1px solid rgba(239,68,68,0.3)",
-                  borderRadius: 9,
-                  color: "#ef4444",
-                  cursor: "pointer",
-                  fontSize: 12, fontWeight: 600,
-                  whiteSpace: "nowrap", letterSpacing: "-0.01em",
-                  transition: "background 0.12s",
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(239,68,68,0.16)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
-              >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                  <rect x="1.5" y="1.5" width="7" height="7" rx="1.5" fill="currentColor" />
-                </svg>
-                 {stopLabel ?? t("chat.stop")}
-              </button>
-            )}
 
             {onSoundToggle !== undefined && (
               <button

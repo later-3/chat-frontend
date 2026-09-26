@@ -22,6 +22,7 @@ export interface FriendExecution {
   capabilities: { cancel: boolean; steer: boolean; followUp: boolean; images: boolean };
 }
 export interface FriendSnapshot {
+  roundPhase?: "work" | "remember";
   seq: number;
   messages: AgentMessage[];
   partial: AgentMessage | null;
@@ -55,12 +56,17 @@ function parseFriendAgentEvent(value: unknown) {
   try { return parseAgentEvent(value); }
   catch (error) { throw new FriendContractError(error instanceof Error ? error.message : "无效Pi事件"); }
 }
+function parseRoundPhase(value: unknown): "work" | "remember" | undefined {
+  if (value === undefined || value === "work" || value === "remember") return value;
+  throw new FriendContractError("无效节点轮次阶段");
+}
 function parseSnapshot(v: unknown): FriendSnapshot {
   if (!record(v) || !Number.isSafeInteger(v.seq) || Number(v.seq) < 0 || !Array.isArray(v.messages))
     throw new FriendContractError("无效会话快照");
   for (const message of v.messages) parseFriendAgentEvent({ type: "message_end", message });
   if (v.partial !== null) parseFriendAgentEvent({ type: "message_start", message: v.partial });
   return {
+    roundPhase: parseRoundPhase(v.roundPhase),
     seq: Number(v.seq),
     messages: v.messages as AgentMessage[],
     partial: v.partial as AgentMessage | null,
@@ -87,6 +93,7 @@ export async function acceptFriendMessage(
     /** Association revision the client last read; the Backend freezes the project from it. */
     interactionRevision?: number;
     text: string;
+    sessionMemory?: "on" | "off";
     images?: { type: "image"; data: string; mimeType: string }[];
   },
   signal?: AbortSignal,
@@ -109,6 +116,7 @@ export async function followFriendExecution(
   signal: AbortSignal,
   callbacks: {
     event: (event: ChatRunEvent) => void;
+    roundPhase?: (phase: "work" | "remember" | undefined) => void;
     snapshot: (snapshot: FriendSnapshot) => void;
     status: (status: FriendExecution) => void;
     connection: (status: WorkflowConnectionUpdate) => void;
@@ -131,6 +139,7 @@ export async function followFriendExecution(
       const snapshot = parseSnapshot(value.snapshot);
       seq = snapshot.seq;
       callbacks.snapshot(snapshot);
+      callbacks.roundPhase?.(snapshot.roundPhase);
       callbacks.status(current);
       const check = (execution: unknown) => {
         const next = parseFriendExecution(execution);
@@ -161,6 +170,7 @@ export async function followFriendExecution(
               const reset = parseSnapshot(item.snapshot);
               seq = reset.seq;
               callbacks.snapshot(reset);
+              callbacks.roundPhase?.(reset.roundPhase);
               return;
             }
             if (
@@ -178,6 +188,7 @@ export async function followFriendExecution(
               throw new FriendContractError("无效Agent事件信封");
             const next = Number(item.seq);
             if (next <= seq) return;
+            callbacks.roundPhase?.(parseRoundPhase(item.roundPhase));
             if (next !== seq + 1) throw new Error("事件不连续，需要重新同步");
             seq = next;
             callbacks.event({ type: "agent_event", event: parseFriendAgentEvent(item.event) });

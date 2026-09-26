@@ -1,0 +1,12 @@
+.root { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.request { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-subtle); color: var(--text); text-align: left; cursor: pointer; }
+.request:hover { background: var(--bg-hover); }
+.request span { min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
+.request small { display: block; margin-top: 4px; color: var(--text-muted); font-size: 12px; }
+.content { padding: 16px; overflow-y: auto; min-height: 0; overflow-wrap: anywhere; }
+.content p { margin: 0 0 12px; }
+.primary, .cancel { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 14px; border-radius: 8px; margin: 8px 8px 0 0; font-size: 14px; }
+.primary { color: var(--on-accent); background: var(--accent); text-decoration: none; }
+.cancel { border: 1px solid var(--border-control); color: var(--text); background: var(--bg-panel); cursor: pointer; }
+.error { color: var(--text); font-size: 13px; }
+.error button { min-width: 44px; min-height: 44px; vertical-align: middle; }

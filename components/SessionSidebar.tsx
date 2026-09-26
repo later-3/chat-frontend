@@ -1826,6 +1826,7 @@ function SessionTreeItem({
         )}
         <SessionItem
           session={node.session}
+          dataSessionOpen={node.session.id}
           isSelected={node.session.id === selectedSessionId}
           isRunning={runningSessionIds.has(node.session.id)}
           isUnread={unreadSessionIds.has(node.session.id)}
@@ -2006,6 +2007,7 @@ function showProjectActivity(
 
 function SessionItem({
   session,
+  dataSessionOpen,
   isSelected,
   isRunning,
   isUnread,
@@ -2023,6 +2025,8 @@ function SessionItem({
   isRunning?: boolean;
   isUnread?: boolean;
   descendantAttentionCount?: number;
+  /** Stable hook for navigation tests/measurements: which Session this item opens. */
+  dataSessionOpen: string;
   onClick: () => void;
   onRenamed?: () => void;
   onRemoved?: (id: string) => void;
@@ -2140,6 +2144,7 @@ function SessionItem({
 
   return (
     <div
+      data-session-open={dataSessionOpen}
       onClick={confirmRemove || renaming ? undefined : onClick}
       onContextMenu={confirmRemove || renaming || diskActionsDisabled ? undefined : handleContextMenu}
       onMouseEnter={() => setHovered(true)}

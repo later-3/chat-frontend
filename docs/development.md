@@ -164,6 +164,16 @@ Chat 父仓库以 `frontend/` Git Submodule 固定本仓库的确定 Commit。Fr
 
 不得通过只修改父仓库中的 Submodule 指针来代替 Frontend 提交，也不得把未提交的 Frontend 工作区当作可部署状态。上游 Pi Web 的来源和同步方式见 [UPSTREAM.md](../UPSTREAM.md)。
 
+## 7.1 会话打开的关键路径与度量
+
+打开一个会话（点 Friend、点会话条目、旧链接恢复）的既有顺序是：**点击反馈 → 解析今天的会话 → 一次会话读取 → 消息绘制 → 输入可用**。这部分必须保持三件事：
+
+- **一次导航只读一次会话正文**。导航拿到的响应由 `frontend/lib/session-preload.ts` 交给**同一次导航的所有读取者共享**（按会话 id 匹配、短 TTL、会话身份变化即失效）。同一次打开可能由默认落点、点击、旧链接等多个触发者发起，单次消费会让第二个读取者重新下载整份会话；同时 `fetchProjectSessionById` 对同一 navigation 做请求合并，重复触发同一已打开会话时直接复用当前状态。不得用列表里的旧 `primarySessionId` 绕过每日会话解析。导航交接仅用于初次加载；轮次结束、重连和后台同步必须重读耐久历史，不能复用打开时的旧正文。复用已打开会话的数据仍须完成视图切换，不能因省略 GET 而停留在主题或设置页。
+- **不得重复全量读取**。按精确 id 解析会话时只读目标文件，不做全目录正文扫描；没有子调用时不扫描子调用；同一个会话在同一次导航里不重复解析。
+- **无变更不写入**。今天的会话与绑定已经有效时，打开动作不再刷新 `updatedAt`、不重写全局状态。
+
+度量方法（`scripts/session-open-perf.mjs`，需要先 `pnpm build`）：在隔离 CHAT_HOME 里构造「一个小的目标会话 + 多个无关大会话」，用真实浏览器采样，输出点击/启动到消息可见与可输入的中位数/P95、`/api/sessions/*` 的请求次数与字节数，以及被消除的工作量（全目录扫描耗时、单次会话 GET 耗时/字节）。CI 只守住请求次数、无关文件读取次数与正确性，不用毫秒断言。
+
 ## 8. 工作区实现入口
 
 对象关系、切换和完整功能入口只在父仓库 [Chat Web 交互说明](../../docs/modules/web/chat-web.md)维护。纯浏览器实现保留以下分工：
@@ -216,6 +226,18 @@ Workflow Call parent/child 的可选 projectId 由响应解析器保留，不能
 Friend 发送只等耐久 202 后清理待确认输入，随后按引用观察；刷新和断网只重取状态，不重发正文。重连先替换快照，再接增量，过期/断序重新同步；15 秒无任何流数据重连。终态来自 Backend，最后重读 Pi 历史。切页只 abort 浏览器订阅；点击停止才 DELETE 执行。当前轮冻结项目不随选择器变化，后续消息按新选项目接受。
 
 引导/后续按钮按实际能力显示；Workflow 未提供追加合同，不显示之前会报不支持的操作，草稿仍可编辑。Friend 跨项目只允许后续消息；接受提示不冒充模型已消费。附件能力取后端有效模型，读取失败明确提示而不是假定图片可用。自动重试/压缩与工具使用共用状态栏，最终用量沿用原生记录统计。原生压缩/分支摘要由 Backend 转成既有 custom 展示合同，快照与普通历史都显示同一摘要组件；不能把原生角色直接强制转换为 AgentMessage。`friend-execution.test.mjs` 验证重复、断序、归属、未知版本、终态及无响应/断开恢复，真实浏览器证据在父仓库 P4 审计中。
+
+## 主题会话
+
+主题节点通过 `useAgentSession` / `ChatWindow` 的 `topicNode` 目标适配使用完整公共聊天。读取走 `/api/sessions/:id`；发送走节点授权入口；观察、工具过程、图片能力、停止和运行中恢复复用 `friend-execution`。新建空节点也从图解析的 `topicNode.longAgentId` 获取身份，不能先露出普通 Workflow 选择器。节点记忆阶段通过同一事件流/快照的可选 `roundPhase` 展示“答案已生成，正在整理会话记忆”；停止作用于当前真实阶段。
+
+`LongAgentTopicsView/Panel` 只负责导航和辅助操作。桌面左侧列出主题与节点关系，中央保留完整高度的会话；窄屏按需打开导航，来源、记忆、开关、锚点和补充整合使用共享 `SurfaceDialog`，不挤占输入区。图/记忆响应由 `lib/topics-browser.ts` 从 unknown 校验。导航选中项可存 localStorage；深链 `?view=topics&topicAgent=…&topicId=…&nodeId=…` 优先，切换后同步地址，数据从 Backend 重读。
+
+日常聊天的 `topic_manage.request_topic`、新建与分叉均到同一审核 Workflow。`TopicCreationRequests` 在日常聊天按来源 Session 查询、在主题导航按 Friend 查询 `GET /api/long-agents/:id/topics/creations`，恢复既有 Run/审核/产物；不重新 POST。创建身份保存在 Backend 原有 Run binding，审核和执行状态仍归 Workflow。组件复用 `PlanReviewCard` 与现有 review/cancel API，可反复修改、批准当前版或取消；刷新/断线保留原执行引用，失败保留已读内容。日常聊天创建完成后提供“进入会话”，面板内批准后打开产物。
+
+会话记忆按 purpose 分组，编辑内容与分类通过 supersede + revision CAS；冲突保留草稿。补充整合单独读取所选父节点的锚点，经用户确认提交；relay 的接受与执行状态分开显示。辅助读取失败不能清空聊天历史。
+
+验证入口为 `lib/topics-browser.test.mjs`、`lib/topic-creation.test.mjs`、`lib/topic-node-execution.test.mjs` 和父仓库 `scripts/topics-browser.test.mjs`。浏览器场景覆盖日常发起、两次修订、审核刷新/断线/批准/取消、创建后进入会话、节点发送/工具/停止、运行中重连、记忆 CAS、补充整合、锚点分叉与视口/缩放。精确运行结果见父仓库[纠偏方案](../../docs/development/topic-mode-correction-plan.md)与收口报告。
 
 ## 旧链接与历史（P5）
 

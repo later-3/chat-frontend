@@ -266,6 +266,7 @@ export function ProjectLongAgentSection({
                   <button
                     type="button"
                     className={`${styles.agentButton}${selected ? ` ${styles.selected}` : ""}`}
+                    data-long-agent-open={agent.id}
                     onClick={() => void handleOpen(agent)}
                     disabled={openingAgentId !== null || !agent.available || state === "disabled"}
                     aria-current={selected ? "page" : undefined}

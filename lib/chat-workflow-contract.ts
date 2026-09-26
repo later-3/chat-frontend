@@ -68,6 +68,8 @@ export interface ChatWorkflowPromptInput {
   readonly sessionId?: string;
   readonly workflow: ChatWorkflowId;
   readonly agentConfigs?: Readonly<Record<string, AgentConfigSelection>>;
+  /** Send-time switch for the Workflow's LAST node: "off" runs this round without writing session memory. */
+  readonly sessionMemory?: "on" | "off";
 }
 
 export interface ChatWorkflowResult {
@@ -267,6 +269,7 @@ export function parseChatWorkflowPromptInput(value: unknown): ChatWorkflowPrompt
     ...(images === undefined ? {} : { images }),
     ...(value.sessionId === undefined ? {} : { sessionId: value.sessionId }),
     ...(value.agentConfigs === undefined ? {} : { agentConfigs }),
+    ...(value.sessionMemory === undefined ? {} : { sessionMemory: value.sessionMemory as "on" | "off" }),
   };
 }
 

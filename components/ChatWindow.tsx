@@ -5,7 +5,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, use
 import type { AgentMessage, AssistantContentBlock, AssistantMessage, BashExecutionMessage, BlockingExtensionUiRequest, CustomMessage, ExtensionUiRequest, SessionInfo, SessionTreeNode, ToolResultMessage, UserMessage } from "@/lib/types";
 import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
-import { getAssistantErrorMessage, getDisplayableAssistantBlocks, splitFinalAssistantBlocks } from "@/lib/message-display";
+import { getAssistantErrorMessage, getDisplayableAssistantBlocks, splitFinalAssistantBlocks, findFinalAssistantIndex, isSessionMemoryResponse } from "@/lib/message-display";
 import { extractTurnWrittenFiles, type WrittenFile } from "@/lib/turn-written-files";
 import { summarizeTurn } from "@/lib/turn-summary";
 import { TurnSummary } from "./TurnSummary";
@@ -22,7 +22,12 @@ import { usePushNotifications } from "@/hooks/usePushNotifications";
 import type { SessionStatsInfo } from "@/lib/pi-types";
 import type { PlanReview } from "@/lib/chat-workflow-events";
 import type { PlanReviewDecisionInput } from "@/lib/chat-workflow-browser";
+import type { TopicNodeTarget } from "@/lib/topic-node-execution";
 import { MarkdownBody } from "./MarkdownBody";
+import { PlanReviewCard } from "./PlanReviewCard";
+import { SessionMemoryPanel } from "./SessionMemoryPanel";
+import { SurfaceDialog } from "./SurfaceDialog";
+import { TopicCreationRequests } from "./TopicCreationRequests";
 import {
   captureScrollDistance,
   getNextVisibleCount,
@@ -42,6 +47,8 @@ interface Props {
   interactionRevision?: number;
   /** Non-null when a new Friend private turn must be refused (association loading/unavailable). */
   contextBlockedReason?: string | null;
+  /** Topic node target: sends go through the node route, everything else uses the shared Session surface. */
+  topicNode?: TopicNodeTarget;
   session: SessionInfo | null;
   sessionRunning?: boolean;
   newSessionCwd: string | null;
@@ -70,23 +77,6 @@ interface Props {
 
 const CHAT_MINIMAP_WIDTH = 36;
 const CHAT_COLUMN_PADDING = 16;
-
-function hasFinalAssistantAnswer(message: AgentMessage): boolean {
-  if (message.role !== "assistant") return false;
-  return splitFinalAssistantBlocks(message as AssistantMessage).answerBlocks.some((block) => (
-    block.type === "image" || (block.type === "text" && block.text.trim().length > 0)
-  ));
-}
-
-function findFinalAssistantIndex(messages: AgentMessage[], userIdx: number, endIdx: number): number {
-  for (let candidateIdx = endIdx - 1; candidateIdx > userIdx; candidateIdx--) {
-    if (hasFinalAssistantAnswer(messages[candidateIdx])) return candidateIdx;
-  }
-  for (let candidateIdx = endIdx - 1; candidateIdx > userIdx; candidateIdx--) {
-    if (messages[candidateIdx]?.role === "assistant") return candidateIdx;
-  }
-  return -1;
-}
 
 function getUserInputText(message: AgentMessage): string | null {
   if (message.role !== "user") return null;
@@ -123,6 +113,9 @@ function isGroupAnchor(message: AgentMessage): boolean {
     "compaction",
     "chat.plan_review_decision",
     "chat.plan_review_feedback",
+    // A memory failure must be plainly visible, never folded into a collapsed turn summary: it is the
+    // only signal that this round's memory was not written.
+    "chat.session_memory_notice",
   ].includes((message as CustomMessage).customType);
 }
 
@@ -136,104 +129,11 @@ function withAssistantBlocks(
   return next;
 }
 
-function PlanReviewCard({
-  review,
-  submitting,
-  onDecision,
-}: {
-  review: PlanReview;
-  submitting: boolean;
-  onDecision: (decision: PlanReviewDecisionInput) => Promise<void>;
-}) {
-  const { t } = useI18n();
-  const [feedback, setFeedback] = useState("");
-  const trimmedFeedback = feedback.trim();
-  const needsClarification = review.readiness === "needs_clarification";
-  const title = t(needsClarification ? "chat.planClarificationTitle" : "chat.planReviewTitle", {
-    revision: review.planRevision,
-  });
-  return (
-    <section
-      aria-label={title}
-      style={{
-        margin: "14px 0 18px",
-        padding: 16,
-        border: "1px solid color-mix(in srgb, var(--accent) 42%, var(--border))",
-        borderRadius: 12,
-        background: "color-mix(in srgb, var(--accent) 5%, var(--bg-secondary))",
-      }}
-    >
-      <div style={{ marginBottom: 10, color: "var(--text)", fontSize: 14, fontWeight: 650 }}>
-        {title}
-      </div>
-      <div style={{ marginBottom: 10, color: "var(--text-muted)", fontSize: 12, lineHeight: 1.5 }}>
-        {t(needsClarification ? "chat.planClarificationHint" : "chat.planReviewHint")}
-      </div>
-      {needsClarification && (
-        <div style={{ marginBottom: 12, padding: "10px 12px", border: "1px solid color-mix(in srgb, var(--warning, #d97706) 38%, var(--border))", borderRadius: 8, background: "color-mix(in srgb, var(--warning, #d97706) 7%, var(--bg-primary))" }}>
-          <div style={{ marginBottom: 6, color: "var(--text)", fontSize: 12, fontWeight: 650 }}>
-            {t("chat.planBlockingQuestions")}
-          </div>
-          <ol style={{ margin: 0, paddingLeft: 20, color: "var(--text-muted)", fontSize: 12, lineHeight: 1.6 }}>
-            {review.blockingQuestions.map((question) => <li key={question}>{question}</li>)}
-          </ol>
-        </div>
-      )}
-      <div className="markdown-body" style={{ maxHeight: 360, overflow: "auto", padding: "0 2px 6px" }}>
-        <MarkdownBody>{review.plan}</MarkdownBody>
-      </div>
-      <label style={{ display: "block", marginTop: 12, color: "var(--text-muted)", fontSize: 12 }}>
-        {t(needsClarification ? "chat.planClarificationFeedback" : "chat.planReviewFeedback")}
-        <textarea
-          value={feedback}
-          onChange={(event) => setFeedback(event.target.value)}
-          disabled={submitting}
-          placeholder={t(needsClarification
-            ? "chat.planClarificationFeedbackPlaceholder"
-            : "chat.planReviewFeedbackPlaceholder")}
-          rows={3}
-          maxLength={20_000}
-          style={{
-            display: "block",
-            width: "100%",
-            marginTop: 7,
-            padding: "9px 10px",
-            resize: "vertical",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            background: "var(--bg-primary)",
-            color: "var(--text)",
-            font: "inherit",
-            lineHeight: 1.5,
-          }}
-        />
-      </label>
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10 }}>
-        <button
-          type="button"
-          disabled={submitting || trimmedFeedback === ""}
-          onClick={() => void onDecision({ kind: "request_revision", feedback })}
-          style={{ padding: "7px 12px", border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg-primary)", color: "var(--text)", cursor: submitting || trimmedFeedback === "" ? "not-allowed" : "pointer", opacity: trimmedFeedback === "" ? 0.55 : 1 }}
-        >
-          {t(needsClarification ? "chat.submitPlanClarification" : "chat.requestPlanRevision")}
-        </button>
-        {!needsClarification && (
-          <button
-            type="button"
-            disabled={submitting}
-            onClick={() => void onDecision({ kind: "approve" })}
-            style={{ padding: "7px 12px", border: "1px solid var(--accent)", borderRadius: 8, background: "var(--accent)", color: "white", cursor: submitting ? "wait" : "pointer" }}
-          >
-            {submitting ? t("chat.submittingPlanReview") : t("chat.approveAndExecute")}
-          </button>
-        )}
-      </div>
-    </section>
-  );
-}
-
-export function ChatWindow({ projectId, deviceId, contextProjectId, interactionRevision, contextBlockedReason, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onConnectionFailure, soundEnabled = true, onSoundToggle, playDoneSound = () => {}, unlockAudio }: Props) {
+export function ChatWindow({ projectId, deviceId, contextProjectId, interactionRevision, contextBlockedReason, topicNode, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onConnectionFailure, soundEnabled = true, onSoundToggle, playDoneSound = () => {}, unlockAudio }: Props) {
   const { t, locale } = useI18n();
+  // The session-memory bar: one view button and the ONE switch the owner sets before sending.
+  const [memoryOpen, setMemoryOpen] = useState(false);
+  const [memoryCount, setMemoryCount] = useState(0);
   const { pushStatus, onPushToggle } = usePushNotifications(locale);
   const isMobile = useIsMobile();
   const readOnly = session?.readOnly === true;
@@ -275,8 +175,9 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
     handleBuiltinSlashCommand,
     loadSlashCommands,
     setWorkflowId, setWorkflowAgentConfigs,
+    memoryEnabled, setMemoryEnabled,
   } = useAgentSession({
-    projectId, deviceId, contextProjectId, interactionRevision, contextBlockedReason, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd: wrappedOnAgentEnd, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked,
+    projectId, deviceId, contextProjectId, interactionRevision, contextBlockedReason, topicNode, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd: wrappedOnAgentEnd, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked,
     chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsPanelOpen,
     onConnectionFailure,
   });
@@ -437,7 +338,23 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
     autoScrollRef.current?.update(activityKey);
   }, [activityKey, isEmptyNew, loading, error]);
 
-  const chatInputElement = readOnly ? (
+  const memoryStorageProjectId = longAgentId ?? projectId;
+  const memorySessionId = session?.id ?? sessionIdRef.current ?? null;
+  const sessionMemoryBar = !readOnly && memorySessionId !== null ? (
+    <div className="flex items-center gap-2 px-4 pb-1 text-[11px] text-text-muted" data-session-memory-bar>
+      <button type="button" className="rounded border border-border px-2 py-0.5 hover:bg-bg-secondary" data-session-memory-open
+        onClick={() => setMemoryOpen(true)}>
+        {t("topics.memoryPanel")}{memoryCount === 0 ? "" : ` · ${String(memoryCount)}`}
+      </button>
+      <label className="flex cursor-pointer items-center gap-1">
+        <input type="checkbox" checked={memoryEnabled} data-session-memory-toggle
+          onChange={(event) => setMemoryEnabled(event.target.checked)} />
+        记录会话记忆
+      </label>
+    </div>
+  ) : null;
+
+  const chatInputElement = <>{sessionMemoryBar}{readOnly ? (
     <div
       role="note"
       style={{
@@ -494,7 +411,7 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
       draftKey={composerDraftKey(session?.id, session?.owner.type === "long-agent", contextProjectId, newSessionDraftKey, deviceId, projectId)}
       cwd={session?.cwd ?? newSessionCwd}
     />
-  );
+  )}</>;
 
   if (loading) {
     return (
@@ -522,6 +439,11 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {memoryOpen && memorySessionId !== null && (
+        <SurfaceDialog title={t("topics.memoryPanel")} onClose={() => setMemoryOpen(false)}>
+          <SessionMemoryPanel storageProjectId={memoryStorageProjectId} sessionId={memorySessionId} onCount={setMemoryCount} />
+        </SurfaceDialog>
+      )}
       {isDragOver && (
         <div className="pointer-events-none absolute inset-0 z-50 flex animate-[drop-zone-in_0.15s_ease_both] items-center justify-center bg-[rgba(37,99,235,0.06)] backdrop-blur-[1px]">
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -682,7 +604,7 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
                     cwd={messageCwd}
                     onOpenFile={onOpenFile}
                     entryId={entryIds[idx]}
-                    onFork={readOnly || sessionBusy || isNew || (idx === 0 && msg.role === "user") ? undefined : handleFork}
+                    onFork={readOnly || sessionBusy || isNew || longAgentId !== null || (idx === 0 && msg.role === "user") ? undefined : handleFork}
                     forking={forkingEntryId === entryIds[idx]}
                     onNavigate={readOnly || sessionBusy ? undefined : handleNavigate}
                     prevAssistantEntryId={readOnly || sessionBusy ? undefined : prevAssistantEntryId}
@@ -750,9 +672,10 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
 
                 rendered.push(renderMessage(userIdx));
 
+                const memoryRound = messages.slice(userIdx + 1, endIdx).some(isSessionMemoryResponse);
                 const processIndices: number[] = [];
-                for (let processIdx = userIdx + 1; processIdx < finalAssistantIdx; processIdx++) {
-                  processIndices.push(processIdx);
+                for (let processIdx = userIdx + 1; processIdx < (memoryRound ? endIdx : finalAssistantIdx); processIdx++) {
+                  if (processIdx !== finalAssistantIdx) processIndices.push(processIdx);
                 }
                 const visibleProcessIndices = processIndices.filter((processIdx) => hasDisplayableProcessMessage(messages[processIdx]));
                 const finalAssistant = messages[finalAssistantIdx] as AssistantMessage;
@@ -787,7 +710,7 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
                   const writtenFiles = extractTurnWrittenFiles(turnContent, toolResultsMap, messageCwd);
                   rendered.push(renderMessage(finalAssistantIdx, { messageOverride: finalAnswerMessage, writtenFiles }));
                 }
-                for (let renderIdx = finalAssistantIdx + 1; renderIdx < endIdx; renderIdx++) {
+                for (let renderIdx = finalAssistantIdx + 1; !memoryRound && renderIdx < endIdx; renderIdx++) {
                   rendered.push(renderMessage(renderIdx));
                 }
                 rendered.push(<div key={`turn-summary-${userIdx}-${finalAssistantIdx}`}
@@ -809,6 +732,12 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
                     </div>
                   )}
                   {rendered.slice(startIndex)}
+                  {/* Session-memory notices are rendered on their own: they are the only signal that a
+                      round's memory was not written, so turn folding must never swallow them. */}
+                  {messages.flatMap((message, index) => message.role === "custom"
+                    && (message as CustomMessage).customType === "chat.session_memory_notice"
+                    ? [<MessageView key={`session-memory-notice-${String(index)}`} message={message} cwd={messageCwd} onOpenFile={onOpenFile} />]
+                    : [])}
                 </>
               );
             })()}
@@ -823,6 +752,11 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
                 )}
                 <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming cwd={messageCwd} onOpenFile={onOpenFile} />
               </div>
+            )}
+
+            {longAgentId && !topicNode && (session?.id ?? sessionIdRef.current) && (
+              <TopicCreationRequests key={`${longAgentId}:${session?.id ?? sessionIdRef.current}`}
+                longAgentId={longAgentId} sourceSessionId={session?.id ?? sessionIdRef.current ?? undefined} />
             )}
 
             {planReview && (
