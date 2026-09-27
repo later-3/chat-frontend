@@ -161,6 +161,7 @@ export function AppShell({
   const { locale, setLocale, t: translate, supportedLocales } = useI18n();
   const isMobile = useIsMobile();
   const isNarrowMobile = useIsNarrowMobile();
+  const sidebarUsesOverlay = isMobile || viewportWidth < 960;
   useVisualViewport(); // CSS owns the resting viewport; JS adapts only to the keyboard.
   // Audio ownership lives here (not in ChatWindow) so the completion tone can
   // also fire for tasks finishing in a non-active workspace whose ChatWindow
@@ -273,11 +274,11 @@ export function AppShell({
   });
   const reclampSidebarWidth = sidebarResizer.reclampWidth;
   const reclampRightPanelWidth = rightPanelResizer.reclampWidth;
-  // On mobile the sidebar is an overlay drawer; hide it by default so the chat
-  // is visible on load. Runs once the breakpoint resolves after hydration.
+  // Every overlay breakpoint starts with the conversation exposed. Selecting a
+  // different session also closes the drawer; ordinary refreshes keep its state.
   useEffect(() => {
-    if (isMobile) setSidebarOpen(false);
-  }, [isMobile]);
+    if (sidebarUsesOverlay) setSidebarOpen(false);
+  }, [sidebarUsesOverlay, selectedSession?.id]);
   useEffect(() => {
     if (viewportWidth < 960 && rightPanelOpen) setSidebarOpen(false);
   }, [viewportWidth, rightPanelOpen]);
@@ -1617,7 +1618,7 @@ export function AppShell({
   };
 
   const rightPanelOverlay = isMobile || viewportWidth < 960 || viewportWidth - 64 - (sidebarOpen ? 225 : 0) - 321 < 480;
-  const sidebarModal = sidebarOpen && (isMobile || viewportWidth < 960) && !settingsVisible && workspaceView === "chat";
+  const sidebarModal = sidebarOpen && sidebarUsesOverlay && !settingsVisible && workspaceView === "chat";
   const detailsModal = rightPanelOpen && rightPanelOverlay && !settingsVisible && workspaceView === "chat";
   const sidebarFocusRef = useDialogFocus(() => setSidebarOpen(false), sidebarModal);
   const detailsFocusRef = useDialogFocus(() => setRightPanelOpen(false), detailsModal);

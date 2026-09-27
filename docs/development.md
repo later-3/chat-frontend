@@ -45,11 +45,11 @@ Fork 通过 `lib/session-fork-browser.ts` 调用 `POST /api/sessions/:id/fork`�
 
 Session列表与Session详情中的`session.owner`是导航和发送链共用的唯一归属事实。Frontend运行时合同必须接受且严格校验`{ type: "ordinary" }`或`{ type: "long-agent", longAgentId, projectLongAgentId }`，并直接用该值选择面板与发送API。Long Agent列表只用于展示 Friend 和配置/运行状态，不得异步用`primarySessionId`反推Session归属；也不得根据消息内容猜测，或在Hook/组件中维护第二份映射。`owner`缺失、非法或无法解析时必须停止发送并告警/重新加载，不得默认当成Workflow Session继续执行。
 
-全局“Friend”的设置及右侧“Friend 资料 → 管理这位 Friend”打开同一个 Long Agent 配置页，管理的是跨Project持续的Personal `LongAgent`与其一对一映射的NanoClaw Agent Group；`ProjectLongAgent`为当前 Home 日历会话投影，历史归属另由完整日历与迁移记录提供。配置共九个栏目，其中运行策略、Agent Group、Agent Memory 的来源如下；任务、职责、交付、活动按各自领域 API 管理，群聊管理成员和权限并进入群工作区，主题提供统一工作区入口。任务使用 `friend-tasks.ts` 的 schema 2 同源 API，活动读取既有活动/动态 API：
+全局“Friend”的设置及右侧“Friend 资料 → 管理这位 Friend”打开同一个 Long Agent 配置页，管理的是跨Project持续的Personal `LongAgent`与其一对一映射的NanoClaw Agent Group；`ProjectLongAgent`为当前 Home 日历会话投影，历史归属另由完整日历与迁移记录提供。配置共四个栏目：助手设置、长期任务、定时任务、助手记忆。朋友圈、群聊、主题使用全局入口，任务成果位于对应任务详情；内部 Duty、Artifact、Agent Group 不成为额外顶层栏目。定时任务使用 `friend-tasks.ts` 的 schema 2 同源 API，助手设置合并展示下列两种来源但分别保存：
 
-1. “运行策略”编辑Chat Personal配置中的显示别名、列表摘要、全局启停、默认Project、Model、Thinking Level、System Prompt/自定义Prompt、Tools和Resources；这里的别名不是Agent运行身份。
-2. “Agent Group”编辑NanoClaw拥有的运行身份名称和Standing Instructions，并只读展示稳定Group ID、Workspace安全摘要、核心Memory快照、revision和stale状态。
-3. “Agent Memory”管理该Agent Group自己的OKF Markdown文件，支持列表、搜索、打开、新建、编辑和确认删除。
+1. “助手设置”的运行配置编辑Chat Personal配置中的显示别名、列表摘要、全局启停、默认Project、Model、Thinking Level、System Prompt/自定义Prompt、Tools和Resources；这里的别名不是Agent运行身份。
+2. 同页的身份与长期指令编辑NanoClaw拥有的运行身份名称和Standing Instructions，并只读展示稳定Group ID、Workspace安全摘要、核心Memory快照、revision和stale状态。
+3. “助手记忆”管理该Agent Group自己的OKF Markdown文件，支持列表、搜索、打开、新建、编辑和确认删除。
 
 Agent Group与Agent Memory通过Backend的安全投影进入浏览器。Frontend不得直接读取NanoClaw目录或数据库，也不得接收宿主机绝对路径、Telegram Credential、服务Credential、事件游标、Nano容器Provider或容器运行状态。Workspace与Memory路径只能是拒绝绝对路径、反斜杠、`.`和`..`段的相对路径。所有保存按内容revision做乐观并发保护；`409`必须保留或明确处理页面草稿，不能自动覆盖新版本。Chat运行策略、Agent Group和Agent Memory配置均从下一轮Long Agent对话开始装配，页面不提供含义模糊的Agent进程操作。
 
