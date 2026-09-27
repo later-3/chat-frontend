@@ -444,3 +444,11 @@
     transition: none;
   }
 }
+
+.maintenance { position: relative; color: var(--text-muted); font-size: 13px; }
+.maintenance summary { cursor: pointer; min-height: 36px; display: flex; align-items: center; padding: 0 12px; border-radius: var(--radius-control); border: 1px solid var(--border); }
+.maintenance[open] > button { position: absolute; z-index: 2; right: 0; top: calc(100% + 8px); min-width: 200px; box-shadow: var(--shadow-popover); background: var(--bg-panel); }
+.header { min-height: 64px; }.titleGroup h1 { font-size: 20px; }
+.button, .primaryButton, .dangerButton, .iconButton { min-height: 36px; font-size: 13px; border-radius: var(--radius-control); }
+.input, .select, .textarea, .searchBox input { font-size: 14px; }
+@media(max-width:768px) { .maintenance summary, .iconButton, .button, .primaryButton, .dangerButton { min-height:44px; } .input,.select,.textarea,.searchBox input {font-size:16px;} }

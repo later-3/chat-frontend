@@ -24,6 +24,8 @@ export async function acceptTopicNodeMessage(
   target: TopicNodeTarget,
   input: {
     requestId: string;
+    workflow?: string;
+    sessionMemory?: "off";
     text: string;
     images?: { type: "image"; data: string; mimeType: string }[];
   },

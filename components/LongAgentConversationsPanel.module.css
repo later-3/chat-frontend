@@ -89,8 +89,8 @@
 }
 
 .danger {
-  border-color: #d9534f;
-  color: #d9534f;
+  border-color: var(--danger);
+  color: var(--danger);
   align-self: flex-start;
 }
 
@@ -181,10 +181,10 @@
 }
 
 .hint {
-  color: var(--muted, #8a8a8a);
+  color: var(--text-muted);
   font-size: 0.85rem;
 }
 
 .error {
-  color: #d9534f;
+  color: var(--danger);
 }

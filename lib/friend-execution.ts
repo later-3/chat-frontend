@@ -2,12 +2,15 @@ import { parseAgentEvent, type ChatRunEvent } from "./chat-workflow-events.ts";
 import { consumeExecutionStream } from "./execution-stream.ts";
 import {
   workflowRequestSignal,
+  resumeChatWorkflowRun,
+  followAcceptedChatWorkflowRun,
   WorkflowTerminalError,
   type WorkflowConnectionUpdate,
 } from "./chat-workflow-browser.ts";
 import type { AgentMessage } from "./types";
 
 export interface FriendExecution {
+  workflow?: { id: string; invocationId: string; runId?: string };
   schemaVersion: 1;
   kind: "friend";
   id: string;
@@ -50,6 +53,9 @@ export function parseFriendExecution(v: unknown): FriendExecution {
     )
   )
     throw new FriendContractError("无效Friend执行状态");
+  if (v.workflow !== undefined && (!record(v.workflow) || typeof v.workflow.id !== "string"
+    || typeof v.workflow.invocationId !== "string" || (v.workflow.runId !== undefined && typeof v.workflow.runId !== "string")))
+    throw new FriendContractError("无效Workflow执行绑定");
   return v as unknown as FriendExecution;
 }
 function parseFriendAgentEvent(value: unknown) {
@@ -88,6 +94,7 @@ export async function acceptFriendMessage(
   longAgentId: string,
   input: {
     requestId: string;
+    workflow?: string;
     sessionId?: string;
     contextProjectId?: string | null;
     /** Association revision the client last read; the Backend freezes the project from it. */
@@ -123,6 +130,7 @@ export async function followFriendExecution(
   },
 ) {
   let seq = 0;
+  let finishedRunId: string | undefined;
   for (;;) {
     signal.throwIfAborted();
     try {
@@ -136,6 +144,35 @@ export async function followFriendExecution(
         current.projectId !== ref.projectId
       )
         throw new FriendContractError("执行快照归属不一致");
+      if (current.workflow !== undefined && ["queued", "running"].includes(current.status)) {
+        callbacks.status(current);
+        if (current.workflow.runId === undefined) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          continue;
+        }
+        if (finishedRunId !== current.workflow.runId) {
+          const follow = ref.workflow?.runId === undefined ? followAcceptedChatWorkflowRun : resumeChatWorkflowRun;
+          if (ref.workflow?.runId !== undefined) {
+            const snapshot = parseSnapshot(value.snapshot);
+            callbacks.snapshot(snapshot);
+            callbacks.roundPhase?.(snapshot.roundPhase);
+          }
+          try {
+            await follow({ runId: current.workflow.runId,
+              workflowInvocationId: current.workflow.invocationId, projectId: current.projectId },
+              signal, callbacks.event, callbacks.connection);
+          } catch (error) {
+            // The SDK may cancel/fail before the owner receipt and topic marker are projected. Keep
+            // observing that receipt; finishing the UI here would briefly restore a still-running turn.
+            if (!(error instanceof WorkflowTerminalError)) throw error;
+          }
+          finishedRunId = current.workflow.runId;
+        }
+        // Runtime completion precedes the small durable receipt/anchor projection. Do not report the
+        // node settled until the Backend has published that outcome.
+        await new Promise(resolve => setTimeout(resolve, 50));
+        continue;
+      }
       const snapshot = parseSnapshot(value.snapshot);
       seq = snapshot.seq;
       callbacks.snapshot(snapshot);

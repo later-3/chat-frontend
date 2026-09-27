@@ -1,20 +1,20 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#FFFFFF" />
-    <title>Chat 当前离线</title>
+    <meta name="theme-color" content="#FAF9F7" />
+    <title>Chat is offline</title>
     <style>
       :root {
         color-scheme: light;
-        --bg:#FFFFFF; --text:#20242C; --text-muted:#596273; --bg-panel:#F7F8FA; --border:#D8DDE6; --accent:#245FD6; --bg-hover:#EEF1F5;
+        --bg:#FAF9F7; --text:#29272E; --text-muted:#605C69; --bg-panel:#F2F1EE; --border:#DBD7DF; --accent:#6551B8; --bg-hover:#EAE8E5;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         background: var(--bg);
         color: var(--text);
       }
 
-      :root[data-theme="dark"] { color-scheme:dark; --bg:#181A1E; --text:#E8EBF0; --text-muted:#ADB6C5; --bg-panel:#202329; --border:#383F4B; --accent:#8AB4FF; --bg-hover:#2B3039; }
+      :root[data-theme="dark"] { color-scheme:dark; --bg:#1C1B20; --text:#EEEDF2; --text-muted:#BDB7C8; --bg-panel:#242329; --border:#423D4B; --accent:#BEB0FF; --bg-hover:#302E36; }
       * {
         box-sizing: border-box;
       }
@@ -81,7 +81,7 @@
         try { preference = localStorage.getItem("pi-theme") || "auto"; } catch {}
         const dark = preference === "dark" || preference !== "light" && systemTheme.matches;
         document.documentElement.dataset.theme = dark ? "dark" : "light";
-        document.querySelector('meta[name="theme-color"]').content = dark ? "#181A1E" : "#FFFFFF";
+        document.querySelector('meta[name="theme-color"]').content = dark ? "#1C1B20" : "#FAF9F7";
       }
       applyTheme();
       systemTheme.addEventListener("change", applyTheme);
@@ -90,9 +90,23 @@
   <body>
     <main>
       <img src="/lifeos-astronaut-192x192.png" alt="" />
-      <h1>Chat 当前离线</h1>
-      <p>请恢复网络连接后重试。</p>
-      <button type="button" onclick="location.reload()">重新连接</button>
+      <h1 id="offline-title">Chat is offline</h1>
+      <p id="offline-description">Reconnect to the internet and try again.</p>
+      <button id="offline-reconnect" type="button" onclick="location.reload()">Reconnect</button>
     </main>
+    <script>
+      function applyLanguage() {
+        let locale = "en";
+        try { if (localStorage.getItem("pi-locale") === "zh-CN") locale = "zh-CN"; } catch {}
+        const chinese = locale === "zh-CN";
+        document.documentElement.lang = locale;
+        document.title = chinese ? "Chat 当前离线" : "Chat is offline";
+        document.getElementById("offline-title").textContent = document.title;
+        document.getElementById("offline-description").textContent = chinese ? "请恢复网络连接后重试。" : "Reconnect to the internet and try again.";
+        document.getElementById("offline-reconnect").textContent = chinese ? "重新连接" : "Reconnect";
+      }
+      applyLanguage();
+      window.addEventListener("storage", applyLanguage);
+    </script>
   </body>
 </html>

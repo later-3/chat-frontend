@@ -1,8 +1,13 @@
+
+import { InterfaceFeedback } from "./InterfaceFeedback";
+
+import { useI18n } from "@/hooks/useI18n";
 import { useEffect, useMemo, useState } from "react";
 import { SurfaceDialog } from "./SurfaceDialog";
 import { fetchChatTools, type ChatToolCatalogEntry, type ChatToolsResponse } from "@/lib/tools-browser";
 
 export function ToolsConfig({ projectId, onClose }: { readonly projectId: string; readonly onClose: () => void }) {
+  const { t: tr } = useI18n();
   const [tools, setTools] = useState<readonly ChatToolCatalogEntry[]>([]);
   const [diagnostics, setDiagnostics] = useState<ChatToolsResponse["diagnostics"]>([]);
   const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
@@ -41,33 +46,33 @@ export function ToolsConfig({ projectId, onClose }: { readonly projectId: string
     return [...byAgent.values()];
   }, [selected]);
 
-  return <SurfaceDialog title="Tools" description={`当前 Project · ${projectId} · 可用工具目录，实际启用由 Agent 配置决定`} onClose={onClose}>
-    {error && <div className="surface-notice surface-error" role="alert">工具目录读取失败：{error} <button onClick={() => setRevision(value => value + 1)}>重试</button></div>}
-    {diagnostics.length > 0 && <details className="surface-notice surface-warning"><summary>部分扩展未加载 · {diagnostics.length} 条诊断，可用工具仍可浏览</summary>
+  return <SurfaceDialog title={tr("interface.tools")} description={tr("tools.scopeHint", { project: projectId })} onClose={onClose}>
+    {error && <div className="surface-notice surface-error" role="alert">{tr("interface.unable.to.load.tools")}<InterfaceFeedback message={error} /> <button onClick={() => setRevision(value => value + 1)}>{tr("interface.retry")}</button></div>}
+    {diagnostics.length > 0 && <details className="surface-notice surface-warning"><summary>{tr("interface.some.extensions.did.not.load")}{diagnostics.length}{tr("interface.diagnostics.available.tools.can.still.be.browsed")}</summary>
       {diagnostics.map((item, index) => <p key={`${item.path}:${index}`}>{item.message}</p>)}
     </details>}
     <div className={`catalog-layout${detailOpen ? " catalog-detail-open" : ""}`}>
-      <nav className="catalog-list" aria-label="工具目录">
-        <label className="catalog-search">搜索工具<input value={query} onChange={event => setQuery(event.target.value)} placeholder="名称或用途" /></label>
-        {loading && <p className="surface-empty" role="status">正在读取工具…</p>}
-        {!loading && !error && visible.length === 0 && <p className="surface-empty">没有匹配的工具</p>}
+      <nav className="catalog-list" aria-label={tr("interface.tool.catalog")}>
+        <label className="catalog-search">{tr("interface.search.tools")}<input value={query} onChange={event => setQuery(event.target.value)} placeholder={tr("interface.name.or.purpose")} /></label>
+        {loading && <p className="surface-empty" role="status">{tr("interface.loading.tools")}</p>}
+        {!loading && !error && visible.length === 0 && <p className="surface-empty">{tr("interface.no.matching.tools")}</p>}
         {visible.map(tool => <button key={tool.address} type="button" className="catalog-item" aria-current={selectedAddress === tool.address ? "true" : undefined}
           onClick={() => { setSelectedAddress(tool.address); setDetailOpen(true); }}>
           <strong>{tool.name}</strong><small>{tool.label}</small>
         </button>)}
       </nav>
       <main className="catalog-detail">
-        <button type="button" className="catalog-back workspace-button" onClick={() => setDetailOpen(false)}>返回工具列表</button>
+        <button type="button" className="catalog-back workspace-button" onClick={() => setDetailOpen(false)}>{tr("interface.back.to.tools")}</button>
         {selected && <>
           <h2>{selected.label}</h2><p className="surface-meta">{selected.name} · {selected.sourceInfo.scope} / {selected.sourceInfo.source}</p>
           <p>{selected.description}</p>
-          <dl className="surface-facts"><dt>风险</dt><dd>{selected.risk === "read-only" ? "只读" : selected.risk === "write" ? "可写入" : selected.risk === "destructive" ? "含删除等操作" : "未声明"}</dd><dt>权限</dt><dd>{selected.permissions.join("、") || "未声明"}</dd></dl>
-          <section><h3>Workflow Agent 使用关系</h3><p className="surface-meta">配置结果，不代表工具正在执行。Friend 的实际工具请在其配置中检查。</p>
-            {consumers.length === 0 ? <p>没有已声明的使用关系。</p> : <ul className="surface-records">{consumers.map(consumer => <li key={`${consumer.workflowId}/${consumer.agentId}`}>
-              <div><strong>{consumer.agentId}</strong><small>{consumer.workflowId}</small></div><span>{consumer.enabled ? "启用" : "禁用"} · {consumer.source === "project-config" ? "项目配置" : "默认"}</span>
+          <dl className="surface-facts"><dt>{tr("interface.risk")}</dt><dd>{selected.risk === "read-only" ? tr("interface.read.only") : selected.risk === "write" ? tr("interface.can.write") : selected.risk === "destructive" ? tr("interface.includes.destructive.actions") : tr("interface.not.declared")}</dd><dt>{tr("interface.permissions")}</dt><dd>{selected.permissions.join("、") || tr("interface.not.declared")}</dd></dl>
+          <section><h3>{tr("interface.workflow.agent.usage")}</h3><p className="surface-meta">{tr("interface.configured.usage.does.not.mean.a.tool.is.running.check.each.friend.s.settings.for.its.effective.tools")}</p>
+            {consumers.length === 0 ? <p>{tr("interface.no.configured.usage")}</p> : <ul className="surface-records">{consumers.map(consumer => <li key={`${consumer.workflowId}/${consumer.agentId}`}>
+              <div><strong>{consumer.agentId}</strong><small>{consumer.workflowId}</small></div><span>{consumer.enabled ? tr("interface.enabled") : tr("interface.disabled")} · {consumer.source === "project-config" ? tr("interface.project.configuration") : tr("interface.default")}</span>
             </li>)}</ul>}
           </section>
-          <details><summary>技术信息</summary><dl className="surface-facts"><dt>地址</dt><dd><code>{selected.address}</code></dd><dt>版本</dt><dd>{selected.toolVersion ?? selected.version?.contentHash ?? selected.version?.modifiedAt ?? "未提供"}</dd><dt>来源</dt><dd>{selected.sourceInfo.origin}</dd></dl></details>
+          <details><summary>{tr("interface.technical.details")}</summary><dl className="surface-facts"><dt>{tr("interface.address")}</dt><dd><code>{selected.address}</code></dd><dt>{tr("interface.version")}</dt><dd>{selected.toolVersion ?? selected.version?.contentHash ?? selected.version?.modifiedAt ?? tr("interface.not.provided")}</dd><dt>{tr("interface.source")}</dt><dd>{selected.sourceInfo.origin}</dd></dl></details>
         </>}
       </main>
     </div>

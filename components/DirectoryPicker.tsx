@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceFeedback } from "./InterfaceFeedback";
+
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
@@ -127,7 +129,7 @@ export function DirectoryPicker({ onCancel, onSelect, busy = false, error }: Pro
             id="directory-path"
             type="text"
             value={pathInput}
-            placeholder="/path/to/project or ~/project"
+            placeholder={t("interface..path.to.project.or.project")}
             autoFocus
             autoComplete="off"
             spellCheck={false}
@@ -189,7 +191,7 @@ export function DirectoryPicker({ onCancel, onSelect, busy = false, error }: Pro
             <div style={{ padding: 8, color: "var(--text-dim)", fontSize: 12 }}>{t("directoryPicker.noSubdirectories")}</div>
           )}
           {(loadError ?? error) !== null && (loadError ?? error) !== undefined && (
-            <div style={{ padding: "8px", color: "var(--danger)", fontSize: 12 }} role="alert">{loadError ?? error}</div>
+            <div style={{ padding: "8px", color: "var(--danger)", fontSize: 12 }} role="alert"><InterfaceFeedback message={loadError ?? error} /></div>
           )}
         </div>
 

@@ -1,7 +1,9 @@
 "use client";
 
+import { InterfaceFeedback } from "./InterfaceFeedback";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { IconPlus, IconRefresh, IconSettings } from "@tabler/icons-react";
+import { IconCalendar, IconPlus, IconRefresh, IconSettings } from "@tabler/icons-react";
 import { useLongAgentPresence } from "@/hooks/useLongAgentPresence";
 import { useI18n } from "@/hooks/useI18n";
 import {
@@ -11,7 +13,9 @@ import {
   startProjectLongAgent,
   type LongAgentSummary,
 } from "@/lib/long-agents-browser";
+import { friendDateFromUrl } from "@/lib/friend-calendar";
 import { FriendWorkPanel } from "./FriendWorkPanel";
+import { FriendCalendar } from "./FriendCalendar";
 import styles from "./ProjectLongAgentSection.module.css";
 import { LongAgentAvatarView } from "./LongAgentAvatar";
 import { LongAgentSettingsPanel } from "./LongAgentSettingsPanel";
@@ -23,7 +27,7 @@ interface Props {
   selectedLongAgentId?: string;
   visible?: boolean;
   refreshKey?: number;
-  onOpenSession: (sessionId: string, projectId: string) => void | Promise<void>;
+  onOpenSession: (sessionId: string, projectId: string, date?: string) => void | Promise<void>;
   onRequestClose?: () => void;
   closeAfterOpen?: boolean;
 }
@@ -46,12 +50,26 @@ export function ProjectLongAgentSection({
   const openVersion = useRef(0);
   useEffect(() => { openVersion.current += 1; }, [visible, selectedSessionId]);
   const [openingAgentId, setOpeningAgentId] = useState<string | null>(null);
+  const [openingNoticeId, setOpeningNoticeId] = useState<string | null>(null);
+  useEffect(() => {
+    setOpeningNoticeId(null);
+    if (openingAgentId === null) return;
+    const timer = window.setTimeout(() => setOpeningNoticeId(openingAgentId), 300);
+    return () => window.clearTimeout(timer);
+  }, [openingAgentId]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(() => friendDateFromUrl(window.location.href));
+  useEffect(() => {
+    const restore = () => setSelectedDate(friendDateFromUrl(window.location.href));
+    restore();
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
+  }, [selectedSessionId]);
+  const [calendarAgent, setCalendarAgent] = useState<LongAgentSummary | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createDraft, setCreateDraft] = useState({ id: "", name: "", description: "" });
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-
 
   const presence = useLongAgentPresence(visible && agents.length > 0, refreshKey ?? 0);
   const loadVersion = useRef(0);
@@ -142,6 +160,7 @@ export function ProjectLongAgentSection({
           }
         : item));
       await onOpenSession(started.primarySessionId, sessionProjectId);
+      setSelectedDate(null);
       if (closeAfterOpen) onRequestClose?.();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -215,7 +234,7 @@ export function ProjectLongAgentSection({
             disabled={creating} maxLength={500}
             onChange={(event) => setCreateDraft((draft) => ({ ...draft, description: event.target.value }))}
           /></label>
-          {createError && <p className={styles.inlineError} role="alert">{createError}</p>}
+          {createError && <p className={styles.inlineError} role="alert"><InterfaceFeedback message={createError} /></p>}
           <div>
             <button type="submit" disabled={creating || !createDraft.name.trim()}>
               {creating ? t("common.saving") : t("longAgent.createSubmit")}
@@ -243,7 +262,7 @@ export function ProjectLongAgentSection({
             <button type="button" disabled={creating} onClick={() => void enable()}>
               {creating ? t("common.saving") : t("longAgent.enable")}
             </button>
-            {createError && <p className={styles.inlineError} role="alert">{createError}</p>}
+            {createError && <p className={styles.inlineError} role="alert"><InterfaceFeedback message={createError} /></p>}
           </>}
         </div>
       ) : (
@@ -255,6 +274,7 @@ export function ProjectLongAgentSection({
               const primarySessionId = agent.project?.primarySessionId ?? null;
               const selected = agent.id === selectedLongAgentId || (primarySessionId !== null && primarySessionId === selectedSessionId);
               const opening = openingAgentId === agent.id;
+              const showOpening = opening && openingNoticeId === agent.id;
               const started = agent.project?.started === true;
               const action = selected
                 ? t("sidebar.longAgentCurrent")
@@ -262,13 +282,15 @@ export function ProjectLongAgentSection({
                   ? t("sidebar.longAgentDedicatedSession")
                   : t("sidebar.longAgentStartChat");
               return (
-                <li key={agent.id}>
+                <li key={agent.id} className={styles.agentRow}>
                   <button
                     type="button"
                     className={`${styles.agentButton}${selected ? ` ${styles.selected}` : ""}`}
                     data-long-agent-open={agent.id}
                     onClick={() => void handleOpen(agent)}
                     disabled={openingAgentId !== null || !agent.available || state === "disabled"}
+                    data-opening-blocked={openingAgentId !== null && agent.available && state !== "disabled" ? "true" : undefined}
+                    aria-busy={opening || undefined}
                     aria-current={selected ? "page" : undefined}
                     aria-label={t("sidebar.longAgentChatWith", { name: agent.name })}
                     title={agent.available
@@ -288,9 +310,12 @@ export function ProjectLongAgentSection({
                       <span className={styles.presenceLabel} data-state={state}>{stateLabel}</span>
                     </span>
                     <span className={`${styles.status}${selected ? ` ${styles.statusActive}` : ""}`}>
-                      {opening ? t("sidebar.longAgentOpening") : action}
+                      {showOpening ? t("sidebar.longAgentOpening") : action}
                     </span>
                   </button>
+                  <button type="button" className={styles.calendarButton} data-friend-calendar-open={agent.id}
+                    aria-label={t("friendCalendar.title", { name: agent.name })} title={t("friendCalendar.title", { name: agent.name })}
+                    onClick={() => setCalendarAgent(agent)}><IconCalendar size={18} aria-hidden="true" /></button>
                 </li>
               );
             })}
@@ -299,13 +324,19 @@ export function ProjectLongAgentSection({
       )}
 
       {activeAgent && selectedSessionId && <FriendWorkPanel key={activeAgent.id} agentId={activeAgent.id}
-        sessionId={selectedSessionId} projectId={contextProjectId} onOpenSession={async (id, ownerProjectId) => {
-          await onOpenSession(id, ownerProjectId);
+        sessionId={selectedSessionId} date={selectedDate} projectId={contextProjectId} onOpenSession={async (id, ownerProjectId, date) => {
+          await onOpenSession(id, ownerProjectId, date);
           if (closeAfterOpen) onRequestClose?.();
         }} />}
 
-      {error && agents.length > 0 && <p className={styles.inlineError} role="status">{error}</p>}
+      {error && agents.length > 0 && <p className={styles.inlineError} role="status"><InterfaceFeedback message={error} /></p>}
     </section>
+    {calendarAgent && <FriendCalendar key={calendarAgent.id} agentId={calendarAgent.id} name={calendarAgent.name}
+      selectedSessionId={selectedSessionId} selectedDate={selectedDate} onClose={() => setCalendarAgent(null)} onOpenSession={async (id, ownerProjectId, date) => {
+        await onOpenSession(id, ownerProjectId, date);
+        setSelectedDate(date ?? null);
+        if (closeAfterOpen) onRequestClose?.();
+      }} />}
     {settingsOpen && agents.length > 0 && (
       <LongAgentSettingsPanel
         agents={agents}

@@ -1,5 +1,7 @@
 "use client";
 
+import { useI18n } from "@/hooks/useI18n";
+
 import { useEffect, useState } from "react";
 
 interface CheckResult {
@@ -8,7 +10,7 @@ interface CheckResult {
   detail: string;
 }
 
-function getChecks(): CheckResult[] {
+function getChecks(t: ReturnType<typeof useI18n>["t"]): CheckResult[] {
   const results: CheckResult[] = [];
   const cs = getComputedStyle(document.documentElement);
 
@@ -16,9 +18,9 @@ function getChecks(): CheckResult[] {
   const isStandalone =
     window.matchMedia?.("(display-mode: standalone)").matches ?? false;
   results.push({
-    label: "Standalone (PWA)",
+    label: t("debug.standalone"),
     pass: isStandalone,
-    detail: isStandalone ? "display-mode: standalone" : "browser tab",
+    detail: isStandalone ? "display-mode: standalone" : t("debug.browser"),
   });
 
   // 2. Safe-area insets readable
@@ -26,7 +28,7 @@ function getChecks(): CheckResult[] {
   const safBottom = cs.getPropertyValue("--safe-area-bottom").trim();
   const hasSafeArea = safTop !== "" && safBottom !== "";
   results.push({
-    label: "Safe-area CSS vars",
+    label: t("debug.safeArea"),
     pass: hasSafeArea,
     detail: `top=${safTop || "0px"} bottom=${safBottom || "0px"}`,
   });
@@ -38,7 +40,7 @@ function getChecks(): CheckResult[] {
   const clientWidth = root.clientWidth;
   const hasOverflowX = scrollWidth > clientWidth + 1;
   results.push({
-    label: "No horizontal overflow",
+    label: t("debug.overflow"),
     pass: !hasOverflowX,
     detail: `scroll=${scrollWidth} client=${clientWidth}`,
   });
@@ -54,12 +56,12 @@ function getChecks(): CheckResult[] {
     const expectedTop = visibleTop + safeTop;
     const topBarOk = Boolean(controlRect) && controlRect!.top >= expectedTop - 1;
     results.push({
-      label: "Topbar safe area",
+      label: t("debug.topbar"),
       pass: topBarOk,
       detail: `bar=${rect.top.toFixed(0)} control=${controlRect?.top.toFixed(0) ?? "?"} expected≥${expectedTop.toFixed(0)}`,
     });
   } else {
-    results.push({ label: "Topbar safe area", pass: false, detail: "topbar missing" });
+    results.push({ label: t("debug.topbar"), pass: false, detail: t("debug.topbarMissing") });
   }
 
   // 5. Textarea font-size >= 16px
@@ -67,12 +69,12 @@ function getChecks(): CheckResult[] {
   if (textarea) {
     const fs = parseFloat(getComputedStyle(textarea).fontSize);
     results.push({
-      label: "Textarea ≥ 16px",
+      label: t("debug.textarea"),
       pass: fs >= 16,
       detail: `${fs}px`,
     });
   } else {
-    results.push({ label: "Textarea ≥ 16px", pass: false, detail: "select or create a session" });
+    results.push({ label: t("debug.textarea"), pass: false, detail: t("debug.sessionRequired") });
   }
 
   // 6. Composer visible
@@ -90,7 +92,7 @@ function getChecks(): CheckResult[] {
       : Math.max(visualBottom, shellBottom ?? visualBottom);
     const composerVisible = rect.height > 0 && rect.bottom <= visibleBottom + 2;
     results.push({
-      label: "Composer visible",
+      label: t("debug.composer"),
       pass: composerVisible,
       detail: `bottom=${rect.bottom.toFixed(0)} visible=${visibleBottom.toFixed(0)}`,
     });
@@ -103,13 +105,13 @@ function getChecks(): CheckResult[] {
     const navigationHeight = document.querySelector(".workspace-rail")?.getBoundingClientRect().height ?? 0;
     const expectedGap = Math.max(8, safeBottom) + navigationHeight;
     results.push({
-      label: "Composer bottom gap",
+      label: t("debug.gap"),
       pass: bottomGap <= expectedGap + 4,
       detail: `gap=${bottomGap.toFixed(0)} expected≤${(expectedGap + 4).toFixed(0)}`,
     });
   } else {
-    results.push({ label: "Composer visible", pass: false, detail: "select or create a session" });
-    results.push({ label: "Composer bottom gap", pass: false, detail: "composer missing" });
+    results.push({ label: t("debug.composer"), pass: false, detail: t("debug.sessionRequired") });
+    results.push({ label: t("debug.gap"), pass: false, detail: t("debug.composerMissing") });
   }
 
   // 7. Drawer count (sidebar + right panel should not both be open)
@@ -119,7 +121,7 @@ function getChecks(): CheckResult[] {
   );
   const drawerCount = (sidebarOpen ? 1 : 0) + (rightPanelOpen ? 1 : 0);
   results.push({
-    label: "Drawer exclusivity",
+    label: t("debug.drawers"),
     pass: drawerCount <= 1,
     detail: `open=${drawerCount}`,
   });
@@ -140,7 +142,7 @@ function getChecks(): CheckResult[] {
     if (minDim < 44) allTouchTargetsOk = false;
   });
   results.push({
-    label: "Touch targets ≥ 44px",
+    label: t("debug.touch"),
     pass: visibleTargetCount > 0 && allTouchTargetsOk,
     detail: `count=${visibleTargetCount} smallest=${smallestTarget === 999 ? "?" : smallestTarget.toFixed(0)}px`,
   });
@@ -149,6 +151,7 @@ function getChecks(): CheckResult[] {
 }
 
 export function MobileDebugOverlay({ open = false, onClose }: { open?: boolean; onClose?: () => void }) {
+  const { t: tr } = useI18n();
   const [queryRequested, setQueryRequested] = useState(false);
   const [checks, setChecks] = useState<CheckResult[]>([]);
 
@@ -162,11 +165,11 @@ export function MobileDebugOverlay({ open = false, onClose }: { open?: boolean; 
 
   useEffect(() => {
     if (!visible) return;
-    const refresh = () => setChecks(getChecks());
+    const refresh = () => setChecks(getChecks(tr));
     refresh();
     const interval = setInterval(refresh, 2000);
     return () => clearInterval(interval);
-  }, [visible]);
+  }, [visible, tr]);
 
   if (!visible) return null;
 
@@ -200,10 +203,9 @@ export function MobileDebugOverlay({ open = false, onClose }: { open?: boolean; 
           marginBottom: 6,
         }}
       >
-        <span style={{ fontWeight: 700 }}>
-          Mobile Debug{" "}
+        <span style={{ fontWeight: 700 }}>{tr("interface.mobile.diagnostics")}{" "}
           <span style={{ color: allPass ? "var(--success)" : "var(--danger)" }}>
-            {allPass ? "✓ ALL PASS" : "✗ ISSUES"}
+            {allPass ? tr("interface..all.checks.passed") : tr("interface..issues.found")}
           </span>
         </span>
         <button
@@ -211,7 +213,7 @@ export function MobileDebugOverlay({ open = false, onClose }: { open?: boolean; 
             setQueryRequested(false);
             onClose?.();
           }}
-          aria-label="Close mobile debug overlay"
+          aria-label={tr("interface.close.mobile.diagnostics")}
           style={{
             background: "none",
             border: "none",

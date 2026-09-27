@@ -1,6 +1,9 @@
 "use client";
+import { Button } from "./ui/Button";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { InterfaceFeedback } from "./InterfaceFeedback";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import type { SessionInfo } from "@/lib/types";
 import {
@@ -10,15 +13,12 @@ import {
   fetchTopicNodeAnchors,
   fetchTopicNodeSession,
   followTopicNodeTurn,
-  setTopicNodeSessionMemory,
   supplementTopicNode,
   type TopicAnchor,
   type TopicDetail,
-  type TopicNodeSummary,
   type TopicSummary,
 } from "@/lib/topics-browser";
 import { ChatWindow } from "./ChatWindow";
-import { SessionMemoryPanel } from "./SessionMemoryPanel";
 import { SurfaceDialog } from "./SurfaceDialog";
 import { TopicCreationRequests } from "./TopicCreationRequests";
 import { TopicsGraph } from "./TopicsGraph";
@@ -54,16 +54,24 @@ export function LongAgentTopicsPanel({ initialAgentId, agents }: Props) {
   // what all data loading below uses.
   const [activeAgentId, setActiveAgentId] = useState(initialAgentId);
   const longAgentId = activeAgentId;
+  const activeAgentRef = useRef(longAgentId);
+  activeAgentRef.current = longAgentId;
+  const detailRequestRef = useRef(0);
   const [allGraphs, setAllGraphs] = useState<{ agentId: string; agentName: string; topics: TopicSummary[] }[]>([]);
   const stored = useMemo(() => readStoredSelection(longAgentId), [longAgentId]);
   const [graph, setGraph] = useState<{ revision: number; topics: TopicSummary[] } | null>(null);
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(stored.topicId);
   const [navigationOpen, setNavigationOpen] = useState(stored.nodeId === null);
-  // Session memory is a FIRST-CLASS view (one click from the node header); the rest of the node
-  // management stays behind 「资料」.
-  const [auxView, setAuxView] = useState<"memory" | "details" | null>(null);
+  // Node details are separate from the shared session-memory entry.
+  const [auxView, setAuxView] = useState<"details" | null>(null);
   const [detail, setDetail] = useState<TopicDetail | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(stored.nodeId);
+  const selectedNode = detail?.nodes.find((node) => node.nodeId === selectedNodeId);
+  const nodeSessionId = selectedNode?.sessionId;
+  const nodeTitle = selectedNode?.title;
+  const memoryTarget = `${longAgentId}/${selectedTopicId}/${selectedNodeId}`;
+  const memoryTargetRef = useRef(memoryTarget);
+  memoryTargetRef.current = memoryTarget;
   const [nodeState, setNodeState] = useState<NodeState | null>(null);
   const [nodeSession, setNodeSession] = useState<SessionInfo | null>(null);
   const [nodeSessionError, setNodeSessionError] = useState<string | null>(null);
@@ -76,14 +84,12 @@ export function LongAgentTopicsPanel({ initialAgentId, agents }: Props) {
   const [supplementParent, setSupplementParent] = useState<string>("");
   const [supplementParentAnchors, setSupplementParentAnchors] = useState<TopicAnchor[]>([]);
   const [supplementAnchor, setSupplementAnchor] = useState<TopicAnchor | null>(null);
-  // The memory count feeds the header badge; the panel itself owns reading/editing its own frame.
-  const [memoryCount, setMemoryCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [integrating, setIntegrating] = useState<string | null>(null);
   const [creationRequestId, setCreationRequestId] = useState<string | null>(null);
   // Narrow screens prioritise the conversation: the map is collapsed unless the user opens it.
-  const [mapVisible, setMapVisible] = useState<boolean>(() => typeof window === "undefined" || !window.matchMedia("(max-width: 900px)").matches);
+  const [mapVisible, setMapVisible] = useState<boolean>(() => typeof window === "undefined" || !window.matchMedia("(max-width: 959px)").matches);
 
   // The selection is UI state only; the graph, nodes, messages and memory are always re-read from the server.
   useEffect(() => {
@@ -106,20 +112,22 @@ export function LongAgentTopicsPanel({ initialAgentId, agents }: Props) {
     return () => controller.abort();
   }, [agents, graphRevisionForForest]);
 
-  const loadGraph = useCallback(async () => {
-    const next = await fetchTopicGraph(longAgentId);
-    setGraph(next);
+  const loadGraph = useCallback(async (signal?: AbortSignal) => {
+    const next = await fetchTopicGraph(longAgentId, signal);
+    if (!signal?.aborted && activeAgentRef.current === longAgentId) setGraph(next);
     return next;
   }, [longAgentId]);
 
   useEffect(() => {
     const controller = new AbortController();
-    void loadGraph().catch((cause: unknown) => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : String(cause)); });
+    void loadGraph(controller.signal).catch((cause: unknown) => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : String(cause)); });
     return () => controller.abort();
   }, [loadGraph]);
 
-  const loadDetail = useCallback(async (topicId: string): Promise<TopicDetail> => {
-    const next = await fetchTopicDetail(longAgentId, topicId);
+  const loadDetail = useCallback(async (topicId: string, signal?: AbortSignal): Promise<TopicDetail> => {
+    const request = ++detailRequestRef.current;
+    const next = await fetchTopicDetail(longAgentId, topicId, signal);
+    if (signal?.aborted || activeAgentRef.current !== longAgentId || request !== detailRequestRef.current) return next;
     setDetail(next);
     // Auto-select the first node so an existing topic is immediately enterable (never a dead end).
     setSelectedNodeId((current) => current !== null && next.nodes.some((node) => node.nodeId === current) ? current : next.nodes[0]?.nodeId ?? null);
@@ -129,19 +137,21 @@ export function LongAgentTopicsPanel({ initialAgentId, agents }: Props) {
   useEffect(() => {
     if (selectedTopicId === null) { setDetail(null); setNodeState(null); return; }
     const controller = new AbortController();
-    void loadDetail(selectedTopicId).catch((cause: unknown) => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : String(cause)); });
+    void loadDetail(selectedTopicId, controller.signal).catch((cause: unknown) => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : String(cause)); });
     return () => controller.abort();
   }, [selectedTopicId, loadDetail]);
 
-  const loadNodeState = useCallback(async (topicId: string, nodeId: string, sessionId: string) => {
+  const loadNodeState = useCallback(async (topicId: string, nodeId: string, sessionId: string, signal?: AbortSignal) => {
+    const target = `${longAgentId}/${topicId}/${nodeId}`;
     setNodeState({ anchors: [], memory: null, loading: true });
     try {
       const [anchors, mem] = await Promise.all([
-        fetchTopicNodeAnchors(longAgentId, topicId, nodeId),
-        fetchSessionMemory(longAgentId, sessionId),
+        fetchTopicNodeAnchors(longAgentId, topicId, nodeId, signal),
+        fetchSessionMemory(longAgentId, sessionId, signal),
       ]);
-      setNodeState({ anchors, memory: mem, loading: false });
+      if (!signal?.aborted && memoryTargetRef.current === target) setNodeState({ anchors, memory: mem, loading: false });
     } catch (cause) {
+      if (signal?.aborted || memoryTargetRef.current !== target) return;
       setNodeState({ anchors: [], memory: null, loading: false });
       setError(cause instanceof Error ? cause.message : String(cause));
     }
@@ -152,29 +162,27 @@ export function LongAgentTopicsPanel({ initialAgentId, agents }: Props) {
     const node = detail.nodes.find((candidate) => candidate.nodeId === selectedNodeId);
     if (node === undefined) return;
     const controller = new AbortController();
-    void loadNodeState(detail.topic.topicId, selectedNodeId, node.sessionId);
+    void loadNodeState(detail.topic.topicId, selectedNodeId, node.sessionId, controller.signal);
     return () => controller.abort();
   }, [selectedNodeId, detail, loadNodeState]);
 
   // The central surface is a REAL Session: mount the shared ChatWindow on the node's own Session. The
   // node target routes sends through the node's authorized endpoint; everything else is the public chat.
   useEffect(() => {
-    if (selectedNodeId === null || detail === null) { setNodeSession(null); setNodeSessionError(null); return; }
-    const node = detail.nodes.find((candidate) => candidate.nodeId === selectedNodeId);
-    if (node === undefined) return;
+    if (nodeSessionId === undefined) { setNodeSession(null); setNodeSessionError(null); return; }
     const controller = new AbortController();
     setNodeSession(null); setNodeSessionError(null);
-    void fetchTopicNodeSession(longAgentId, node.sessionId, controller.signal)
+    void fetchTopicNodeSession(longAgentId, nodeSessionId, controller.signal)
       .then((info) => {
         if (controller.signal.aborted) return;
         const now = new Date().toISOString();
         setNodeSession({ path: "", id: info.id, cwd: info.cwd, ...(info.name === null ? {} : { name: info.name }), created: now, modified: now,
-          messageCount: 0, firstMessage: node.title, owner: { type: "ordinary" }, projectRoot: info.cwd, projectAvailable: true,
+          messageCount: 0, firstMessage: nodeTitle ?? "", owner: { type: "ordinary" }, projectRoot: info.cwd, projectAvailable: true,
           projectKey: longAgentId, projectId: longAgentId, transient: false, readOnly: false, sessionSource: "chat" });
       })
       .catch((cause) => { if (!controller.signal.aborted) setNodeSessionError(cause instanceof Error ? cause.message : String(cause)); });
     return () => controller.abort();
-  }, [selectedNodeId, detail, longAgentId]);
+  }, [nodeSessionId, nodeTitle, longAgentId]);
 
   // The supplemental-integration anchor belongs to the SELECTED PARENT, never to the current child.
   useEffect(() => {
@@ -242,32 +250,22 @@ export function LongAgentTopicsPanel({ initialAgentId, agents }: Props) {
     if (node !== undefined) await loadNodeState(topicId, nodeId, node.sessionId);
   });
 
-  const toggleMemory = (node: TopicNodeSummary) => void run(async () => {
-    if (detail === null) return;
-    const next = node.sessionMemory === "on" ? "off" : "on";
-    await setTopicNodeSessionMemory(longAgentId, detail.topic.topicId, node.nodeId, { expectedRevision: detail.revision, sessionMemory: next });
-    await loadDetail(detail.topic.topicId);
-    setNotice(t("topics.memoryToggled", { state: next === "on" ? "开启" : "关闭" }));
-  });
-
-  const selectedNode = detail !== null && selectedNodeId !== null ? detail.nodes.find((node) => node.nodeId === selectedNodeId) : undefined;
-
   return <div className={styles.panel} data-topics-root>
-    {error !== null && <p role="alert" className={styles.error}>{error}</p>}
+    {error !== null && <p role="alert" className={styles.error}><InterfaceFeedback message={error} /></p>}
     {notice !== null && <p role="status" className={styles.notice}>{notice}</p>}
     {integrating !== null && <div className={styles.integrating} role="status" data-topics-integrating>⏳ {t("topics.integrating")}</div>}
     <div className={styles.toolbar}>
       <TopicCreationRequests longAgentId={longAgentId} focusedRequestId={creationRequestId} onCreated={openCreatedNode} />
-      <button type="button" className={styles.secondary} data-topics-map-toggle onClick={() => setMapVisible((value) => !value)}>
+      <Button variant="secondary" type="button" className={styles.secondary} data-topics-map-toggle onClick={() => setMapVisible((value) => !value)}>
         {mapVisible ? t("topics.hideMap") : t("topics.showMap")}
-      </button>
+      </Button>
       <details className={styles.createForm} data-topic-create>
         <summary className={styles.createSummary}>{t("topics.createSummary")}</summary>
         <div className={styles.createRow}>
-          <input value={newTitle} data-topic-create-title placeholder={t("topics.title")} onChange={(event) => setNewTitle(event.target.value)} maxLength={200} />
-          <input value={newPurpose} data-topic-create-purpose placeholder={t("topics.purpose")} onChange={(event) => setNewPurpose(event.target.value)} maxLength={2000} />
-          <button type="button" className={styles.primary} data-topic-create-submit disabled={newTitle.trim() === "" || newPurpose.trim() === "" || integrating !== null}
-            onClick={createTopic}>{t("topics.create")}</button>
+          <label className={styles.field}>{t("topics.title")}<input value={newTitle} data-topic-create-title placeholder={t("topics.title")} onChange={(event) => setNewTitle(event.target.value)} maxLength={200} /></label>
+          <label className={styles.field}>{t("topics.purpose")}<input value={newPurpose} data-topic-create-purpose placeholder={t("topics.purpose")} onChange={(event) => setNewPurpose(event.target.value)} maxLength={2000} /></label>
+          <Button variant="primary" type="button" className={styles.primary} data-topic-create-submit disabled={newTitle.trim() === "" || newPurpose.trim() === "" || integrating !== null}
+            onClick={createTopic}>{t("topics.create")}</Button>
         </div>
       </details>
     </div>
@@ -280,45 +278,37 @@ export function LongAgentTopicsPanel({ initialAgentId, agents }: Props) {
               onSelect={(agentId, topicId, nodeId) => {
                 if (agentId !== longAgentId) setActiveAgentId(agentId);
                 setSelectedTopicId(topicId); setSelectedNodeId(nodeId); setNavigationOpen(false);
-                if (typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches) setMapVisible(false);
+                if (typeof window !== "undefined" && window.matchMedia("(max-width: 959px)").matches) setMapVisible(false);
               }} />}
       </section>
       <section className={styles.sessionPane} aria-label={t("topics.detailLabel")}>
         {detail === null ? <p className={styles.hint}>{t("topics.selectNodeHint")}</p> : <>
           {selectedNodeId !== null && <div className={styles.header}>
             <h3>{selectedNode?.title ?? ""}</h3>
-            <button type="button" className={styles.secondary} data-topic-memory-open onClick={() => setAuxView("memory")}>
-              {t("topics.memoryPanel")}{memoryCount === 0 ? "" : ` · ${String(memoryCount)}`}
-            </button>
-            <button type="button" className={styles.secondary} data-topic-aux-open onClick={() => setAuxView("details")}>{t("topics.details")}</button>
+            <Button variant="secondary" type="button" className={styles.secondary} data-topic-aux-open onClick={() => setAuxView("details")}>{t("topics.details")}</Button>
 
           </div>}
           {selectedNodeId !== null && <>
             <div className={styles.session} data-topic-session>
               {nodeSessionError !== null
-                ? <p role="alert" className={styles.error}>{nodeSessionError}</p>
+                ? <p role="alert" className={styles.error}><InterfaceFeedback message={nodeSessionError} /></p>
                 : nodeSession !== null
                   ? <ChatWindow
                       key={`${detail.topic.topicId}:${selectedNodeId}`}
                       projectId={longAgentId}
                       session={nodeSession}
                       topicNode={{ longAgentId, topicId: detail.topic.topicId, nodeId: selectedNodeId }}
+                      onSessionMemoryChanged={() => {
+                        void loadGraph().catch(cause => setError(String(cause)));
+                        void loadDetail(detail.topic.topicId).catch(cause => setError(String(cause)));
+                      }}
                       newSessionCwd={null}
                       newSessionDraftKey={null}
                     />
                   : <p className={styles.hint} data-topic-session-loading>{t("topics.sessionLoading")}</p>}
             </div>
-            {auxView !== null && <SurfaceDialog title={auxView === "memory" ? t("topics.memoryPanel") : t("topics.auxSummary")} onClose={() => setAuxView(null)}>
+            {auxView !== null && <SurfaceDialog title={t("topics.auxSummary")} onClose={() => setAuxView(null)}>
             <div className={styles.auxPanel} data-topic-aux>
-            {auxView === "details" && selectedNode !== undefined && selectedNode.status === "active" && (
-              <div className={styles.toggleRow}>
-                <span>{t("topics.memoryToggle")}</span>
-                <button type="button" className={styles.secondary} data-topic-memory-toggle
-                  onClick={() => selectedNode !== undefined && toggleMemory(selectedNode)}>
-                  {selectedNode.sessionMemory === "on" ? "ON" : "OFF"}
-                </button>
-              </div>
-            )}
             {auxView === "details" && selectedNode !== undefined && <div className={styles.nodeMeta} data-topic-node-meta>
               <div className={styles.metaRow}>
                 <span className={styles.metaLabel}>{t("topics.frozenProject")}</span>
@@ -344,10 +334,10 @@ export function LongAgentTopicsPanel({ initialAgentId, agents }: Props) {
                 {(nodeState?.anchors ?? []).map((anchor) => (
                   <div key={anchor.anchorEntryId} className={styles.anchorRow}>
                     <span>#{String(anchor.anchorSequence)} · {anchor.turnId}</span>
-                    <button type="button" className={styles.secondary} data-topic-fork-anchor={anchor.anchorEntryId}
+                    <Button variant="secondary" type="button" className={styles.secondary} data-topic-fork-anchor={anchor.anchorEntryId}
                       onClick={() => setForkAnchor(forkAnchor?.anchorEntryId === anchor.anchorEntryId ? null : anchor)}>
                       {forkAnchor?.anchorEntryId === anchor.anchorEntryId ? t("topics.forkSelected") : t("topics.selectForFork")}
-                    </button>
+                    </Button>
                   </div>
                 ))}
                 {(nodeState?.anchors.length ?? 0) === 0 && <span className={styles.hint}>{t("topics.noAnchors")}</span>}
@@ -358,8 +348,8 @@ export function LongAgentTopicsPanel({ initialAgentId, agents }: Props) {
                     <label>{t("topics.forkTitle")}</label>
                     <input value={forkTitle} data-topic-fork-title onChange={(event) => setForkTitle(event.target.value)} maxLength={200} />
                   </div>
-                  <button type="button" className={styles.primary} data-topic-fork-submit disabled={forkTitle.trim() === "" || integrating !== null}
-                    onClick={forkFromAnchor}>{t("topics.fork")}</button>
+                  <Button variant="primary" type="button" className={styles.primary} data-topic-fork-submit disabled={forkTitle.trim() === "" || integrating !== null}
+                    onClick={forkFromAnchor}>{t("topics.fork")}</Button>
                 </div>
               )}
             </div>}
@@ -402,15 +392,11 @@ export function LongAgentTopicsPanel({ initialAgentId, agents }: Props) {
                   <label>{t("topics.supplementContent")}</label>
                   <input value={supplementContent} data-topic-supplement-content onChange={(event) => setSupplementContent(event.target.value)} maxLength={4000} />
                 </div>
-                <button type="button" className={styles.primary} data-topic-supplement-confirm
+                <Button variant="primary" type="button" className={styles.primary} data-topic-supplement-confirm
                   disabled={supplementParent === "" || supplementAnchor === null || supplementContent.trim() === ""}
-                  onClick={confirmSupplement}>{t("topics.confirmSupplement")}</button>
+                  onClick={confirmSupplement}>{t("topics.confirmSupplement")}</Button>
               </div>
             </div>}
-            <div className={styles.memorySection}>
-              <h4>{t("topics.memoryPanel")}</h4>
-              <SessionMemoryPanel storageProjectId={longAgentId} sessionId={selectedNode?.sessionId ?? ""} onCount={setMemoryCount} />
-            </div>
             </div></SurfaceDialog>}
           </>}
         </>}

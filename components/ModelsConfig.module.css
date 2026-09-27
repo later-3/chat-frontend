@@ -1,0 +1,31 @@
+.dialog { width:min(1040px,calc(100vw - 48px)); height:min(820px,calc(100dvh - 48px)); max-height:calc(100dvh - 48px); display:flex; flex-direction:column; overflow:hidden; color:var(--text); background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-dialog); box-shadow:var(--shadow-dialog); }
+.dialog > div:first-child { padding:20px 24px!important; }
+.dialog > div:first-child > div { flex-direction:column; align-items:flex-start!important; gap:6px!important; }
+.subtitle { color:var(--text-muted); font-size:13px; }
+.body { flex:1; min-height:0; display:flex; overflow:hidden; }
+.navigation { width:264px; min-width:0; display:flex; flex-direction:column; border-right:1px solid var(--border); background:var(--bg-panel); }
+.navItem { width:100%; min-height:40px; border:0; text-align:left; font:inherit; }
+.navItem span { font-family:var(--font-sans)!important; font-size:13px!important; }
+.detail { flex:1; min-width:0; overflow:auto; padding:28px; }
+.field { display:grid; gap:8px; min-width:0; }
+.fieldLabel { font-size:13px; color:var(--text); font-weight:550; }
+.field :is(input,select) { min-height:40px; border-radius:var(--radius-control); }
+.thinkingMap { display:grid; gap:0; }
+.thinkingRow { display:flex; flex-wrap:wrap; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); }
+.thinkingRow > span { display:grid; gap:3px; min-width:84px; }
+.thinkingRow strong { font-size:13px; font-weight:550; }
+.thinkingRow code { font-size:12px; color:var(--text-muted); }
+.thinkingRow input { max-width:160px; padding:8px 12px; border:1px solid var(--border); background:var(--bg); color:var(--text); }
+.back { display:flex; align-items:center; gap:8px; background:transparent; border:0; color:var(--accent); margin-bottom:20px; cursor:pointer; }
+@media(max-width:768px), (hover:none) and (pointer:coarse) and (max-height:500px) {
+ .dialog { width:100%; height:100dvh; max-height:100dvh; border:0; border-radius:0; padding:var(--safe-area-top) var(--safe-area-right) var(--safe-area-bottom) var(--safe-area-left); }
+ .dialog > div:first-child { padding:16px!important; }
+ .subtitle { font-size:12px; }
+ .navigation { display:none; width:100%; border:0; }
+ .detail { padding:20px 16px; }
+ .body[data-show-list] .navigation { display:flex; }
+ .body[data-show-list] .detail { display:none; }
+ .thinkingRow { gap:8px; }
+ .thinkingRow button { padding:8px 10px; }
+ .navItem { min-height:48px; }
+}

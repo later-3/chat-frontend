@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceFeedback } from "./InterfaceFeedback";
+
 import { useI18n } from "@/hooks/useI18n";
 import type { ChatProjectSummary } from "@/lib/projects-contract";
 import type { FriendInteractionProject } from "@/lib/friend-interaction-project";
@@ -38,8 +40,8 @@ export function FriendProjectContext({ agentId, interaction, projects, busy, err
       <option value="">{t("friendProject.none")}</option>
       {projects.map((project) => <option key={project.projectId} value={project.projectId}>{project.cachedName}</option>)}
     </select>
-    {interaction.effective.availability === "unavailable" && <span className={styles.unavailable} role="alert">{interaction.effective.reason ?? t("friendProject.unavailable")}</span>}
-    {error !== null && <span className={styles.error} role="alert">{error}</span>}
+    {interaction.effective.availability === "unavailable" && <span className={styles.unavailable} role="alert"><InterfaceFeedback message={interaction.effective.reason ?? t("friendProject.unavailable")} /></span>}
+    {error !== null && <span className={styles.error} role="alert"><InterfaceFeedback message={error} /></span>}
     <span hidden data-friend-project-cwd>{contextCwd ?? ""}</span>
     <span hidden>{agentId}</span>
   </div>;

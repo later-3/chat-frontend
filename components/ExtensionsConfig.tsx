@@ -1,6 +1,10 @@
 "use client";
 
+import { InterfaceFeedback } from "./InterfaceFeedback";
+
 import { ConfigurationToggle as Toggle } from "./ConfigurationToggle";
+
+import { useI18n } from "@/hooks/useI18n";
 
 import { useDialogFocus } from "@/hooks/useDialogFocus";
 
@@ -32,6 +36,7 @@ function buttonStyle(disabled?: boolean, danger?: boolean): React.CSSProperties 
 }
 
 function ScopeTag({ scope }: { scope: "global" | "project" }) {
+  const { t } = useI18n();
   return (
     <span
       style={{
@@ -39,11 +44,11 @@ function ScopeTag({ scope }: { scope: "global" | "project" }) {
         padding: "1px 5px",
         borderRadius: 3,
         flexShrink: 0,
-        background: scope === "project" ? "rgba(99,102,241,0.12)" : "rgba(120,120,120,0.12)",
-        color: scope === "project" ? "rgba(99,102,241,0.85)" : "var(--text-dim)",
+        background: scope === "project" ? "var(--bg-selected)" : "rgba(120,120,120,0.12)",
+        color: scope === "project" ? "var(--accent)" : "var(--text-dim)",
       }}
     >
-      {scope}
+      {t(scope === "project" ? "design.scopeProject" : "design.scopePersonal")}
     </span>
   );
 }
@@ -79,6 +84,7 @@ function ExtensionDetail({
   onReloadSession: () => void;
   onViewRequests: () => void;
 }) {
+  const { t } = useI18n();
   const enabled = ext.enabled;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18, maxWidth: 680 }}>
@@ -87,22 +93,22 @@ function ExtensionDetail({
           {ext.canToggle ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 12, color: "var(--text-dim)", width: 52, flexShrink: 0 }}>Global</span>
+                <span style={{ fontSize: 12, color: "var(--text-dim)", width: 52, flexShrink: 0 }}>{t("design.persistentSetting")}</span>
                 <Toggle
                   enabled={enabled}
                   loading={busy}
                   onToggle={onToggle}
-                  label={enabled ? "Disable extension (rename .ts.disabled)" : "Enable extension"}
+                  label={t(enabled ? "design.disableExtension" : "design.enableExtension")}
                 />
               </div>
               {sessionId && enabled && (
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontSize: 12, color: "var(--text-dim)", width: 52, flexShrink: 0 }}>Session</span>
+                  <span style={{ fontSize: 12, color: "var(--text-dim)", width: 52, flexShrink: 0 }}>{t("design.thisSession")}</span>
                   <Toggle
                     enabled={!sessionDisabled}
                     loading={sessionBusy || busy}
                     onToggle={onSessionToggle}
-                    label={sessionDisabled ? "Enable for this session" : "Disable for this session"}
+                    label={t(sessionDisabled ? "design.enableThisSession" : "design.disableThisSession")}
                   />
                 </div>
               )}
@@ -122,7 +128,7 @@ function ExtensionDetail({
           </span>
           {!enabled && (
             <span style={{ fontSize: 12, padding: "1px 5px", borderRadius: 3, background: "rgba(120,120,120,0.12)", color: "var(--text-dim)" }}>
-              disabled
+              {t("i18n.disabled")}
             </span>
           )}
           <span
@@ -142,16 +148,16 @@ function ExtensionDetail({
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {hasProviderRequests(ext) && (
             <button onClick={onViewRequests} style={buttonStyle(false)}>
-              View recorded requests
+              {t("design.recordedRequests")}
             </button>
           )}
           <button
             onClick={onReloadSession}
             disabled={!sessionId || busy}
             style={buttonStyle(!sessionId || busy)}
-            title={sessionId ? "Reload current session to apply changes" : "Open a session to reload"}
+            title={t(sessionId ? "design.reloadSessionHint" : "design.openSessionHint")}
           >
-            Reload session
+            {t("i18n.reloadSession")}
           </button>
         </div>
       </div>
@@ -165,17 +171,17 @@ function ExtensionDetail({
           lineHeight: 1.45,
         }}
       >
-        <div style={{ color: "var(--text-dim)" }}>Path</div>
+        <div style={{ color: "var(--text-dim)" }}>{t("design.resourcePath")}</div>
         <div style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", overflowWrap: "anywhere" }}>
           {shortenPath(ext.enabled ? ext.path : ext.disabledPath ?? ext.path)}
         </div>
-        <div style={{ color: "var(--text-dim)" }}>Origin</div>
+        <div style={{ color: "var(--text-dim)" }}>{t("design.resourceOrigin")}</div>
         <div style={{ color: "var(--text-muted)" }}>
-          {ext.origin === "package" ? "package" : "auto-discovered file"}
+          {t(ext.origin === "package" ? "design.packageOrigin" : "design.fileOrigin")}
         </div>
-        <div style={{ color: "var(--text-dim)" }}>Source</div>
+        <div style={{ color: "var(--text-dim)" }}>{t("design.resourceSource")}</div>
         <div style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>{ext.source}</div>
-        <div style={{ color: "var(--text-dim)" }}>Cwd</div>
+        <div style={{ color: "var(--text-dim)" }}>{t("design.workingDirectory")}</div>
         <div style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", overflowWrap: "anywhere" }}>
           {shortenPath(cwd)}
         </div>
@@ -183,22 +189,17 @@ function ExtensionDetail({
 
       {!ext.canToggle && (
         <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.6 }}>
-          This extension cannot be toggled from the web UI.{" "}
-          {ext.origin === "package"
-            ? "Package extensions are managed in the Plugins panel."
-            : "Directory-form extensions are not supported yet."}
+          {t(ext.origin === "package" ? "design.extensionManagedByPlugin" : "design.extensionNoToggle")}
         </div>
       )}
       {ext.canToggle && (
         <div style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.6 }}>
-          Toggling renames <code style={{ fontFamily: "var(--font-mono)" }}>foo.ts</code> ↔{" "}
-          <code style={{ fontFamily: "var(--font-mono)" }}>foo.ts.disabled</code> on disk (global effect).
-          The change applies when Chat Workflow starts its next AgentSession.
+          {t("design.extensionToggleHint")}
         </div>
       )}
 
       {actionMessage && <div style={{ fontSize: 12, color: "var(--success)" }}>{actionMessage}</div>}
-      {actionError && <div style={{ fontSize: 12, color: "var(--danger)", whiteSpace: "pre-wrap" }}>{actionError}</div>}
+      {actionError && <div style={{ fontSize: 12, color: "var(--danger)", whiteSpace: "pre-wrap" }}><InterfaceFeedback message={actionError} /></div>}
     </div>
   );
 }
@@ -215,6 +216,7 @@ export function ExtensionsConfig({
   onClose: () => void;
   onReloaded?: () => void;
 }) {
+  const { t } = useI18n();
   const modalRef = useDialogFocus(onClose);
   const isMobile = useIsMobile();
   const [data, setData] = useState<ExtensionsResponse | null>(null);
@@ -308,7 +310,7 @@ export function ExtensionsConfig({
 
   const reloadSession = useCallback(async () => {
     if (!sessionId) return;
-    setActionMessage("Chat前端不持有AgentSession；配置会在后续Workflow运行时生效。");
+    setActionMessage(t("interface.configuration.applies.when.the.next.workflow.runs"));
   }, [sessionId]);
 
   const busy = busyPath !== null || reloadBusy;
@@ -318,7 +320,7 @@ export function ExtensionsConfig({
   }
 
   return (
-    <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label="Extensions" className="configuration-dialog"
+    <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("interface.extensions")} className="configuration-dialog"
       style={{
         position: "fixed",
         inset: 0,
@@ -359,7 +361,7 @@ export function ExtensionsConfig({
           }}
         >
           <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Extensions</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("interface.extensions")}</span>
             <code
               style={{
                 fontSize: 12,
@@ -405,12 +407,12 @@ export function ExtensionsConfig({
               }}
             >
               {loading ? (
-                <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>Loading…</div>
+                <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>{t("i18n.loading")}</div>
               ) : error ? (
-                <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--danger)" }}>{error}</div>
+                <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--danger)" }}><InterfaceFeedback message={error} /></div>
               ) : extensions.length === 0 ? (
                 <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-dim)" }}>
-                  No extensions found. Drop a .ts file in ~/.pi/agent/extensions/.
+                  {t("design.extensionsEmpty")}
                 </div>
               ) : (
                 grouped.map((group) => (
@@ -424,12 +426,12 @@ export function ExtensionsConfig({
                         textTransform: "uppercase",
                       }}
                     >
-                      {group.scope}
+                      {t(group.scope === "project" ? "design.scopeProject" : "design.scopePersonal")}
                     </div>
                     {group.items.map((ext) => {
                       const isSelected = selected === ext.path;
                       return (
-                        <div
+                        <button type="button" className="resource-nav-button" aria-pressed={isSelected}
                           key={ext.path}
                           onClick={() => {
                             setSelected(ext.path);
@@ -485,10 +487,10 @@ export function ExtensionsConfig({
                                 whiteSpace: "nowrap",
                               }}
                             >
-                              {ext.origin} · {ext.enabled ? "on" : "off"}
+                              {ext.origin} · {ext.enabled ? t("interface.on") : t("interface.off")}
                             </div>
                           </div>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
@@ -523,7 +525,7 @@ export function ExtensionsConfig({
                     fontSize: 13,
                   }}
                 >
-                  Select an extension
+                  {t("design.selectExtension")}
                 </div>
               )}
             </div>
@@ -547,20 +549,19 @@ export function ExtensionsConfig({
                 title={data.errors.map((e) => `${e.path}: ${e.error}`).join("\n")}
                 style={{ color: "var(--warning)" }}
               >
-                {data.errors.length} error{data.errors.length === 1 ? "" : "s"}
+                {t("design.extensionErrors", { count: data.errors.length })}
               </span>
             ) : data ? (
               <span>
-                {extensions.length} extension{extensions.length === 1 ? "" : "s"} ·{" "}
-                {extensions.filter((e) => e.enabled).length} enabled
+                {t("design.extensionCount", { count: extensions.length, enabled: extensions.filter((e) => e.enabled).length })}
               </span>
             ) : null}
           </div>
           <button onClick={() => void load()} disabled={loading || busy} style={buttonStyle(loading || busy)}>
-            Refresh
+            {t("common.refresh")}
           </button>
           <button onClick={onClose} style={buttonStyle(false)}>
-            Close
+            {t("common.close")}
           </button>
         </div>
       </div>

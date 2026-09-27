@@ -1,3 +1,4 @@
+import { ConfirmationProvider } from "@/components/ui/Confirmation";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "katex/dist/katex.min.css";
@@ -12,8 +13,10 @@ if (root === null) throw new Error("缺少前端根节点 #root");
 createRoot(root).render(
   <StrictMode>
     <I18nProvider>
+      <ConfirmationProvider>
       <PwaRegistration />
       <DeviceWorkspaceRoot />
+      </ConfirmationProvider>
     </I18nProvider>
   </StrictMode>,
 );

@@ -15,6 +15,7 @@ interface PreloadedProjectSession {
   readonly sessionId: string;
   readonly body: unknown;
   readonly stashedAt: number;
+  readonly revalidate: boolean;
 }
 
 /** A navigation payload only serves the burst of loads that opening this session starts. */
@@ -22,9 +23,9 @@ const PRELOAD_TTL_MS = 3_000;
 
 let pending: PreloadedProjectSession | null = null;
 
-export function stashProjectSessionPayload(projectId: string, sessionId: string, body: unknown, now = Date.now()): void {
+export function stashProjectSessionPayload(projectId: string, sessionId: string, body: unknown, now = Date.now(), revalidate = false): void {
   // A different session means a different navigation: the previous payload can never serve it.
-  pending = { projectId, sessionId, body, stashedAt: now };
+  pending = { projectId, sessionId, body, stashedAt: now, revalidate };
 }
 
 export function takeProjectSessionPayload(sessionId: string, now = Date.now()): unknown | undefined {
@@ -38,4 +39,9 @@ export function takeProjectSessionPayload(sessionId: string, now = Date.now()): 
 
 export function clearProjectSessionPayload(): void {
   pending = null;
+}
+
+/** A warm view can paint immediately but must be refreshed; a just-fetched navigation must not GET twice. */
+export function navigationNeedsRevalidation(projectId: string, sessionId: string): boolean {
+  return pending?.projectId === projectId && pending.sessionId === sessionId && pending.revalidate;
 }

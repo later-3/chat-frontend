@@ -4,8 +4,9 @@ import { workflowRequestSignal } from "./chat-workflow-browser.ts";
 export interface FriendWork {
   id: string; longAgentId: string; sessionId: string; originSessionId: string; originEntryId: string | null;
   contextProjectId: string | null; requestId: string; payloadHash: string; title: string; createdAt: string;
+  topicIntegration?: { topicId: string; sessionId: string; nodeId: string };
 }
-export interface FriendWorkItem { work: FriendWork; execution: FriendExecution | null }
+export interface FriendWorkItem { work: FriendWork; execution: FriendExecution | null; displayTitle?: string }
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -13,15 +14,22 @@ export function parseFriendWorkItem(value: unknown, agentId: string): FriendWork
   if (!record(value) || !record(value.work)) throw new Error("无效后台工作响应");
   const w = value.work;
   const keys = ["id", "longAgentId", "sessionId", "originSessionId", "originEntryId", "contextProjectId", "requestId", "payloadHash", "title", "createdAt"];
-  if (Object.keys(w).some(k => !keys.includes(k)) || keys.some(k => !(k in w))
+  if (Object.keys(w).some(k => !keys.includes(k) && k !== "topicIntegration") || keys.some(k => !(k in w))
     || !keys.filter(k => !["originEntryId", "contextProjectId"].includes(k)).every(k => typeof w[k] === "string" && w[k])
     || ![w.originEntryId, w.contextProjectId].every(v => v === null || (typeof v === "string" && v.length > 0))
     || w.longAgentId !== agentId || !/^work-[a-f0-9]{32}$/.test(String(w.id))
     || !/^[a-f0-9]{64}$/.test(String(w.payloadHash)) || !Number.isFinite(Date.parse(String(w.createdAt)))) throw new Error("后台工作绑定不匹配");
+  if (w.topicIntegration !== undefined) {
+    const target = w.topicIntegration;
+    const fields = ["topicId", "sessionId", "nodeId"];
+    if (!record(target) || Object.keys(target).some(key => !fields.includes(key))
+      || fields.some(key => typeof target[key] !== "string" || !(target[key] as string).trim())) throw new Error("后台工作主题目标无效");
+  }
   const execution = value.execution === null ? null : parseFriendExecution(value.execution);
   if (execution && (execution.longAgentId !== agentId || execution.projectId !== agentId || execution.sessionId !== w.sessionId || execution.workId !== w.id
     || execution.contextProjectId !== w.contextProjectId)) throw new Error("后台工作执行身份不匹配");
-  return { work: w as unknown as FriendWork, execution };
+  if (value.displayTitle !== undefined && (typeof value.displayTitle !== "string" || !value.displayTitle.trim())) throw new Error("后台工作显示名称无效");
+  return { work: w as unknown as FriendWork, execution, ...(value.displayTitle === undefined ? {} : {displayTitle:value.displayTitle as string}) };
 }
 async function request(agentId: string, init: RequestInit = {}) {
   const response = await fetch(`/api/long-agents/${encodeURIComponent(agentId)}/work`, { cache: "no-store", ...init });

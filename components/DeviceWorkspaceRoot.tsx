@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceFeedback } from "./InterfaceFeedback";
+
 import { useEffect, useState } from "react";
 import { IconDevices, IconRefresh, IconWifiOff } from "@tabler/icons-react";
 import { useDeviceDirectory } from "@/hooks/useDeviceDirectory";
@@ -112,7 +114,7 @@ export function DeviceWorkspaceRoot() {
       {loading && <div className={styles.loadingShield}>{statusCard}</div>}
       {workspace.switchError && (
         <div className={styles.errorToast} role="alert">
-          <span>{workspace.switchError}</span>
+          <span><InterfaceFeedback message={workspace.switchError} /></span>
           <button type="button" onClick={workspace.dismissSwitchError} aria-label={t("common.close")}>×</button>
         </div>
       )}

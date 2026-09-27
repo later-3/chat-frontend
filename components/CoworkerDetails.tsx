@@ -1,3 +1,6 @@
+import { Button } from "./ui/Button";
+
+import { InterfaceFeedback } from "./InterfaceFeedback";
 import { useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { fetchLongAgents, type LongAgentSummary } from "@/lib/long-agents-browser";
@@ -25,13 +28,13 @@ export function CoworkerDetails({ agentId }: { agentId: string }) {
   }, [agentId, revision]);
   const agent = agents.find(candidate => candidate.id === agentId);
   return <section className="workspace-coworker-details" aria-label={t("workspaceNav.profile")}>
-    {loading ? <p role="status">{t("common.loading")}</p> : error ? <div role="alert"><p>{error}</p><button type="button" className="workspace-button" onClick={() => setRevision(value => value + 1)}>{t("sidebar.longAgentRetry")}</button></div> : agent ? <>
+    {loading ? <p role="status">{t("common.loading")}</p> : error ? <div role="alert"><p><InterfaceFeedback message={error} /></p><Button variant="secondary" type="button" className="workspace-button" onClick={() => setRevision(value => value + 1)}>{t("sidebar.longAgentRetry")}</Button></div> : agent ? <>
       <LongAgentAvatarView agentId={agent.id} name={agent.name} avatar={agent.avatar} />
       <h2>{agent.name}</h2><p>{agent.description}</p>
       <dl><dt>{t("workspaceNav.defaultProject")}</dt><dd>{agent.defaultProjectId}</dd>
         <dt>{t("workspaceNav.model")}</dt><dd>{agent.configuration.model ? `${agent.configuration.model.provider} / ${agent.configuration.model.modelId}` : t("workspaceNav.inheritModel")}</dd></dl>
       <p>{t("workspaceNav.profileHint")}</p>
-      <button type="button" className="workspace-button" onClick={() => setEditing(true)}>{t("workspaceNav.configureCoworker")}</button>
+      <Button variant="secondary" type="button" className="workspace-button" onClick={() => setEditing(true)}>{t("workspaceNav.configureCoworker")}</Button>
     </> : <p role="alert">{t("sidebar.longAgentUnavailable", { name: agentId })}</p>}
     {editing && agent && <LongAgentSettingsPanel agents={agents} initialAgentId={agent.id} onBack={() => setEditing(false)} onSaved={() => setRevision(value => value + 1)} />}
   </section>;

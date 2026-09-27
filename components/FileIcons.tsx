@@ -1,6 +1,5 @@
 import type { CSSProperties } from "react";
 
-
 interface IconProps {
   size?: number;
 }

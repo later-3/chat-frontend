@@ -218,22 +218,21 @@
 
 .settingsTabs {
   display: flex;
+  flex-direction: column;
+  margin-top: 24px;
   gap: 4px;
   padding: 4px;
-  overflow-x: auto;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg-panel);
-  scrollbar-width: thin;
+  border: 0;
+  background: transparent;
 }
 
 .settingsTab,
 .activeSettingsTab {
-  min-height: 40px;
-  flex: 1 0 auto;
+  min-height: 42px;
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 7px;
   padding: 0 14px;
   border: 1px solid transparent;
@@ -1012,7 +1011,8 @@
 
   .agentNav {
     flex: 0 0 auto;
-    overflow: hidden;
+    max-height: 210px;
+    overflow: auto;
     padding: 8px 10px;
     border-right: 0;
     border-bottom: 1px solid var(--border);
@@ -1052,8 +1052,13 @@
   }
 
   .settingsTabs {
-    margin-inline: -2px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    margin: 8px 0 0;
   }
+  .settingsTab, .activeSettingsTab { white-space: normal; font-size: 12px; padding-inline: 6px; }
+  .settingsTab svg, .activeSettingsTab svg { flex-shrink: 0; }
 
   .settingsTab,
   .activeSettingsTab {
@@ -1261,3 +1266,24 @@
 .taskOccurrence { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
 .taskOccurrence p { flex-basis:100%; margin:0; }
 .taskOccurrence a { color:var(--accent); font-size:13px; }
+
+/* Configuration uses one navigation column and a readable form measure. */
+.agentNav { padding: 20px 14px; }
+.settingsTab, .activeSettingsTab { font-size: 13px; font-weight: 500; text-align: left; }
+.activeSettingsTab { color: var(--accent); border-color: transparent; }
+.section { border-radius: var(--radius-panel); padding: 20px; }
+.section input:not([type="checkbox"]):not([type="radio"]), .section select { min-height: 40px; }
+.section input[type="radio"] { min-height: 0; }
+.taskRow { padding: 14px 16px; border-radius: var(--radius-control); background: var(--bg-panel); }
+.taskPrompt { font-size: 14px; line-height: 1.6; }
+@media (max-width: 768px) { .agentNav { padding: 10px 12px; } .section { padding: 16px; } .section input:not([type="checkbox"]):not([type="radio"]), .section select { min-height: 44px; } }
+
+.sourceLine {flex-wrap:wrap; gap:12px; font-weight:400;}
+.sourceLine > span:first-child {flex:1;min-width:180px;}
+.sourceLine > button {flex-shrink:0;white-space:nowrap;}
+
+.advancedSection { display:block; }
+.advancedSection > summary,.promptOptions > summary { min-height:36px; align-content:center; cursor:pointer; color:var(--text); font-size:14px; font-weight:550; }
+.advancedBody { display:flex; flex-direction:column; gap:16px; padding-top:16px; }
+.promptOptions { border-top:1px solid var(--border); padding-top:12px; }
+@media(max-width:767px) { .advancedSection > summary,.promptOptions > summary { min-height:44px; } }

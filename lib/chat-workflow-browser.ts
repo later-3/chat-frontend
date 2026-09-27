@@ -196,6 +196,14 @@ export async function runChatWorkflowPrompt(
   return followChatWorkflowRun(reference, signal, onEvent, undefined, onConnection);
 }
 
+/** Follow a newly accepted owned Session round from its first event, using the same reducer/stream. */
+export function followAcceptedChatWorkflowRun(
+  reference: ChatWorkflowRunReference, signal?: AbortSignal,
+  onEvent?: (event: ChatRunEvent) => void, onConnection?: (update: WorkflowConnectionUpdate) => void,
+): Promise<ChatWorkflowPromptResult> {
+  return followChatWorkflowRun(reference, signal, onEvent, undefined, onConnection);
+}
+
 /** Reattaches to a durable Run after navigation or page refresh. */
 export function resumeChatWorkflowRun(
   reference: ChatWorkflowRunReference,

@@ -1,5 +1,6 @@
 import type { SessionInfo } from "./types";
 
+import { peekSessionView, fetchSessionView } from "./session-view-cache.ts";
 import { stashProjectSessionPayload } from "./session-preload.ts";
 export interface SessionListPage {
   sessions: SessionInfo[];
@@ -54,6 +55,20 @@ export function parseSessionInfo(value: unknown): SessionInfo {
     throw new Error("Chat返回了无效的Session属性");
   }
   let attention: SessionInfo["attention"];
+  const owner = parseSessionOwner(value.owner);
+  let groupConversation: SessionInfo["groupConversation"];
+  if (value.groupConversation !== undefined) {
+    const group = value.groupConversation;
+    if (!isRecord(group) || (group.role !== "public" && group.role !== "participant")) throw new Error("Chat返回了无效的群会话关联");
+    groupConversation = { conversationId:requiredString(group.conversationId,"群 ID"),longAgentId:requiredString(group.longAgentId,"群成员 ID"),role:group.role };
+  }
+  let topicNode: SessionInfo["topicNode"];
+  if (value.topicNode !== undefined) {
+    if (!isRecord(value.topicNode) || owner.type !== "long-agent" || value.topicNode.longAgentId !== owner.longAgentId
+      || Object.keys(value.topicNode).some(key => !["longAgentId", "topicId", "nodeId"].includes(key))) throw new Error("Chat返回了无效的Session主题归属");
+    topicNode = { longAgentId: owner.longAgentId, topicId: requiredString(value.topicNode.topicId, "主题 ID"),
+      nodeId: requiredString(value.topicNode.nodeId, "节点 ID") };
+  }
   if (value.attention !== undefined) {
     if (!isRecord(value.attention)
       || (value.attention.kind !== "review" && value.attention.kind !== "clarification")) {
@@ -74,7 +89,9 @@ export function parseSessionInfo(value: unknown): SessionInfo {
     modified: dateString(value.modified, "Session修改时间"),
     messageCount: value.messageCount as number,
     firstMessage: value.firstMessage,
-    owner: parseSessionOwner(value.owner),
+    owner,
+    ...(groupConversation === undefined ? {} : {groupConversation}),
+    ...(topicNode === undefined ? {} : { topicNode }),
     ...(value.parentSessionId === undefined ? {} : { parentSessionId: requiredString(value.parentSessionId, "父Session ID") }),
     ...(attention === undefined ? {} : { attention }),
     ...(value.projectRoot === undefined ? {} : { projectRoot: requiredString(value.projectRoot, "Project根目录") }),
@@ -123,6 +140,12 @@ export async function fetchProjectSessionById(
   sessionId: string,
   signal?: AbortSignal,
 ): Promise<SessionInfo> {
+  const cached = peekSessionView(projectId, sessionId);
+  if (isRecord(cached)) {
+    const info = parseSessionInfo(cached.session);
+    stashProjectSessionPayload(projectId, sessionId, cached, Date.now(), true);
+    return info;
+  }
   const key = `${projectId}\u0000${sessionId}`;
   const reused = navigationBurst.reuse.get(key);
   if (reused !== undefined && Date.now() - reused.at < NAVIGATION_REUSE_MS) return reused.info;
@@ -147,20 +170,7 @@ async function requestProjectSessionById(
   sessionId: string,
   signal?: AbortSignal,
 ): Promise<SessionInfo> {
-  const query = new URLSearchParams({ projectId, deferThinking: "1", deferMedia: "1" });
-  const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}?${query.toString()}`, {
-    cache: "no-store",
-    credentials: "same-origin",
-    signal,
-  });
-  const body: unknown = await response.json().catch(() => null);
-  if (!response.ok) {
-    const message = isRecord(body)
-      ? [body.statusMessage, body.message, body.error]
-          .find((item): item is string => typeof item === "string" && item.trim() !== "")
-      : undefined;
-    throw new Error(message ?? `读取Session失败: HTTP ${response.status}`);
-  }
+  const body = await fetchSessionView(projectId, sessionId, signal);
   if (!isRecord(body)) throw new Error("Chat返回了无效的Session响应");
   const target = parseSessionInfo(body.session);
   if (target.id !== sessionId) throw new Error(`Chat返回了不匹配的Session: ${sessionId}`);

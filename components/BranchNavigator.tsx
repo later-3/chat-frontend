@@ -197,8 +197,8 @@ function TreeNodeView({ node, activePathIds, depth, isLast, parentLines, onSelec
             fontSize: 12,
             fontFamily: "var(--font-mono)",
             color: role === "user" ? "var(--accent)" : "var(--text-dim)",
-            background: role === "user" ? "rgba(37,99,235,0.08)" : "var(--bg-hover)",
-            border: `1px solid ${role === "user" ? "rgba(37,99,235,0.2)" : "var(--border)"}`,
+            background: role === "user" ? "var(--accent-wash)" : "var(--bg-hover)",
+            border: `1px solid ${role === "user" ? "var(--accent-shadow)" : "var(--border)"}`,
             borderRadius: 3,
             padding: "0 4px",
             marginRight: 5,
@@ -300,7 +300,6 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
       <polyline points="2 3.5 5 6.5 8 3.5" />
     </svg>
   );
-
 
   if (inline) {
     return (

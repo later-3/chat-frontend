@@ -13,6 +13,12 @@ export interface RunActivity {
   error?: string;
   tools: Record<string, { name: string; status: "running" | "completed" | "failed"; since: number }>;
   retry?: { attempt: number; maxAttempts: number; until: number };
+  compaction?: {
+    status: "running" | "completed" | "cancelled" | "failed";
+    reason: "manual" | "threshold" | "overflow";
+    result?: { tokensBefore: number; estimatedTokensAfter: number };
+    error?: string;
+  };
 }
 export function createRunActivity(phase: RunPhase, now = Date.now()): RunActivity {
   return { phase, since: now, lastEventAt: now, tools: {} };
@@ -48,11 +54,29 @@ export function reduceRunActivity(previous: RunActivity, event: ChatRunEvent, no
       return phase(Object.values(state.tools).some(tool => tool.status === "running") ? "tools" : "continuing");
     }
     case "auto_retry_start":
+    case "summarization_retry_scheduled":
       state.retry = { attempt: value.attempt as number, maxAttempts: value.maxAttempts as number, until: now + (value.delayMs as number) };
       return phase("retry");
-    case "auto_retry_end": return phase(value.success ? "waiting" : "continuing");
-    case "compaction_start": return phase("compacting");
-    case "compaction_end": return phase("continuing");
+    case "summarization_retry_attempt_start":
+    case "summarization_retry_finished":
+      delete state.retry;
+      return phase("compacting");
+    case "auto_retry_end":
+      delete state.retry;
+      return phase(value.success ? "waiting" : "continuing");
+    case "compaction_start":
+      state.compaction = { status: "running", reason: value.reason as NonNullable<RunActivity["compaction"]>["reason"] };
+      return phase("compacting");
+    case "compaction_end":
+      // The enclosing Workflow owns its terminal status. A failed/cancelled compaction is not a
+      // successful reduction, and Pi may still recover or retry the model afterwards.
+      state.compaction = {
+        status: value.aborted ? "cancelled" : value.errorMessage !== undefined || value.result === undefined ? "failed" : "completed",
+        reason: value.reason as NonNullable<RunActivity["compaction"]>["reason"],
+        ...(value.result === undefined ? {} : { result: value.result as { tokensBefore: number; estimatedTokensAfter: number } }),
+        ...(typeof value.errorMessage === "string" ? { error: value.errorMessage } : {}),
+      };
+      return phase("continuing");
     case "agent_end": return phase("continuing"); // The enclosing execution owns the terminal state.
     default: return state;
   }

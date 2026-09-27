@@ -1,4 +1,8 @@
 "use client";
+import { Button } from "./ui/Button";
+
+import { formatRelativeTime } from "@/lib/i18n/format";
+import { InterfaceFeedback } from "./InterfaceFeedback";
 
 import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -7,7 +11,7 @@ import { loadExplorerOpen, saveExplorerOpen } from "@/lib/file-explorer-state";
 import { dispatchSessionRowContextMenu } from "@/lib/session-row-context-menu";
 import { skillExpansionToCommand } from "@/lib/slash-display";
 import { getProjectActivity, sessionsForProject } from "@/lib/project-groups";
-import { fetchChatProjects, openChatProject, type ChatProjectSummary } from "@/lib/projects-contract";
+import { fetchChatProjects, parseChatProjectsResponse, openChatProject, type ChatProjectSummary } from "@/lib/projects-contract";
 import { workspaceKeyOf } from "@/lib/workspace-memory";
 import { useI18n } from "@/hooks/useI18n";
 import { DirectoryPicker } from "./DirectoryPicker";
@@ -103,7 +107,7 @@ interface Props {
   selectedSessionId: string | null;
   newSessionDraftKey?: string | null;
   onSelectSession: (session: SessionInfo, isRestore?: boolean) => void;
-  onOpenSessionById?: (sessionId: string, projectId: string) => void | Promise<void>;
+  onOpenSessionById?: (sessionId: string, projectId: string, date?: string) => void | Promise<void>;
   onNewSession?: (sessionId: string, cwd: string) => void;
   initialSessionId?: string | null;
   initialSessionProjectId?: string;
@@ -194,19 +198,6 @@ function saveUnreadSessionIds(ids: Set<string>): void {
   }
 }
 
-function formatRelativeTime(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diff = now.getTime() - date.getTime();
-  const mins = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  if (days < 7) return `${days}d ago`;
-  return date.toLocaleDateString();
-}
 
 /** Substitute the home dir prefix with ~ (no path truncation — see PathLabel) */
 function displayCwd(cwd: string, homeDir?: string): string {
@@ -284,7 +275,6 @@ function AnimatedDropdown({ open, children, style }: { open: boolean; children: 
     </div>
   );
 }
-
 
 
 const SCRAMBLE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
@@ -426,23 +416,23 @@ export function SessionSidebar({ contentPanel, onContentPanelChange: setContentP
   const onReadyRef = useRef(onReady);
   onReadyRef.current = onReady;
 
+  const overviewEtag = useRef<string | undefined>(undefined);
   const loadSessions = useCallback(async (showLoading = false, force = false) => {
     try {
       if (showLoading) setLoading(true);
-      const projects = await fetchChatProjects();
+      const response = await fetch("/api/sessions/overview", { cache: "no-cache",
+        headers: overviewEtag.current === undefined || showLoading ? {} : { "If-None-Match": overviewEtag.current } });
+      if (response.status === 304) { setError(null); return; }
+      if (!response.ok) throw new Error(`读取Session列表失败: HTTP ${response.status}`);
+      const value: unknown = await response.json();
+      if (typeof value !== "object" || value === null || !("projects" in value)) throw new Error("无效会话概览");
+      const projects = parseChatProjectsResponse({ projects: value.projects });
+      const page = parseSessionListPage(value);
+      overviewEtag.current = response.headers.get("ETag") ?? undefined;
       setRegisteredProjects(projects);
-      const pages = await Promise.all(projects.filter((project) => project.available).map(async (project) => {
-        const query = new URLSearchParams({ projectId: project.projectId });
-        if (force) query.set("force", "1");
-        const response = await fetch(`/api/sessions?${query.toString()}`, { cache: "no-store" });
-        if (!response.ok) throw new Error(`读取${project.cachedName} Session失败: HTTP ${response.status}`);
-        return parseSessionListPage(await response.json() as unknown);
-      }));
-      const sessions = pages.flatMap((page) => page.sessions);
+      const sessions = page.sessions;
       setAllSessions(sessions);
-      // Treat the fetched running set as an initial fallback only. Once the
-      // lightweight poll is live, a slow session-list fetch cannot overwrite it.
-      setRunningSessionIds(new Set(pages.flatMap((page) => page.runningSessionIds)));
+      setRunningSessionIds(new Set(page.runningSessionIds));
       // Drop unread markers for sessions that no longer exist (e.g. deleted).
       const existingIds = new Set(sessions.map((session) => session.id));
       setUnreadSessionIds((prev) => {
@@ -835,8 +825,9 @@ export function SessionSidebar({ contentPanel, onContentPanelChange: setContentP
   // works when the prop value won't change — e.g. re-clicking the already
   // open session after manually switching worktrees.
   const handleSelectSessionFromList = useCallback((s: SessionInfo) => {
-    if (s.cwd) setSelectedCwd(s.cwd);
-    setContentPanel("sessions");
+    userNavigatedRef.current = true;
+    if (!s.groupConversation && s.cwd) setSelectedCwd(s.cwd);
+    if (!s.groupConversation) setContentPanel("sessions");
     onSelectSession(s);
   }, [onSelectSession]);
 
@@ -959,8 +950,8 @@ export function SessionSidebar({ contentPanel, onContentPanelChange: setContentP
       )}
       {contentPanel === "sessions" && <div className="workspace-list-heading">
         <h2>{t("sidebar.sessionsPanel")}</h2>
-        <button type="button" className="workspace-icon" onClick={() => setRemovedSessionsOpen(true)} title={t("removedSessions.title")} aria-label={t("removedSessions.title")}><IconArchive size={18} /></button>
-        <button type="button" className="workspace-icon" onClick={handleNewSession} disabled={!selectedCwd} title={t("i18n.newSession")} aria-label={t("i18n.newSession")}>＋</button>
+        <Button iconOnly variant="ghost" type="button" className="workspace-icon" onClick={() => setRemovedSessionsOpen(true)} title={t("removedSessions.title")} aria-label={t("removedSessions.title")}><IconArchive size={18} /></Button>
+        <Button iconOnly variant="ghost" type="button" className="workspace-icon" onClick={handleNewSession} disabled={!selectedCwd} title={t("i18n.newSession")} aria-label={t("i18n.newSession")}>＋</Button>
       </div>}
       {projectSlot && createPortal(<div className="workspace-project-controls">
         {/* CWD picker */}
@@ -974,8 +965,8 @@ export function SessionSidebar({ contentPanel, onContentPanelChange: setContentP
               display: "flex",
               alignItems: "center",
               padding: isMobile ? "0 12px" : "6px 10px",
-              background: selectedCwd ? "var(--bg-hover)" : "rgba(37,99,235,0.06)",
-              border: selectedCwd ? "1px solid var(--border)" : "1px solid rgba(37,99,235,0.4)",
+              background: selectedCwd ? "var(--bg-hover)" : "var(--accent-wash)",
+              border: selectedCwd ? "1px solid var(--border)" : "1px solid var(--accent-outline)",
               borderRadius: 7,
               cursor: "pointer",
               fontSize: isMobile ? 14 : 12,
@@ -1260,7 +1251,7 @@ export function SessionSidebar({ contentPanel, onContentPanelChange: setContentP
                             <button
                               onClick={() => void handleRemoveWorktree(wt.path, true)}
                               disabled={wtBusy}
-                              style={{ padding: "3px 9px", background: "#ef4444", border: "none", borderRadius: 5, color: "#fff", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
+                              style={{ padding: "3px 9px", background: "var(--danger-bg)", border: "1px solid var(--danger)", borderRadius: 5, color: "var(--danger)", fontSize: 11, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}
                             >
                               {t("sidebar.force")}
                             </button>
@@ -1326,7 +1317,7 @@ export function SessionSidebar({ contentPanel, onContentPanelChange: setContentP
                                 borderRadius: 5, flexShrink: 0,
                                 transition: "color 0.12s, background 0.12s",
                               }}
-                              onMouseEnter={(e) => { e.currentTarget.style.color = "#ef4444"; e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
+                              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--danger)"; e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
                               onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
                             >
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1453,7 +1444,7 @@ export function SessionSidebar({ contentPanel, onContentPanelChange: setContentP
                       lineHeight: 1.35,
                       overflowWrap: "anywhere",
                     }}>
-                      {wtError}
+                      <InterfaceFeedback message={wtError} />
                     </div>
                   )}
               </AnimatedDropdown>
@@ -1506,9 +1497,9 @@ export function SessionSidebar({ contentPanel, onContentPanelChange: setContentP
           selectedSessionId={selectedSessionId}
           visible={contentPanel === "long-agents"}
           refreshKey={refreshKey}
-          onOpenSession={(sessionId, sessionProjectId) => {
+          onOpenSession={(sessionId, sessionProjectId, date) => {
             setContentPanel("long-agents");
-            return onOpenSessionById(sessionId, sessionProjectId);
+            return onOpenSessionById(sessionId, sessionProjectId, date);
           }}
           onRequestClose={onRequestClose}
           closeAfterOpen={isMobile}
@@ -1540,8 +1531,8 @@ export function SessionSidebar({ contentPanel, onContentPanelChange: setContentP
           </div>
         )}
         {error && (
-          <div style={{ padding: "12px 14px", color: "#f87171", fontSize: 12 }}>
-            {error}
+          <div style={{ padding: "12px 14px", color: "var(--danger)", fontSize: 12 }}>
+            <InterfaceFeedback message={error} />
           </div>
         )}
         {!loading && !error && visibleSessions.length === 0 && (
@@ -1640,12 +1631,12 @@ export function SessionSidebar({ contentPanel, onContentPanelChange: setContentP
                 }}
                 title={t("sidebar.refreshExplorer")}
                 skipHover={explorerRefreshDone}
-                color={explorerRefreshDone ? "#4ade80" : "var(--text-dim)"}
+                color={explorerRefreshDone ? "var(--success)" : "var(--text-dim)"}
                 background={explorerRefreshDone ? "rgba(74,222,128,0.18)" : "none"}
                 size={44}
               >
                 {explorerRefreshDone ? (
-                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
                 ) : (
@@ -1742,12 +1733,12 @@ export function SessionSidebar({ contentPanel, onContentPanelChange: setContentP
               }}
               title={t("sidebar.refreshExplorer")}
               skipHover={explorerRefreshDone}
-              color={explorerRefreshDone ? "#4ade80" : "var(--text-dim)"}
+              color={explorerRefreshDone ? "var(--success)" : "var(--text-dim)"}
               background={explorerRefreshDone ? "rgba(74,222,128,0.18)" : "none"}
               marginRight={6}
             >
               {explorerRefreshDone ? (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
               ) : (
@@ -2035,7 +2026,7 @@ function SessionItem({
   collapsed?: boolean;
   onToggleCollapse?: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const isMobile = useIsMobile();
   const [hovered, setHovered] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -2062,7 +2053,8 @@ function SessionItem({
   // back to the compact /skill:name args command the user typed before using
   // it as the auto-name fallback, mirroring MessageView's rendering.
   const displayFirstMessage = skillExpansionToCommand(session.firstMessage) ?? session.firstMessage;
-  const title = session.name || displayFirstMessage.slice(0, 50) || session.id.slice(0, 12);
+  const baseTitle = session.name || displayFirstMessage.slice(0, 50) || session.id.slice(0, 12);
+  const title = session.groupConversation ? `${t(session.groupConversation.role === "public" ? "design.groupRecord" : "design.participationRecord")} · ${baseTitle}` : baseTitle;
 
   const startRename = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -2181,7 +2173,7 @@ function SessionItem({
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
                 height: 30, padding: "0 11px",
                 background: "var(--accent)", border: "none",
-                borderRadius: 6, color: "#fff",
+                borderRadius: 6, color: "var(--on-accent)",
                 cursor: "pointer", fontSize: 12, fontWeight: 600,
                 whiteSpace: "nowrap",
               }}
@@ -2259,7 +2251,7 @@ function SessionItem({
               </span>
               {readOnly && (
                 <span
-                  title="Chat托管，只读"
+                  title={t("interface.managed.by.chat.read.only")}
                   style={{
                     flexShrink: 0,
                     padding: "1px 5px",
@@ -2270,14 +2262,12 @@ function SessionItem({
                     fontWeight: 700,
                     letterSpacing: "0.04em",
                   }}
-                >
-                  CHAT · 只读
-                </span>
+                >{t("interface.chat.read.only")}</span>
               )}
             </div>
             <div style={{ marginTop: 2, display: "flex", alignItems: "center", gap: 8, color: "var(--text-dim)", fontSize: 11, minWidth: 0 }}>
               {actionError ? (
-                <span title={actionError} style={{ color: "#ef4444", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{actionError}</span>
+                <span title={actionError} style={{ color: "var(--danger)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><InterfaceFeedback message={actionError} /></span>
               ) : session.attention !== undefined || descendantAttentionCount > 0 ? (
                 <AttentionSessionIndicator
                   attention={session.attention}
@@ -2288,7 +2278,7 @@ function SessionItem({
               ) : isUnread ? (
                 <UnreadSessionIndicator />
               ) : (
-                <span title={session.modified}>{formatRelativeTime(session.modified)}</span>
+                <span title={session.modified}>{formatRelativeTime(session.modified, locale)}</span>
               )}
               <span>{t("sidebar.messagesCount", { count: session.messageCount })}</span>
               {session.worktreeBranch && (
@@ -2312,7 +2302,7 @@ function SessionItem({
           {hasChildren && (
             <button
               onClick={(e) => { e.stopPropagation(); onToggleCollapse?.(); }}
-              title={collapsed ? "Expand forks" : "Collapse forks"}
+              title={collapsed ? t("interface.expand.branches") : t("interface.collapse.branches")}
               style={{
                 display: "flex", alignItems: "center", justifyContent: "center",
                 width: isMobile ? 44 : 20, height: isMobile ? 44 : 20, padding: 0, flexShrink: 0,
@@ -2336,7 +2326,7 @@ function SessionItem({
                 setMobileActionsOpen(true);
               }}
               aria-label={`Session actions for ${title}`}
-              title="Session actions"
+              title={t("interface.session.actions")}
               style={{
                 width: 44,
                 height: 44,
@@ -2364,13 +2354,13 @@ function SessionItem({
                   event.stopPropagation();
                   setMobileActionsOpen(false);
                 }}
-                aria-label="Close session actions"
+                aria-label={t("interface.close.session.actions")}
               />
               <div className="mobile-action-sheet" role="dialog" aria-modal="true" aria-label={`Session actions for ${title}`}>
                 <div className="mobile-action-sheet-header">
                   <div>
                     <strong>{title}</strong>
-                    <span>{session.messageCount} messages</span>
+                    <span>{session.messageCount}{t("interface.messages.3")}</span>
                   </div>
                   <button
                     type="button"
@@ -2379,7 +2369,7 @@ function SessionItem({
                       event.stopPropagation();
                       setMobileActionsOpen(false);
                     }}
-                    aria-label="Close session actions"
+                    aria-label={t("interface.close.session.actions")}
                   >
                     <IconX size={22} stroke={1.8} aria-hidden="true" />
                   </button>
@@ -2393,7 +2383,7 @@ function SessionItem({
                     }}
                   >
                     <IconPencil size={21} stroke={1.7} aria-hidden="true" />
-                    <span>Rename session</span>
+                    <span>{t("interface.rename.session")}</span>
                   </button>
                   <button
                     type="button"
@@ -2427,7 +2417,7 @@ function SessionItem({
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = "var(--bg-selected)";
                   e.currentTarget.style.color = "var(--accent)";
-                  e.currentTarget.style.borderColor = "rgba(37,99,235,0.35)";
+                  e.currentTarget.style.borderColor = "var(--accent-outline)";
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = "var(--bg-hover)";

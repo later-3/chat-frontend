@@ -1,5 +1,7 @@
 # Chat Frontend 开发指南
 
+原生会话维护使用 `lib/session-maintenance.ts` 严格解析与 `useSessionMaintenance` 观察后端：按钮、`/compact [说明]`、`/session`、统计、取消和历史继续共用 [Backend 合同](../../docs/modules/sessions/chat-session-maintenance.md)。页面卸载只 detach；运行回执来自服务端，重复 POST 保留 requestId。历史浏览禁发，显式继续成功后才回填编辑内容；不能把只读 leaf 当写入位置。
+
 本文面向 Frontend 贡献者和协助开发的外部 AI，说明浏览器端代码放在哪里、如何开发和验证，以及与 Chat Backend、父仓库的协作边界。视觉和交互要求不在本文重复，见 [Chat Frontend UI/UX 规范](./ui-ux-guidelines.md)。
 
 ## 1. 职责边界
@@ -33,15 +35,15 @@ Fork 通过 `lib/session-fork-browser.ts` 调用 `POST /api/sessions/:id/fork`�
 
 ### 1.1 当前Long Agent页面基线
 
-首次使用的“Friend”面板不要求已选 Project。空状态通过 `POST /api/long-agents/enable`（空对象）显式创建默认 Nexus；有 Friend 后仍提供“＋”创建。产品中 Long Agent 统一称为 Friend，翻译键和服务实体标识不因此迁移。网关健康只标为“网关已连接/未连接”，不推断 IM 收发可用。新建表单只要求名称和可选简介；内部 ID 由系统自动生成，同一草稿失败重试沿用该 ID，成功后才清空。表单不接收 NanoClaw Group ID、不硬编码实例 ID，`POST /api/long-agents` 由 Backend 完成 Group 与独立空间初始化。两个响应共用运行时 Parser；失败保留草稿、允许原请求重试，成功重读列表，点击 Friend 进入其 home 会话。前端不启动服务、不保存另一份启用状态。
+首次使用的“Friend”面板不要求已选 Project。空状态通过 `POST /api/long-agents/enable`（空对象）显式创建默认 Nexus；有 Friend 后仍提供“＋”创建。产品中 Long Agent 英语称为 Friend，中文称为“长期助手”，翻译键和服务实体标识不因此迁移。网关健康只标为“网关已连接/未连接”，不推断 IM 收发可用。新建表单只要求名称和可选简介；内部 ID 由系统自动生成，同一草稿失败重试沿用该 ID，成功后才清空。表单不接收 NanoClaw Group ID、不硬编码实例 ID，`POST /api/long-agents` 由 Backend 完成 Group 与独立空间初始化。两个响应共用运行时 Parser；失败保留草稿、允许原请求重试，成功重读列表，点击 Friend 进入其 home 会话。前端不启动服务、不保存另一份启用状态。
 
-当前工作区提供 Friend、项目、动态、设置四个全局入口。顶部 Project 是选中的交流上下文；切换 Project 更新项目资料，在 Friend 模式保留 Friend 与原 Session。普通 Session 仍归属于 Project；进入项目模式可新建、恢复多个普通 Session，Friend 专属 Session 不重复列入普通列表。布局和数据归属分别负责：页面选择不会改变后端 Session owner 或实际执行目录。
+当前工作区提供 Friend、项目、动态、群聊、主题、设置六个全局入口。顶部 Project 是选中的交流上下文；切换 Project 更新项目资料，在 Friend 模式保留 Friend 与原 Session。普通 Session 仍归属于 Project；进入项目模式可新建、恢复多个普通 Session，Friend 专属 Session 不重复列入普通列表。布局和数据归属分别负责：页面选择不会改变后端 Session owner 或实际执行目录。
 
-打开普通 Session 使用 Workflow 发送；打开 Friend 使用 turns 接受与实时订阅 API，终态后重读 Pi Session。Friend 列表通过全局 `GET /api/long-agents` 获取身份；点击通过 `POST /api/long-agents/:id/start` 返回的实际 Project/Session 打开，不能以顶部 Project 猜测归属。未实现的长期能力及迁移差距仍以父仓库 Long Agent 架构文档为准，不能从前端布局推断已支持多方会话或跨项目执行。
+普通 Session 使用 `/runs`；Friend/Topic 使用授权接受入口，随后新轮次订阅同一个 Workflow Run，旧接受记录保持兼容订阅；终态后重读 Pi Session。Friend 列表通过全局 `GET /api/long-agents` 获取身份；点击通过 `POST /api/long-agents/:id/start` 返回的实际 Project/Session 打开，不能以顶部 Project 猜测归属。未实现的长期能力及迁移差距仍以父仓库 Long Agent 架构文档为准，不能从前端布局推断已支持多方会话或跨项目执行。
 
 Session列表与Session详情中的`session.owner`是导航和发送链共用的唯一归属事实。Frontend运行时合同必须接受且严格校验`{ type: "ordinary" }`或`{ type: "long-agent", longAgentId, projectLongAgentId }`，并直接用该值选择面板与发送API。Long Agent列表只用于展示 Friend 和配置/运行状态，不得异步用`primarySessionId`反推Session归属；也不得根据消息内容猜测，或在Hook/组件中维护第二份映射。`owner`缺失、非法或无法解析时必须停止发送并告警/重新加载，不得默认当成Workflow Session继续执行。
 
-全局“Friend”的设置及右侧“Friend 资料 → 管理这位 Friend”打开同一个 Long Agent 配置页，管理的是跨Project持续的Personal `LongAgent`与其一对一映射的NanoClaw Agent Group；`ProjectLongAgent`为当前 Home 日历会话投影，历史归属另由完整日历与迁移记录提供。配置的三个核心标签页来源如下；另外提供任务与活动标签，任务使用 `friend-tasks.ts` 的 schema 2 同源 API，活动读取既有活动/动态 API：
+全局“Friend”的设置及右侧“Friend 资料 → 管理这位 Friend”打开同一个 Long Agent 配置页，管理的是跨Project持续的Personal `LongAgent`与其一对一映射的NanoClaw Agent Group；`ProjectLongAgent`为当前 Home 日历会话投影，历史归属另由完整日历与迁移记录提供。配置共九个栏目，其中运行策略、Agent Group、Agent Memory 的来源如下；任务、职责、交付、活动按各自领域 API 管理，群聊管理成员和权限并进入群工作区，主题提供统一工作区入口。任务使用 `friend-tasks.ts` 的 schema 2 同源 API，活动读取既有活动/动态 API：
 
 1. “运行策略”编辑Chat Personal配置中的显示别名、列表摘要、全局启停、默认Project、Model、Thinking Level、System Prompt/自定义Prompt、Tools和Resources；这里的别名不是Agent运行身份。
 2. “Agent Group”编辑NanoClaw拥有的运行身份名称和Standing Instructions，并只读展示稳定Group ID、Workspace安全摘要、核心Memory快照、revision和stale状态。
@@ -90,6 +92,8 @@ pnpm dev
 开发服务器默认监听 `127.0.0.1:30145`。Frontend 依赖 Chat Backend API；涉及完整交互时，应按父仓库说明启动 Backend，而不是在本仓库补一套模拟服务端。
 
 ## 4. HTTP 合同
+
+Pi 会话能力的整体兼容账本见父仓库 `docs/modules/pi/chat-pi-session-capabilities.md`。`compaction_end` 的可选 result 保留原生 tokensBefore/estimatedTokensAfter，后者仅为估计；解析器拒绝负数、非有限值和非法错误字段。RunStatus 分开呈现成功、取消和失败，Workflow 仍拥有运行终态。不要把 hook 中的 null/空函数当作已支持的 Pi 能力。
 
 浏览器不能信任网络响应。每个新增或变更的 HTTP 响应都必须在 `lib/` 的合同边界中从 `unknown` 做运行时结构校验，然后再交给 Hook 或组件使用。不要只依赖 TypeScript 类型断言。
 
@@ -166,13 +170,16 @@ Chat 父仓库以 `frontend/` Git Submodule 固定本仓库的确定 Commit。Fr
 
 ## 7.1 会话打开的关键路径与度量
 
-打开一个会话（点 Friend、点会话条目、旧链接恢复）的既有顺序是：**点击反馈 → 解析今天的会话 → 一次会话读取 → 消息绘制 → 输入可用**。这部分必须保持三件事：
+性能流程与数字见父仓库[会话导航性能](../../docs/development/session-navigation-performance.md)。已交接/缓存的数据在 layout effect 内同步校验并呈现，避免 keyed ChatWindow 首帧 loading 闪烁；保留 key 的目标隔离。首次滚动在 layout effect 同步定位，后续增量继续按帧合并。打开联系人不把整列 disabled 变灰；保留重复点击保护和 aria-busy，超过 300ms 才显示等待文案。后台重新校验不切换整页 loading。
 
-- **一次导航只读一次会话正文**。导航拿到的响应由 `frontend/lib/session-preload.ts` 交给**同一次导航的所有读取者共享**（按会话 id 匹配、短 TTL、会话身份变化即失效）。同一次打开可能由默认落点、点击、旧链接等多个触发者发起，单次消费会让第二个读取者重新下载整份会话；同时 `fetchProjectSessionById` 对同一 navigation 做请求合并，重复触发同一已打开会话时直接复用当前状态。不得用列表里的旧 `primarySessionId` 绕过每日会话解析。导航交接仅用于初次加载；轮次结束、重连和后台同步必须重读耐久历史，不能复用打开时的旧正文。复用已打开会话的数据仍须完成视图切换，不能因省略 GET 而停留在主题或设置页。
-- **不得重复全量读取**。按精确 id 解析会话时只读目标文件，不做全目录正文扫描；没有子调用时不扫描子调用；同一个会话在同一次导航里不重复解析。
-- **无变更不写入**。今天的会话与绑定已经有效时，打开动作不再刷新 `updatedAt`、不重写全局状态。
+打开 Friend 仍先通过 Backend 解析今天的会话，不用旧 primarySessionId 推断。Project、Friend、Topic 都用公共聊天控件；Friend/Topic 的下一轮 Workflow 选择发给各自授权接受入口，随后订阅同一 Workflow Run，详情读取仍是公共 Session API。
 
-度量方法（`scripts/session-open-perf.mjs`，需要先 `pnpm build`）：在隔离 CHAT_HOME 里构造「一个小的目标会话 + 多个无关大会话」，用真实浏览器采样，输出点击/启动到消息可见与可输入的中位数/P95、`/api/sessions/*` 的请求次数与字节数，以及被消除的工作量（全目录扫描耗时、单次会话 GET 耗时/字节）。CI 只守住请求次数、无关文件读取次数与正确性，不用毫秒断言。
+- `session-view-cache.ts` 保存最多 16 项、8MiB、5 分钟的最近视图，键为 projectId + sessionId。命中先绘制，再执行权威 GET；未命中等待一次合并 GET。同导航所有消费者共享结果，单个观察者取消不取消其他读者，导航不取消服务端执行。失败、身份不匹配、过期或删除清除视图；不能作为授权或 CAS 事实。
+- 详情用 `view=chat&deferThinking=1&deferMedia=1`，当前消息不截断，只移除重复的完整树正文；按需全文/媒体读取保留。轮次完成/恢复强制重读。
+- 侧边栏一个 `/api/sessions/overview` 请求取 Project 与列表，校验响应后更新；ETag/304 避免无变化下载与 React 重绘。后端仍读取当前 owner 与文件版本，不是延长 TTL 掩盖变更。
+- 后端精确 id 查找与原生摘要缓存消除无关文件重复解析；外部 Pi 追加、重命名、移除必须可见。
+
+`scripts/unified-session-perf.mjs <隔离地址> 50` 使用真实浏览器、不拦截响应；校验目标 sessionId、消息数、可见输入框与两帧绘制，分开报告首次、暖态与轮询碰撞。数据为隔离真实副本时只保存数字，不记录消息内容。CI 守住功能、次数和字节机制，不用依赖机器负载的毫秒硬断言。`session-open-perf.mjs` 是此前小夹具基线，不能代替真实规模结果。
 
 ## 8. 工作区实现入口
 
@@ -229,7 +236,7 @@ Friend 发送只等耐久 202 后清理待确认输入，随后按引用观察�
 
 ## 主题会话
 
-主题节点通过 `useAgentSession` / `ChatWindow` 的 `topicNode` 目标适配使用完整公共聊天。读取走 `/api/sessions/:id`；发送走节点授权入口；观察、工具过程、图片能力、停止和运行中恢复复用 `friend-execution`。新建空节点也从图解析的 `topicNode.longAgentId` 获取身份，不能先露出普通 Workflow 选择器。节点记忆阶段通过同一事件流/快照的可选 `roundPhase` 展示“答案已生成，正在整理会话记忆”；停止作用于当前真实阶段。
+主题节点通过 `useAgentSession` / `ChatWindow` 的 `topicNode` 目标适配使用完整公共聊天。读取走 `/api/sessions/:id`；发送走节点授权入口；观察、工具过程、图片能力、停止和运行中恢复复用 `friend-execution`。新建空节点也从图解析的 `topicNode.longAgentId` 获取身份；允许选择 Workflow，但发送始终保留节点授权归属，不能暂时走普通 `/runs`。节点记忆阶段通过同一事件流/快照的可选 `roundPhase` 展示“答案已生成，正在整理会话记忆”；停止作用于当前真实阶段。
 
 `LongAgentTopicsView/Panel` 只负责导航和辅助操作。桌面左侧列出主题与节点关系，中央保留完整高度的会话；窄屏按需打开导航，来源、记忆、开关、锚点和补充整合使用共享 `SurfaceDialog`，不挤占输入区。图/记忆响应由 `lib/topics-browser.ts` 从 unknown 校验。导航选中项可存 localStorage；深链 `?view=topics&topicAgent=…&topicId=…&nodeId=…` 优先，切换后同步地址，数据从 Backend 重读。
 
@@ -241,14 +248,55 @@ Friend 发送只等耐久 202 后清理待确认输入，随后按引用观察�
 
 ## 旧链接与历史（P5）
 
-初始导航和设备快照保留可选 sessionProjectId，对应 URL 的 projectId，区别于浏览器选择的协作项目。携带 Project 的旧链接直接读取精确 Session API，并严格校验返回的 owner、readOnly 与 Session ID；迁移位置由 Backend 决定。未知链接显示失败，不改选其他项目。历史 Friend 由公共 ChatWindow 显示只读说明，点击 Friend 进入今天，不让历史落入普通 Workflow 发送链。
+初始导航和设备快照保留可选 sessionProjectId，对应 URL 的 projectId，区别于浏览器选择的协作项目。携带 Project 的旧链接直接读取精确 Session API，并严格校验返回的 owner、readOnly 与 Session ID；迁移位置由 Backend 决定。未知链接显示失败，不改选其他项目。Home 历史 Friend 由公共 ChatWindow 正常续聊，Backend 的只读判断只用于实际受限档案；点击 Friend 默认进入今天。公共 Session 响应可带后端从节点绑定投影的 `topicNode`，解析器同时验证 owner，ChatWindow 在没有显式节点 prop 时复用它，日历/普通深链进入主题会话也走节点授权发送。不能把历史或主题误送进普通 Workflow/今日聊天。
 
-## Friend 后台工作（LA1）
+## Friend 后台任务（LA1）
 
-`FriendWorkPanel` 是侧栏工作入口，`lib/friend-work.ts` 严格校验 HTTP v1 绑定及执行归属；身份、Session、workId、固定项目必须一致。列表每 3 秒刷新，隐藏页面不轮询，卸载取消读请求。创建的未确认请求由 `friend-work-draft.ts` 保存到本标签页 sessionStorage，显式重试沿用原 ID 和原项目；实际工作状态从 Backend 恢复。
+`FriendWorkPanel` 是侧栏工作入口，`lib/friend-work.ts` 严格校验 HTTP v1 绑定及执行归属；身份、Session、workId、固定项目必须一致；可选 `topicIntegration` 必须验证其 topicId/nodeId/sessionId，不能因已有合法主题关联把整张后台工作列表判成无效。列表每 3 秒刷新，隐藏页面不轮询，卸载取消读请求。新建任务通过主聊及真实 `friend_work` Tool。旧创建表单留下的未确认请求仍由 `friend-work-draft.ts` 恢复，显式重试沿用原 ID 和原项目；实际工作状态从 Backend 恢复。
 
-工作会话继续使用 `useAgentSession` 和 `friend-execution.ts`，没有单独聊天渲染器。FriendExecution.workId 表示固定项目工作，后续消息/引导使用执行记录的 contextProjectId，不跟随顶部项目选择；日常交流仍按下一条消息选择项目。列表提供停止单个执行、打开原生 Session、返回今日主聊。新增文案同时覆盖中英文；回归为 `lib/friend-work.test.mjs`，浏览器还须验证流式、刷新、跨项目及移动布局。
+工作会话继续使用 `useAgentSession` 和 `friend-execution.ts`，没有单独聊天渲染器。FriendExecution.workId 表示固定项目工作，后续消息/引导使用执行记录的 contextProjectId，不跟随顶部项目选择；日常交流仍按下一条消息选择项目。列表按日定位并提供停止单个执行、打开原生 Session；点击 Friend 卡片是返回今日主聊的统一入口，不另设返回按钮。新增文案同时覆盖中英文；回归为 `lib/friend-work.test.mjs`，浏览器还须验证流式、刷新、跨项目及移动布局。
 
 LA2 任务页区分定义修订、调度应用状态和执行历史；不在浏览器计算 cron。create/run 未确认请求在 sessionStorage 保留同一 ID，重试沿用原命令；事实刷新仍来自 Backend。每次执行链接到 LA1 原生工作会话，继续使用公共实时聊天组件。
 
 Friend 项目关联的异步状态按所选 Friend 管理：切换时同时清理旧关联、错误和忙碌标志；旧读取/保存响应按请求代次失效，不得重新污染新 Friend。真实浏览器门禁覆盖慢 GET 快切和挂起 PUT 后切换，后者必须验证新 Friend 的控件仍可操作。
+
+### Friend 日历与记忆目录（2026-09-27）
+
+Friend 每行日历按钮按需打开 `FriendCalendar`，全年格子与月历共用 `GET /api/long-agents/:id/daily?year=YYYY` 的 `sessions` 原生历史投影；不能用 `days` 生命周期绑定判断有消息。日期和时区来自 Backend，空壳不点亮；点击任意日期直接打开当日日常 Session，侧栏展示该日所有会话与后台工作；点击复用 `onOpenSession(sessionId, projectId)` 和公共 `ChatWindow`，保留目标会话的权限。跨日会话按实际有消息的日期显示，不只取创建或修改日期。加载/切年/失败/空月分别反馈。空日期可点，通过现有 `startProjectLongAgent({date})` 幂等打开/创建该日 Session，再走同一个导航函数；创建不运行模型、不产生任务、不会改掉默认联系人今天的目标。历史可在原会话持续交流，不回退今日。日历不影响联系人暖切换关键路径。未来按真实 Token 用量显示绿色强度，仅有注释，未把会话数量当作 Token。`friendDate` 是 URL 中的导航筛选，随同日条目切换和刷新保留，点击 Friend 清除并返回今天；不能参与接受请求或修改 Session 时间。侧栏只读派生数据，工作按 createdAt 的 Agent 本地日期或实际活动日期归入，显示开始时间区分同名执行。
+
+Memory 目录只把 Backend `kind=project` 的实体列为项目记忆，Agent home 只在 Friend 分组出现。新增记忆的目标选择同样过滤 kind，不把当前存储 projectId 兜底塞回选择器。切到 Agent Memory 不发 Personal/Project Catalog 请求；NanoClaw 读取失败显示“暂时无法读取，不表示已删除”，无快照时显示未知数量，不能显示 0 当作已确认空库。列表/health 对非法 Agent home Project Memory 目标返回可理解的 400。
+
+浏览器门禁复用 `scripts/session-memory-switch-browser.test.mjs`，验证历史日期到原 Session 续聊（模型看到历史）、空日期创建/重开/发送/刷新、朋友圈历史、个人记忆仍可读、Agent 不重复与断开 NanoClaw 后不误报空库。`topics-browser.test.mjs` 另验证普通 Session 深链进入主题节点后仍走节点发送入口。
+
+
+## 全面更新的组件合同（2026-09-27）
+
+全局入口为 Friend、Project、朋友圈、群聊、主题、设置。`WorkspaceSettings` 从 URL 恢复类别与项目选择；资源对话框使用当前设置项目，退出设置后恢复会话本身的资源范围。项目列表加载失败要展示错误和重试，不能伪装成无项目。
+
+新增选择组件 `SearchSelect`、`ModelSelection` / `ThinkingSelection` 只管理临时交互，配置事实仍经 Backend 保存。`GET /api/models` 的可选 model.thinkingLevels 经运行时校验；旧后端缺该字段时不猜测支持等级。Friend 和 Workflow Agent 共用这套选择；Provider 编辑使用原有 `/api/models-config`，没有增加配置控制面。
+
+`GroupComposer` 的草稿与待确认请求按 owner/conversation 隔离；`group-submission.ts` 验证恢复的讨论/工作输入，重试保留原请求身份。群列表与详情做目标和请求代次检查；原生 SSE 自动重连，断线时读请求补齐。`GroupWorkControls` 位于群工作区；群成员/生命周期在群内配置，主题从全局入口进入共用工作区；助手设置不再复制群聊/主题导航。Session Memory 只有公共 ChatWindow 的入口，发生 revision 冲突保留稿件并读最新版本。
+
+会话列表的可选 `groupConversation:{conversationId,longAgentId,role}` 由 Backend 群目录投影，role 为 public/participant，和 owner 分开校验。跳转携带 groupAgent/groupProject/groupId，不把群公开/参与 Session 当普通聊天启动。后台工作 GET 可返回 displayTitle；不可改写原 work.title、请求摘要或执行绑定来美化名称。
+
+设计基线与组件样式见 [UI/UX §17](./ui-ux-guidelines.md#17-全面更新基线2026-09-27)。实施覆盖与验证见父仓库 [全面更新工作记录](../../docs/development/frontend-renewal-plan.md)。
+
+主题节点的统一会话记忆开关由节点策略控制，调用既有节点 PATCH 并携带 expectedRevision。ChatWindow 通过 useTopicMemoryControl 按 topicNode 身份读取和更新策略，主题地图、日期记录和直接会话链接走同一控制器；加载中不显示默认勾选，失败可重试。策略值同时用于展示和下一次发送；策略更新不能卸载当前会话。409 保留用户编辑并读回最新服务端状态。不可把普通 Session 的浏览器偏好当成主题节点已持久化事实。
+
+Friend 助手设置将 Prompt、工具、技能、资源及渠道设为按需展开的配置组；保存动作保持可见。Plugins/Extensions 的范围显示个人/当前项目，安装与加载位置由 Backend 管理，不硬编码 Pi 默认目录作为 Chat 安装事实。
+
+## 界面语言实现合同
+
+`lib/i18n/preference.ts` 定义英语默认值与唯一存储键 `pi-locale`，`I18nProvider` 首次渲染读取显式偏好，并维护 `<html lang>`。禁止根据 `navigator.language` 自动覆盖默认值或用户选择。设置中的语言切换不影响执行参数和资源作用域。
+
+组件通过 `useI18n()` 获取 `t` 和 `locale`；翻译由 `messages/en.ts`、`messages/zh-CN.ts` 及共有的 `messages/interface.ts` 提供。日期/数字展示传入 `locale`；配置枚举值、分组 key 与数据 ID 保持稳定，只翻译显示标签。已有可识别的操作提示经 `InterfaceFeedback` 随语言重新显示；未知诊断展示本地化摘要，可展开原文。不要将此组件用于对话正文、用户名称或任意资源内容。
+
+Pi 完整历史通过 `history-locale.ts` 对固定上游版本的阅读器控件做局部呈现适配，不改写 Session 数据、消息正文、提示词或工具结果。上游变更时需检查控件选择器；`public/offline.html` 无应用 bundle，独立读取同一偏好，默认英文。静态 Manifest 声明英语。
+
+`lib/i18n.test.mjs` 检查双语键/参数、直接文案与翻译引用、默认值、原始诊断保留和离线行为；`history-document.test.mjs` 检查历史数据不变及控件刷新；父仓库 `scripts/session-memory-switch-browser.test.mjs` 用真实浏览器验证双向切换、刷新、模型弹窗及离线语言。
+
+内置工作流名称、说明和步骤标签经 `translateWorkflowCopy()` 按工作流 ID 与原始默认文案匹配翻译；用户改写的名称、说明与第三方工作流原样显示。不把本地化显示值送回配置或执行 API。
+
+### 共用动作与模态基础（2026-09-27）
+
+`components/ui/Button.tsx`、`PageHeader.tsx` 负责动作外观与一致的左侧返回；`SurfaceDialog` 基于固定版本 Radix Dialog，`ConfirmationProvider` 基于 AlertDialog，业务组件通过 `useConfirmation` 等待用户决定。列表选择不是动作按钮。不要新增 `window.confirm` 或复制页面级按钮样式。焦点、Escape、窄屏布局的真实浏览器回归随 `test:dev` 执行。

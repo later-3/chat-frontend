@@ -9,13 +9,13 @@ export function TurnSummary({ summary, completed, children, defaultExpanded = fa
   children?: ReactNode;
   defaultExpanded?: boolean;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [expanded, setExpanded] = useState(defaultExpanded);
-  const number = (value: number) => value.toLocaleString();
+  const number = (value: number) => value.toLocaleString(locale);
   return <section className="turn-summary" aria-label={t("turnSummary.label")}>
     <button className="turn-summary-toggle" type="button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>
       <span className="turn-summary-state">{completed && <IconCheck size={14} aria-hidden />}{t(completed ? "runStatus.completed" : "turnSummary.label")}</span>
-      <span>{summary.recordedUsage ? `${number(summary.tokens)} tokens` : t("turnSummary.noUsage")}</span>
+      <span>{summary.recordedUsage ? t("usage.tokens", { count: number(summary.tokens) }) : t("turnSummary.noUsage")}</span>
       <span>{t("turnSummary.tools", { count: summary.toolCount })}</span>
       {summary.durationMs !== null && <span title={t("turnSummary.durationHint")}>{t("turnSummary.seconds", { seconds: number(Math.round(summary.durationMs / 100) / 10) })}</span>}
       <span className="turn-summary-disclosure">{t(children ? "chat.processDetails" : "turnSummary.details")}<IconChevronDown size={14} aria-hidden style={{ transform: expanded ? "rotate(180deg)" : undefined }} /></span>

@@ -1,4 +1,8 @@
 "use client";
+import { useConfirmation } from "./ui/Confirmation";
+import { Button } from "./ui/Button";
+
+import { InterfaceFeedback } from "./InterfaceFeedback";
 
 import { useCallback, useEffect, useState } from "react";
 import { IconAlertTriangle, IconRefresh } from "@tabler/icons-react";
@@ -34,7 +38,8 @@ function shortRevision(revision: string): string {
 }
 
 export function LongAgentGroupSettings({ longAgentId, onDirtyChange }: Props) {
-  const { t } = useI18n();
+  const confirm = useConfirmation();
+  const { t, locale } = useI18n();
   const [document, setDocument] = useState<LongAgentGroupDocument | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [baseline, setBaseline] = useState<Draft | null>(null);
@@ -104,8 +109,8 @@ export function LongAgentGroupSettings({ longAgentId, onDirtyChange }: Props) {
     }
   };
 
-  const loadLatest = () => {
-    if (dirty && !window.confirm(t("longAgentSettings.groupReloadConfirm"))) return;
+  const loadLatest = async () => {
+    if (dirty && !await confirm(t("longAgentSettings.groupReloadConfirm"))) return;
     void load();
   };
 
@@ -116,10 +121,10 @@ export function LongAgentGroupSettings({ longAgentId, onDirtyChange }: Props) {
     return (
       <div className={styles.state} role="alert">
         <strong>{t("longAgentSettings.groupLoadFailed")}</strong>
-        {error && <span>{error}</span>}
-        <button type="button" className={styles.secondaryButton} onClick={() => void load()}>
+        {error && <span><InterfaceFeedback message={error} /></span>}
+        <Button variant="secondary" type="button" className={styles.secondaryButton} onClick={() => void load()}>
           {t("longAgentSettings.retry")}
-        </button>
+        </Button>
       </div>
     );
   }
@@ -141,7 +146,7 @@ export function LongAgentGroupSettings({ longAgentId, onDirtyChange }: Props) {
       {error && (
         <div className={conflict ? styles.warning : styles.error} role="alert">
           {conflict && <IconAlertTriangle size={17} aria-hidden="true" />}
-          <span>{conflict ? t("longAgentSettings.groupConflict") : error}</span>
+          <span><InterfaceFeedback message={conflict ? t("longAgentSettings.groupConflict") : error} /></span>
           {conflict && (
             <button type="button" className={styles.inlineButton} onClick={loadLatest}>
               <IconRefresh size={15} aria-hidden="true" />
@@ -188,7 +193,7 @@ export function LongAgentGroupSettings({ longAgentId, onDirtyChange }: Props) {
           <dt>{t("longAgentSettings.snapshotRevision")}</dt>
           <dd title={document.group.revision}>{shortRevision(document.group.revision)}</dd>
           <dt>{t("longAgentSettings.snapshotFetchedAt")}</dt>
-          <dd>{new Date(document.fetchedAt).toLocaleString()}</dd>
+          <dd>{new Date(document.fetchedAt).toLocaleString(locale)}</dd>
         </dl>
         <p className={styles.help}>{t("longAgentSettings.workspaceHelp")}</p>
       </section>
@@ -208,17 +213,17 @@ export function LongAgentGroupSettings({ longAgentId, onDirtyChange }: Props) {
 
       <div className={styles.actions}>
         <span>{dirty ? t("longAgentSettings.unsaved") : t("longAgentSettings.savedState")}</span>
-        <button
+        <Button variant="secondary"
           type="button"
           className={styles.secondaryButton}
           disabled={!dirty || saving}
           onClick={() => { if (baseline) setDraft(baseline); }}
         >
           {t("longAgentSettings.reset")}
-        </button>
-        <button type="submit" className={styles.primaryButton} disabled={!dirty || saving}>
+        </Button>
+        <Button variant="primary" type="submit" className={styles.primaryButton} disabled={!dirty || saving}>
           {saving ? t("common.saving") : t("common.save")}
-        </button>
+        </Button>
       </div>
     </form>
   );

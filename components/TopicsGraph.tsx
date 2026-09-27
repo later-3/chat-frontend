@@ -147,7 +147,7 @@ export function TopicsGraph({ groups, selectedAgentId, selectedTopicId, selected
           </svg>
           {groupLabels.map((group) => (
             <div key={group.agentId} className={styles.groupLabel} data-topics-agent={group.agentId} style={{ left: group.x, top: group.y }}>
-              {group.agentName}<small>{group.topics} 主题</small>
+              {group.agentName}<small>{group.topics}{t("interface.topics")}</small>
             </div>
           ))}
           {labels.map((label) => {

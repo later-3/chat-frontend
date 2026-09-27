@@ -1,10 +1,11 @@
-export type WorkspaceView = "chat" | "moments" | "groups" | "topics";
+export type WorkspaceView = "chat" | "moments" | "groups" | "topics" | "settings";
 
 export function workspaceViewFromUrl(href: string): WorkspaceView {
   const view = new URL(href).searchParams.get("view");
   if (view === "moments") return "moments";
   if (view === "groups") return "groups";
   if (view === "topics") return "topics";
+  if (view === "settings") return "settings";
   return "chat";
 }
 

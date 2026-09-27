@@ -1,4 +1,9 @@
 "use client";
+import { artifactMatchesScope, type ArtifactScope } from "@/lib/task-results";
+import { Button } from "./ui/Button";
+
+import { InterfaceFeedback } from "./InterfaceFeedback";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import {
@@ -20,8 +25,8 @@ function workspaceStateKey(state: "clean" | "older" | "edited" | "missing"): str
   return WORKSPACE_STATE_KEYS[state];
 }
 
-export function LongAgentDeliverablesSettings({ longAgentId }: { longAgentId: string }) {
-  const { t } = useI18n();
+export function LongAgentDeliverablesSettings({ longAgentId, scope }: { longAgentId: string; scope: ArtifactScope }) {
+  const { t, locale } = useI18n();
   const [document, setDocument] = useState<FriendArtifacts | null>(null);
   const [tasks, setTasks] = useState<FriendTask[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -108,23 +113,24 @@ export function LongAgentDeliverablesSettings({ longAgentId }: { longAgentId: st
   const byDate = useMemo(() => {
     const groups = new Map<string, FriendArtifact[]>();
     for (const artifact of document?.artifacts ?? []) {
+      if (!artifactMatchesScope(artifact, scope)) continue;
       groups.set(artifact.date, [...(groups.get(artifact.date) ?? []), artifact]);
     }
     return [...groups.entries()].sort((a, b) => b[0].localeCompare(a[0]));
-  }, [document]);
+  }, [document, scope]);
   const stateLabel = (state: FriendArtifact["state"]) =>
     t(state === "committed" ? "deliverables.stateCommitted" : state === "pending" ? "deliverables.statePending" : "deliverables.stateFailed");
   return (
     <section className={styles.section} aria-label={t("longAgentSettings.deliverablesTab")}>
       <div className={styles.sourceLine}>
         <span>{t("deliverables.intro")}</span>
-        <button className={styles.secondaryButton} disabled={busy} onClick={() => void load()}>
+        <Button variant="secondary" className={styles.secondaryButton} disabled={busy} onClick={() => void load()}>
           {t("taskV2.refresh")}
-        </button>
+        </Button>
       </div>
       {error && (
         <div className={styles.error} role="alert">
-          {error}
+          <InterfaceFeedback message={error} />
         </div>
       )}
       {notice && (
@@ -132,31 +138,7 @@ export function LongAgentDeliverablesSettings({ longAgentId }: { longAgentId: st
           {notice}
         </div>
       )}
-      <h3>{t("deliverables.slots")}</h3>
-      {tasks.length === 0 && <p className={styles.help}>{t("deliverables.slotsEmpty")}</p>}
-      <ul className={styles.taskList}>
-        {tasks.map((task) => (
-          <li key={task.id} className={styles.taskRow}>
-            <div className={styles.taskHead}>
-              <strong>{task.name}</strong>
-              <span>
-                {task.deliverable?.kind === "post" ? t("deliverables.kindPost") : t("deliverables.kindNote")} · {task.deliverable?.slot}
-                {task.deliverable?.audience ? ` · ${task.deliverable.audience}` : ""}
-              </span>
-              <small>{t(`taskV2.${task.status}`)}</small>
-            </div>
-            <p className={styles.help}>
-              {task.schedule.kind === "cron" ? task.schedule.expression : task.schedule.kind === "once" ? task.schedule.at : task.schedule.source} · {task.timeZone}
-              {task.projection?.nextAt ? ` · ${new Date(task.projection.nextAt).toLocaleString()}` : ""}
-            </p>
-          </li>
-        ))}
-      </ul>
-      <h3>
-        {t("deliverables.artifacts")}
-        {document && document.pending > 0 ? ` · ${t("deliverables.pendingCount", { count: String(document.pending) })}` : ""}
-      </h3>
-      {document && document.artifacts.length === 0 && <p className={styles.help}>{t("deliverables.empty")}</p>}
+      {document && byDate.length === 0 && <p className={styles.help}>{t("taskResults.empty")}</p>}
       {byDate.map(([date, artifacts]) => (
         <div key={date}>
           <h4 className={styles.help}>{date}</h4>
@@ -182,6 +164,7 @@ export function LongAgentDeliverablesSettings({ longAgentId }: { longAgentId: st
                     {artifact.progressEntryId ? ` · ${artifact.progressEntryId}` : ""}
                   </p>
                 )}
+                <p className={styles.help}>{t("taskResults.source")}: {artifact.workId ?? artifact.occurrenceId ?? artifact.dutyId ?? artifact.taskId}</p>
                 {artifact.failure && (
                   <p className={styles.error}>
                     {artifact.failure}
@@ -200,17 +183,17 @@ export function LongAgentDeliverablesSettings({ longAgentId }: { longAgentId: st
                     </p>
                     {artifact.note.conflictResolution === "generated" && <p>{t("deliverables.conflictKeptGenerated")}</p>}
                     <div className={styles.taskActions}>
-                      <button className={styles.secondaryButton} disabled={busy} onClick={() => setMine(mine === artifact.id ? null : artifact.id)}>
+                      <Button variant="secondary" className={styles.secondaryButton} disabled={busy} onClick={() => setMine(mine === artifact.id ? null : artifact.id)}>
                         {t(mine === artifact.id ? "deliverables.hideMine" : "deliverables.showMine")}
-                      </button>
+                      </Button>
                       {artifact.note.conflictResolution === null && (
                         <>
-                          <button className={styles.secondaryButton} disabled={busy} onClick={() => void submit({ operation: "resolve", artifactId: artifact.id, choice: "user" }, "deliverables.conflictAdopted")}>
+                          <Button variant="secondary" className={styles.secondaryButton} disabled={busy} onClick={() => void submit({ operation: "resolve", artifactId: artifact.id, choice: "user" }, "deliverables.conflictAdopted")}>
                             {t("deliverables.keepMine")}
-                          </button>
-                          <button className={styles.secondaryButton} disabled={busy} onClick={() => void submit({ operation: "resolve", artifactId: artifact.id, choice: "generated" }, "deliverables.conflictKept")}>
+                          </Button>
+                          <Button variant="secondary" className={styles.secondaryButton} disabled={busy} onClick={() => void submit({ operation: "resolve", artifactId: artifact.id, choice: "generated" }, "deliverables.conflictKept")}>
                             {t("deliverables.keepGenerated")}
-                          </button>
+                          </Button>
                         </>
                       )}
                     </div>
@@ -218,37 +201,37 @@ export function LongAgentDeliverablesSettings({ longAgentId }: { longAgentId: st
                   </div>
                 )}
                 <div className={styles.taskActions}>
-                  <button className={styles.secondaryButton} disabled={busy} onClick={() => setExpanded(expanded === artifact.id ? null : artifact.id)}>
+                  <Button variant="secondary" className={styles.secondaryButton} disabled={busy} onClick={() => setExpanded(expanded === artifact.id ? null : artifact.id)}>
                     {t(expanded === artifact.id ? "deliverables.hideContent" : "deliverables.showContent")}
-                  </button>
+                  </Button>
                   {artifact.state !== "committed" && artifact.retryable && (
-                    <button className={styles.secondaryButton} disabled={busy} onClick={() => void submit({ operation: "resubmit", artifactId: artifact.id }, "deliverables.resubmitted")}>
+                    <Button variant="secondary" className={styles.secondaryButton} disabled={busy} onClick={() => void submit({ operation: "resubmit", artifactId: artifact.id }, "deliverables.resubmitted")}>
                       {t("deliverables.resubmit")}
-                    </button>
+                    </Button>
                   )}
                   {artifact.state === "committed" && artifact.kind === "note" && (
-                    <button className={styles.secondaryButton} disabled={busy} onClick={() => setRevising({ artifactId: artifact.id, content: artifact.content })}>
+                    <Button variant="secondary" className={styles.secondaryButton} disabled={busy} onClick={() => setRevising({ artifactId: artifact.id, content: artifact.content })}>
                       {t("deliverables.revise")}
-                    </button>
+                    </Button>
                   )}
                   {artifact.state === "committed" && artifact.kind === "note" && artifact.note && (
-                    <button className={styles.secondaryButton} disabled={busy} onClick={() => void submit({ operation: "export", artifactId: artifact.id }, "deliverables.exported")}>
+                    <Button variant="secondary" className={styles.secondaryButton} disabled={busy} onClick={() => void submit({ operation: "export", artifactId: artifact.id }, "deliverables.exported")}>
                       {t("deliverables.export")}
-                    </button>
+                    </Button>
                   )}
                   {artifact.kind === "note" && (artifact.revisions.length > 1 || artifact.revisions.some((entry) => entry.origin === "user")) && (
-                    <button className={styles.secondaryButton} disabled={busy} onClick={() => setHistory(history === artifact.id ? null : artifact.id)}>
+                    <Button variant="secondary" className={styles.secondaryButton} disabled={busy} onClick={() => setHistory(history === artifact.id ? null : artifact.id)}>
                       {t(history === artifact.id ? "deliverables.hideHistory" : "deliverables.history", { count: String(artifact.revisions.length) })}
-                    </button>
+                    </Button>
                   )}
                   {artifact.state === "committed" && (
-                    <button className={styles.secondaryButton} disabled={busy} onClick={() => void submit({ operation: "notify", artifactId: artifact.id }, "deliverables.notified")}>
+                    <Button variant="secondary" className={styles.secondaryButton} disabled={busy} onClick={() => void submit({ operation: "notify", artifactId: artifact.id }, "deliverables.notified")}>
                       {t("deliverables.notify")}
-                    </button>
+                    </Button>
                   )}
-                  <button className={styles.secondaryButton} disabled={busy || !artifact.taskId} onClick={() => void regenerate(artifact)}>
+                  <Button variant="secondary" className={styles.secondaryButton} disabled={busy || !artifact.taskId} onClick={() => void regenerate(artifact)}>
                     {t("deliverables.regenerate")}
-                  </button>
+                  </Button>
                 </div>
                 {expanded === artifact.id && <pre className={styles.taskPrompt}>{artifact.content}</pre>}
                 {history === artifact.id && (
@@ -259,7 +242,7 @@ export function LongAgentDeliverablesSettings({ longAgentId }: { longAgentId: st
                           <strong>v{entry.revision}</strong>
                           <small>
                             {t(entry.origin === "user" ? "deliverables.versionOriginUser" : "deliverables.versionOriginGenerated")}
-                            {` · ${new Date(entry.at).toLocaleString()}`}
+                            {` · ${new Date(entry.at).toLocaleString(locale)}`}
                           </small>
                         </div>
                         {entry.versionFile && <p className={styles.help}>{entry.versionFile}</p>}
@@ -279,12 +262,12 @@ export function LongAgentDeliverablesSettings({ longAgentId }: { longAgentId: st
                       <textarea required rows={8} maxLength={60000} value={revising.content} disabled={busy} onChange={(e) => setRevising({ ...revising, content: e.target.value })} />
                     </label>
                     <div className={styles.taskActions}>
-                      <button className={styles.primaryButton} disabled={busy} type="submit">
+                      <Button variant="primary" className={styles.primaryButton} disabled={busy} type="submit">
                         {t("common.save")}
-                      </button>
-                      <button className={styles.secondaryButton} disabled={busy} type="button" onClick={() => setRevising(null)}>
+                      </Button>
+                      <Button variant="secondary" className={styles.secondaryButton} disabled={busy} type="button" onClick={() => setRevising(null)}>
                         {t("common.cancel")}
-                      </button>
+                      </Button>
                     </div>
                   </form>
                 )}

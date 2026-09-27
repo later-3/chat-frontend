@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceFeedback } from "./InterfaceFeedback";
+
 import { useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import {
@@ -180,7 +182,7 @@ export function MobileDeviceSwitcher({ directory, runningCount, onNavigate }: Pr
               })}
             </div>
 
-            {switchError && <div className={styles.error} role="alert">{switchError}</div>}
+            {switchError && <div className={styles.error} role="alert"><InterfaceFeedback message={switchError} /></div>}
           </section>
         </>
       )}

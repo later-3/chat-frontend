@@ -1,4 +1,8 @@
 "use client";
+import { Button } from "./ui/Button";
+import { PageHeader } from "./ui/PageHeader";
+
+import { InterfaceFeedback } from "./InterfaceFeedback";
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { IconArrowLeft, IconCheck, IconLayoutGrid, IconMessageCircle, IconRefresh, IconUsers } from "@tabler/icons-react";
@@ -129,11 +133,7 @@ export function LongAgentFeedView({ onBack }: Props) {
   return (
     <section className={styles.page} aria-labelledby={titleId}>
       <div className={styles.shell}>
-        <header className={styles.header}>
-          <button type="button" className={styles.iconButton} onClick={onBack} aria-label={t("social.backToChat")} title={t("social.backToChat")}><IconArrowLeft size={22} stroke={1.8} aria-hidden="true" /></button>
-          <div className={styles.heading}><h2 id={titleId} ref={headingRef} tabIndex={-1}>{t("longAgentSettings.socialHeading")}</h2><p>{t("social.subtitle")}</p></div>
-          <button type="button" className={styles.iconButton} onClick={() => void load()} disabled={loading} aria-label={t(loading ? "social.loading" : "common.refresh")} title={t(loading ? "social.loading" : "common.refresh")}><IconRefresh size={21} stroke={1.8} aria-hidden="true" /></button>
-        </header>
+        <PageHeader headingRef={headingRef} titleId={titleId} title={t("workspaceNav.moments")} onBack={onBack}><Button iconOnly variant="ghost" type="button" className={styles.iconButton} onClick={() => void load()} disabled={loading} aria-label={t(loading ? "social.loading" : "common.refresh")} title={t(loading ? "social.loading" : "common.refresh")}><IconRefresh size={21} stroke={1.8} aria-hidden="true" /></Button></PageHeader>
         <div ref={scrollRef} className={styles.scrollArea}>
           {authors.length > 0 && (
             <nav className={styles.authorFilters} aria-label={t("social.filterHeading")}>
@@ -151,7 +151,7 @@ export function LongAgentFeedView({ onBack }: Props) {
           )}
           <main className={styles.feed} aria-busy={loading}>
             <div className={styles.feedHeading}><h3>{activeAuthor ? t("social.authorFeed", { name: activeAuthor.name }) : t("social.latest")}</h3>{posts !== null && <span>{t("social.postCount", { count: visiblePosts.length })}</span>}</div>
-            {error && <div className={styles.error} role="alert"><strong>{t("social.loadError")}</strong><p>{error}</p><button type="button" onClick={() => void load()}>{t("social.retry")}</button></div>}
+            {error && <div className={styles.error} role="alert"><strong>{t("social.loadError")}</strong><p><InterfaceFeedback message={error} /></p><button type="button" onClick={() => void load()}>{t("social.retry")}</button></div>}
             {loading && <p className={styles.loading} role="status">{t("social.loading")}</p>}
             {posts === null && loading && <div className={styles.skeleton} aria-hidden="true"><span /><span /><span /></div>}
             {posts !== null && !error && visiblePosts.length === 0 && (

@@ -1,4 +1,8 @@
 "use client";
+import { useConfirmation } from "./ui/Confirmation";
+import { Button } from "./ui/Button";
+
+import { InterfaceFeedback } from "./InterfaceFeedback";
 
 import { useDialogFocus } from "@/hooks/useDialogFocus";
 
@@ -106,6 +110,7 @@ function draftFor(memory: MemoryRecord | null): MemoryDraft {
 }
 
 export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps) {
+  const confirm = useConfirmation();
   const { locale, t } = useI18n();
   const [projects, setProjects] = useState<readonly ChatProjectSummary[]>([]);
   const [tree, setTree] = useState<MemoryTree | null>(null);
@@ -131,12 +136,12 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
   const [draft, setDraft] = useState<MemoryDraft>(() => draftFor(null));
   const [draftTargetKey, setDraftTargetKey] = useState("personal");
   const editorDirty = editing !== undefined && JSON.stringify(draft) !== JSON.stringify(draftFor(editing));
-  const closeEditor = () => {
-    if (busy || (editorDirty && !window.confirm(t("longAgentSettings.discardConfirm")))) return;
+  const closeEditor = async () => {
+    if (busy || (editorDirty && !await confirm(t("longAgentSettings.discardConfirm"), t("common.discard")))) return;
     setEditing(undefined);
   };
-  const closeManager = () => {
-    if (busy || (editorDirty && !window.confirm(t("longAgentSettings.discardConfirm")))) return;
+  const closeManager = async () => {
+    if (busy || (editorDirty && !await confirm(t("longAgentSettings.discardConfirm"), t("common.discard")))) return;
     onClose();
   };
   const managerRef = useDialogFocus<HTMLElement>(closeManager);
@@ -176,7 +181,7 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
 
   useEffect(() => {
     const controller = new AbortController();
-    void fetchChatProjects(controller.signal).then(setProjects).catch((loadError: unknown) => {
+    void fetchChatProjects(controller.signal).then((items) => setProjects(items.filter(project => project.kind === "project"))).catch((loadError: unknown) => {
       if (!(loadError instanceof DOMException && loadError.name === "AbortError")) {
         setError(loadError instanceof Error ? loadError.message : String(loadError));
       }
@@ -189,6 +194,7 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
   }, [targets]);
 
   useEffect(() => {
+    if (isAgentScope) { setLoading(false); return; }
     const controller = new AbortController();
     setLoading(true);
     setError(null);
@@ -224,7 +230,7 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [activeQuery, kind, loadHealth, offset, refreshKey, targets]);
+  }, [activeQuery, isAgentScope, kind, loadHealth, offset, refreshKey, targets]);
 
   const refresh = useCallback(() => { setRefreshKey((value) => value + 1); void loadTree(); }, [loadTree]);
   const startCreate = () => {
@@ -271,7 +277,7 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
   };
 
   const remove = async (memory: MemoryRecord) => {
-    if (!window.confirm(t("memory.deleteConfirm"))) return;
+    if (!await confirm(t("memory.deleteConfirm"), t("common.delete"))) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -290,7 +296,7 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
     const scopeLabel = scope.kind === "project"
       ? (projects.find((project) => project.projectId === scope.projectId)?.cachedName ?? scope.projectId)
       : t("memory.scope.personal");
-    if (!window.confirm(t("memory.rebuildConfirm", { scope: scopeLabel }))) return;
+    if (!await confirm(t("memory.rebuildConfirm", { scope: scopeLabel }), t("memory.rebuild"))) return;
     setBusy(true);
     setError(null);
     setNotice(t("memory.rebuilding"));
@@ -326,11 +332,11 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
           <div><h1>{t("memory.title")}</h1><p>{t("memory.subtitle")}</p></div>
         </div>
         <div className={styles.headerActions}>
-          <button type="button" className={styles.button} onClick={() => void rebuild()} disabled={busy}>
+          {!isAgentScope && <details className={styles.maintenance}><summary>{t("design.advancedMaintenance")}</summary><Button type="button" className={styles.button} onClick={() => void rebuild()} disabled={busy}>
             <IconDatabase size={16} stroke={1.8} aria-hidden="true" /><span>{t("memory.rebuild")}</span>
-          </button>
-          <button type="button" className={styles.iconButton} onClick={refresh} disabled={loading || busy} aria-label={t("common.refresh")}><IconRefresh size={17} stroke={1.8} aria-hidden="true" /></button>
-          <button type="button" className={styles.iconButton} onClick={closeManager} aria-label={t("common.close")}><IconX size={19} stroke={1.8} aria-hidden="true" /></button>
+          </Button></details>}
+          <Button iconOnly variant="ghost" type="button" className={styles.iconButton} onClick={refresh} disabled={loading || busy} aria-label={t("common.refresh")}><IconRefresh size={17} stroke={1.8} aria-hidden="true" /></Button>
+          <Button iconOnly variant="ghost" type="button" className={styles.iconButton} onClick={closeManager} aria-label={t("common.close")}><IconX size={19} stroke={1.8} aria-hidden="true" /></Button>
         </div>
       </header>
 
@@ -343,7 +349,7 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
               borderRight: "1px solid var(--border)", background: "var(--bg-panel)",
             }}
           >
-            {treeError !== null && <div style={{ padding: "4px 8px", fontSize: 10, color: "#f87171" }}>{treeError}</div>}
+            {treeError !== null && <div style={{ padding: "4px 8px", fontSize: 10, color: "var(--danger)" }}><InterfaceFeedback message={treeError} /></div>}
             {tree === null && treeError === null && (
               <div style={{ padding: "8px", fontSize: 11, color: "var(--text-dim)" }}>{t("common.loading")}</div>
             )}
@@ -360,6 +366,7 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
                   </button>
                 </div>
                 <div style={navHeaderStyle(t("memory.scopeTreeProjects"))}>
+                  <p>{t("memory.scopeTreeProjects")}</p>
                   {tree.projects.map((project) => (
                     <button
                       key={project.projectId}
@@ -374,6 +381,7 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
                   ))}
                 </div>
                 <div style={navHeaderStyle(t("memory.scopeTreeAgents"))}>
+                  <p>{t("memory.scopeTreeAgents")}</p>
                   {tree.longAgents.map((agent) => (
                     <button
                       key={agent.longAgentId}
@@ -382,7 +390,7 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
                       style={navItemStyle(scopeKeyState === `agent:${agent.longAgentId}`)}
                     >
                       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{agent.name}</span>
-                      <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{agent.memoryFiles} f</span>
+                      <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{agent.coreIndexRevision === null ? "—" : `${agent.memoryFiles} f`}</span>
                     </button>
                   ))}
                 </div>
@@ -392,6 +400,7 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
           <div style={{ flex: 1, minWidth: 0 }} className={styles.inner}>
         {isAgentScope ? (
           <LongAgentMemorySettings
+            key={scope.longAgentId}
             longAgentId={scope.longAgentId}
             onDirtyChange={() => {}}
           />
@@ -406,17 +415,17 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
         </div>
 
         <form className={styles.toolbar} onSubmit={(event) => { event.preventDefault(); setOffset(0); setActiveQuery(query.trim()); }}>
-          <div className={styles.searchBox}><IconSearch size={16} stroke={1.8} aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("memory.searchPlaceholder")} /></div>
+          <label className={styles.searchBox}><span>{t("common.search")}</span><IconSearch size={16} stroke={1.8} aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} aria-label={t("memory.searchPlaceholder")} placeholder={t("memory.searchPlaceholder")} /></label>
           <select className={styles.select} aria-label={t("memory.kind")} value={kind} onChange={(event) => { setKind(event.target.value as MemoryKind | "all"); setOffset(0); }}>
             <option value="all">{t("memory.allKinds")}</option>
             {MEMORY_KINDS.map((value) => <option key={value} value={value}>{t(`memory.kind.${value}`)}</option>)}
           </select>
-          <button type="button" className={styles.primaryButton} onClick={startCreate} disabled={busy}><IconPlus size={16} stroke={2} aria-hidden="true" />{t("memory.add")}</button>
+          <Button variant="primary" type="button" className={styles.primaryButton} onClick={startCreate} disabled={busy}><IconPlus size={16} stroke={2} aria-hidden="true" />{t("memory.add")}</Button>
         </form>
 
-        {activeQuery !== "" && <div className={styles.notice}>{t("memory.searchingFor", { query: activeQuery })}<button type="button" className={styles.button} onClick={() => { setQuery(""); setActiveQuery(""); setOffset(0); }} style={{ marginLeft: 10 }}>{t("memory.clearSearch")}</button></div>}
+        {activeQuery !== "" && <div className={styles.notice}>{t("memory.searchingFor", { query: activeQuery })}<Button type="button" className={styles.button} onClick={() => { setQuery(""); setActiveQuery(""); setOffset(0); }} style={{ marginLeft: 10 }}>{t("memory.clearSearch")}</Button></div>}
         {notice && <div className={styles.notice} role="status">{notice}</div>}
-        {error && <div className={styles.error} role="alert">{error}</div>}
+        {error && <div className={styles.error} role="alert"><InterfaceFeedback message={error} /></div>}
 
         {loading ? <div className={styles.empty}>{t("common.loading")}</div> : items.length === 0 ? (
           <div className={styles.empty}><IconBrain size={32} stroke={1.4} aria-hidden="true" /><strong>{t("memory.empty")}</strong><span>{t("memory.emptyHint")}</span></div>
@@ -430,9 +439,9 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
                 <span>v{memory.version}</span>
                 {scores.has(memory.id) && <span>{t("memory.score")}: {scores.get(memory.id)?.toFixed(3) ?? "—"}</span>}
                 <span>{formatDate(memory.updatedAt)}</span>
-              </div>{memory.indexError && <div className={styles.error} style={{ marginTop: 9 }}>{memory.indexError}</div>}</div>
+              </div>{memory.indexError && <div className={styles.error} style={{ marginTop: 9 }}><InterfaceFeedback message={memory.indexError} /></div>}</div>
               <div className={styles.cardActions}>
-                <button type="button" className={styles.iconButton} onClick={() => startEdit(memory)} disabled={busy} aria-label={t("memory.edit")}><IconPencil size={15} stroke={1.8} aria-hidden="true" /></button>
+                <Button iconOnly variant="ghost" type="button" className={styles.iconButton} onClick={() => startEdit(memory)} disabled={busy} aria-label={t("memory.edit")}><IconPencil size={15} stroke={1.8} aria-hidden="true" /></Button>
                 <button type="button" className={styles.dangerButton} onClick={() => void remove(memory)} disabled={busy} aria-label={t("memory.delete")}><IconTrash size={15} stroke={1.8} aria-hidden="true" /></button>
               </div>
             </article>
@@ -440,9 +449,9 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
         )}
 
         {activeQuery === "" && total > PAGE_SIZE && <div className={styles.pagination}>
-          <button type="button" className={styles.iconButton} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))} disabled={offset === 0 || loading} aria-label={t("memory.previous")}><IconChevronLeft size={17} stroke={1.8} aria-hidden="true" /></button>
+          <Button iconOnly variant="ghost" type="button" className={styles.iconButton} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))} disabled={offset === 0 || loading} aria-label={t("memory.previous")}><IconChevronLeft size={17} stroke={1.8} aria-hidden="true" /></Button>
           <span>{offset + 1}–{Math.min(offset + PAGE_SIZE, total)} / {total}</span>
-          <button type="button" className={styles.iconButton} onClick={() => setOffset(offset + PAGE_SIZE)} disabled={offset + PAGE_SIZE >= total || loading} aria-label={t("memory.next")}><IconChevronRight size={17} stroke={1.8} aria-hidden="true" /></button>
+          <Button iconOnly variant="ghost" type="button" className={styles.iconButton} onClick={() => setOffset(offset + PAGE_SIZE)} disabled={offset + PAGE_SIZE >= total || loading} aria-label={t("memory.next")}><IconChevronRight size={17} stroke={1.8} aria-hidden="true" /></Button>
         </div>}
         </>
         )}
@@ -452,18 +461,17 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
 
       {editing !== undefined && <div className={styles.editorBackdrop} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) closeEditor(); }}>
         <div ref={editorRef} tabIndex={-1} className={styles.editor} role="dialog" aria-modal="true" aria-label={editing === null ? t("memory.add") : t("memory.edit")}>
-          <div className={styles.editorHeader}><h2>{editing === null ? t("memory.add") : t("memory.edit")}</h2><button type="button" className={styles.iconButton} onClick={closeEditor} disabled={busy} aria-label={t("common.close")}><IconX size={18} stroke={1.8} aria-hidden="true" /></button></div>
+          <div className={styles.editorHeader}><h2>{editing === null ? t("memory.add") : t("memory.edit")}</h2><Button iconOnly variant="ghost" type="button" className={styles.iconButton} onClick={closeEditor} disabled={busy} aria-label={t("common.close")}><IconX size={18} stroke={1.8} aria-hidden="true" /></Button></div>
           <div className={styles.form}>
             <div className={styles.field}><label htmlFor="memory-text">{t("memory.text")}</label><textarea id="memory-text" className={styles.textarea} value={draft.text} maxLength={50_000} autoFocus onChange={(event) => setDraft((value) => ({ ...value, text: event.target.value }))} /></div>
             <div className={styles.formRow}>
               <div className={styles.field}><label htmlFor="memory-kind">{t("memory.kind")}</label><select id="memory-kind" className={styles.select} value={draft.kind} onChange={(event) => setDraft((value) => ({ ...value, kind: event.target.value as MemoryKind }))}>{MEMORY_KINDS.map((value) => <option key={value} value={value}>{t(`memory.kind.${value}`)}</option>)}</select></div>
               <div className={styles.field}><label htmlFor={editing === null ? "memory-target" : undefined}>{t("memory.scope")}</label>{editing === null ? <select id="memory-target" className={styles.select} value={draftTargetKey} onChange={(event) => setDraftTargetKey(event.target.value)}>
                 <option value="personal">{t("memory.scope.personal")}</option>
-                {currentProjectId !== null && !projects.some((project) => project.projectId === currentProjectId) && <option value={`project:${currentProjectId}`}>{currentProjectId}</option>}
                 {projects.map((project) => <option key={project.projectId} value={`project:${project.projectId}`}>{project.cachedName}</option>)}
               </select> : <div className={styles.input}>{editing.scope === "personal" ? t("memory.scope.personal") : editing.projectId}</div>}</div>
             </div>
-            <div className={styles.editorActions}><button type="button" className={styles.button} onClick={closeEditor} disabled={busy}>{t("common.cancel")}</button><button type="button" className={styles.primaryButton} onClick={() => void saveDraft()} disabled={busy}>{busy ? t("common.saving") : t("common.save")}</button></div>
+            <div className={styles.editorActions}><Button type="button" className={styles.button} onClick={closeEditor} disabled={busy}>{t("common.cancel")}</Button><Button variant="primary" type="button" className={styles.primaryButton} onClick={() => void saveDraft()} disabled={busy}>{busy ? t("common.saving") : t("common.save")}</Button></div>
           </div>
         </div>
       </div>}

@@ -82,6 +82,10 @@ export async function fetchChatProjects(signal?: AbortSignal): Promise<ChatProje
   });
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) throw new Error(`读取Project失败: HTTP ${response.status}`);
+  return parseChatProjectsResponse(body);
+}
+
+export function parseChatProjectsResponse(body: unknown): ChatProjectSummary[] {
   if (!isRecord(body) || !Array.isArray(body.projects)) throw new Error("Chat返回了无效的Project列表");
   // 保留全部项目（含系统容器）：侧栏需要它们来解析会话的真实身份。
   // 哪些项目进入“项目选择器”由使用方按 kind 过滤。

@@ -1,4 +1,7 @@
 "use client";
+
+import { InterfaceFeedback } from "./InterfaceFeedback";
+
 import { useContext } from "react";
 import { ToolActivityContext } from "./RunStatus";
 
@@ -187,7 +190,7 @@ interface Props {
   entryId?: string;
   onFork?: (entryId: string) => void;
   forking?: boolean;
-  onNavigate?: (entryId: string) => void;
+  onNavigate?: (entryId: string) => Promise<boolean>;
   prevAssistantEntryId?: string;
   onEditContent?: (message: UserMessage) => void;
   showTimestamp?: boolean;
@@ -202,16 +205,16 @@ interface Props {
   writtenFiles?: WrittenFile[];
 }
 
-function formatTime(ts?: number): string | null {
+function formatTime(ts: number | undefined, locale: string): string | null {
   if (!ts) return null;
   const d = new Date(ts);
   const now = new Date();
   const isToday = d.getFullYear() === now.getFullYear() &&
     d.getMonth() === now.getMonth() &&
     d.getDate() === now.getDate();
-  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const time = d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
   if (isToday) return time;
-  const date = d.toLocaleDateString([], { month: "short", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
+  const date = d.toLocaleDateString(locale, { month: "short", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
   return `${date} ${time}`;
 }
 
@@ -296,11 +299,11 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
   entryId?: string;
   onFork?: (entryId: string) => void;
   forking?: boolean;
-  onNavigate?: (entryId: string) => void;
+  onNavigate?: (entryId: string) => Promise<boolean>;
   prevAssistantEntryId?: string;
   onEditContent?: (message: UserMessage) => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const isMobile = useIsMobile();
   const [hovered, setHovered] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -328,7 +331,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
     ? commandText.slice(commandSeparator + 1)
     : "";
 
-  const time = formatTime(message.timestamp);
+  const time = formatTime(message.timestamp, locale);
   const delegatedBy = message.chatWorkflow;
   const canFork = !!entryId && !!onFork;
   const copyTarget = commandText ?? content;
@@ -360,7 +363,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
       })}
     </div>
   );
-  const canNavigate = !!prevAssistantEntryId && !!onNavigate;
+  const canNavigate = !!entryId && !!onNavigate;
 
   const copyContent = () => {
     copyText(copyTarget).then(() => {
@@ -534,7 +537,8 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
               {canNavigate && (
                 <button
                   className={isMobile ? "mobile-message-action" : undefined}
-                  onClick={() => { onNavigate!(prevAssistantEntryId!); onEditContent?.(editTarget); }}
+                  onClick={async () => { if (await onNavigate!(entryId!)) onEditContent?.(editTarget); }}
+                  data-session-continue={entryId}
                    title={t("i18n.editFromHereTitle")}
                   style={{
                     display: "flex", alignItems: "center", gap: 4,
@@ -618,9 +622,9 @@ function AssistantMessageView({
   entryId?: string;
   writtenFiles?: WrittenFile[];
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const isMobile = useIsMobile();
-  const time = showTimestamp ? formatTime(message.timestamp) : null;
+  const time = showTimestamp ? formatTime(message.timestamp, locale) : null;
   const blockItems = useMemo(() => (message.content ?? [])
     .map((block, originalIndex) => ({ block, originalIndex }))
     .filter(({ block }) => !isEmptyThinkingBlock(block, { isStreaming })), [message.content, isStreaming]);
@@ -808,15 +812,14 @@ function AssistantMessageView({
             border: "1px solid rgba(239,68,68,0.3)",
             borderRadius: 6,
             background: "rgba(239,68,68,0.07)",
-            color: "#ef4444",
+            color: "var(--danger)",
             fontFamily: "var(--font-mono)",
             fontSize: 12,
             lineHeight: 1.5,
             whiteSpace: "pre-wrap",
             overflowWrap: "anywhere",
           }}
-        >
-          Error: {providerError}
+        >{t("interface.error")}<InterfaceFeedback message={providerError} />
         </div>
       )}
 
@@ -829,7 +832,7 @@ function AssistantMessageView({
       }}>
         {message.usage && !isStreaming && (
           <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
-            {formatUsage(message.usage)}
+            {formatUsage(message.usage, t, locale)}
           </div>
         )}
         {textContent && !isStreaming && (
@@ -961,7 +964,7 @@ function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
         <div
           style={{
             padding: "8px 10px",
-            color: error ? "#f87171" : "var(--text-muted)",
+            color: error ? "var(--danger)" : "var(--text-muted)",
             fontSize: 12,
             lineHeight: 1.6,
             whiteSpace: "pre-wrap",
@@ -975,7 +978,6 @@ function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
     </div>
   );
 }
-
 
 function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number }) {
   const activity = useContext(ToolActivityContext);
@@ -1027,7 +1029,7 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
           minWidth: 0,
         }}
       >
-        <span style={{ color: isError ? "#f87171" : result ? "#16a34a" : "var(--text-muted)", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
+        <span style={{ color: isError ? "var(--danger)" : result ? "var(--success)" : "var(--text-muted)", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
           {block.toolName}
         </span>
         <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
@@ -1186,7 +1188,7 @@ function SplitDiffCellView({ cell, side }: { cell: SplitDiffCell; side: "left" |
   const marker =
     cell.type === "added" ? "+" : cell.type === "removed" ? "-" : " ";
   const markerColor =
-    cell.type === "added" ? "#22c55e" : cell.type === "removed" ? "#f87171" : "var(--text-dim)";
+    cell.type === "added" ? "var(--success)" : cell.type === "removed" ? "var(--danger)" : "var(--text-dim)";
 
   return (
     <div
@@ -1256,8 +1258,8 @@ function PatchTextView({ text }: { text: string }) {
           kind === "hunk" ? "rgba(96,165,250,0.12)" :
           "transparent";
         const color =
-          kind === "added" ? "#22c55e" :
-          kind === "removed" ? "#f87171" :
+          kind === "added" ? "var(--success)" :
+          kind === "removed" ? "var(--danger)" :
           kind === "hunk" ? "var(--accent)" :
           "var(--text)";
 
@@ -1268,9 +1270,9 @@ function PatchTextView({ text }: { text: string }) {
               display: "flex",
               background: bg,
               borderLeft: kind === "added"
-                ? "3px solid #22c55e"
+                ? "3px solid var(--success)"
                 : kind === "removed"
-                ? "3px solid #f87171"
+                ? "3px solid var(--danger)"
                 : kind === "hunk"
                 ? "3px solid var(--accent)"
                 : "3px solid transparent",
@@ -1362,7 +1364,7 @@ function PairedResult({ text, images, isEmpty, isError }: {
           style={{
             margin: 0,
             padding: "8px 10px",
-            color: isError ? "#f87171" : (isEmpty ? "var(--text-dim)" : "var(--text-muted)"),
+            color: isError ? "var(--danger)" : (isEmpty ? "var(--text-dim)" : "var(--text-muted)"),
             fontSize: 12,
             lineHeight: 1.5,
             overflow: "auto",
@@ -1382,10 +1384,10 @@ function PairedResult({ text, images, isEmpty, isError }: {
 }
 
 function CompactionMessageView({ message }: { message: CustomMessage }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const summary = getMessageText(message.content);
   const parsedSummary = useMemo(() => parseCompactionSummary(summary), [summary]);
-  const time = formatTime(message.timestamp);
+  const time = formatTime(message.timestamp, locale);
 
   return (
     <div style={{ marginBottom: 16 }}>
@@ -1408,9 +1410,7 @@ function CompactionMessageView({ message }: { message: CustomMessage }) {
             color: "var(--text-muted)",
           }}
         >
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 650 }}>
-            compaction
-          </span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 650 }}>{t("interface.compaction")}</span>
           {time && <span style={{ marginLeft: "auto", color: "var(--text-dim)", fontSize: 10 }}>{time}</span>}
         </div>
 
@@ -1465,7 +1465,7 @@ function CompactionFileList({ title, files }: { title: string; files: string[] }
 }
 
 function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessage; cwd?: string; onOpenFile?: (filePath: string) => void }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const isHiddenDisplay = message.display === false;
   const [contentExpanded, setContentExpanded] = useState(!isHiddenDisplay);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
@@ -1475,7 +1475,7 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
   const hasDetails = message.details !== undefined;
   const detailsText = hasDetails ? safeJson(message.details) : "";
   const title = formatCustomType(message.customType);
-  const time = formatTime(message.timestamp);
+  const time = formatTime(message.timestamp, locale);
 
   const copyContent = () => {
     copyText(text || detailsText).then(() => {
@@ -1634,9 +1634,9 @@ function CustomMessageView({ message, cwd, onOpenFile }: { message: CustomMessag
  * event instead of leaking the CustomEntry implementation type into the UI.
  */
 function PlanReviewDecisionMessageView({ message }: { message: CustomMessage }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const text = getMessageText(message.content);
-  const time = formatTime(message.timestamp);
+  const time = formatTime(message.timestamp, locale);
 
   return (
     <div
@@ -1704,7 +1704,6 @@ function previewText(text: string): string {
   return normalized.length > 140 ? `${normalized.slice(0, 140)}...` : normalized;
 }
 
-
 function getToolPreview(block: ToolCallContent): string {
   const input = block.input;
   if (!input || typeof input !== "object") return "";
@@ -1728,17 +1727,18 @@ function formatUsage(usage: {
   cacheRead: number;
   cacheWrite: number;
   cost: { total: number };
-}): string {
+}, t: ReturnType<typeof useI18n>["t"], locale: string): string {
   const parts = [];
-  if (usage.input) parts.push(`${usage.input.toLocaleString()} in`);
-  if (usage.output) parts.push(`${usage.output.toLocaleString()} out`);
-  if (usage.cacheRead) parts.push(`${usage.cacheRead.toLocaleString()} cache R`);
-  if (usage.cacheWrite) parts.push(`${usage.cacheWrite.toLocaleString()} cache W`);
+  if (usage.input) parts.push(`${t("session.input")} ${usage.input.toLocaleString(locale)}`);
+  if (usage.output) parts.push(`${t("session.output")} ${usage.output.toLocaleString(locale)}`);
+  if (usage.cacheRead) parts.push(`${t("session.cacheRead")} ${usage.cacheRead.toLocaleString(locale)}`);
+  if (usage.cacheWrite) parts.push(`${t("session.cacheWrite")} ${usage.cacheWrite.toLocaleString(locale)}`);
   if (usage.cost?.total) parts.push(`$${usage.cost.total.toFixed(4)}`);
   return parts.join(" · ");
 }
 
 function BashExecutionView({ message }: { message: BashExecutionMessage }) {
+  const { t: tr } = useI18n();
   const [fullOutput, setFullOutput] = useState<string | null>(null);
   const [loadingFull, setLoadingFull] = useState(false);
   const [fullError, setFullError] = useState<string | null>(null);
@@ -1800,16 +1800,14 @@ function BashExecutionView({ message }: { message: BashExecutionMessage }) {
               disabled={loadingFull}
               style={{ background: "none", border: "none", color: "var(--accent)", cursor: loadingFull ? "default" : "pointer", fontSize: 11, padding: 0, textDecoration: "underline" }}
             >
-              {loadingFull ? "loading…" : "view full output"}
+              {loadingFull ? tr("interface.loading.2") : tr("interface.view.full.output")}
             </button>
           )}
           <a
             href={`${fullOutputUrl}&download=1`}
             style={{ marginLeft: showFullButton ? 10 : 0, color: "var(--accent)", fontSize: 11, textDecoration: "underline" }}
-          >
-            download full output
-          </a>
-          {fullError && <span style={{ marginLeft: 6, color: "var(--text-dim)", fontSize: 11 }}>({fullError})</span>}
+          >{tr("interface.download.full.output")}</a>
+          {fullError && <span style={{ marginLeft: 6, color: "var(--text-dim)", fontSize: 11 }}>(<InterfaceFeedback message={fullError} />)</span>}
         </div>
       )}
     </div>

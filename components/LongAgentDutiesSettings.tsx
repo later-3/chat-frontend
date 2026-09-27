@@ -1,4 +1,9 @@
 "use client";
+import { TaskResults, TaskRunDetails } from "./TaskRunDetails";
+import { Button } from "./ui/Button";
+
+import { InterfaceFeedback } from "./InterfaceFeedback";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import {
@@ -26,7 +31,7 @@ export function LongAgentDutiesSettings({
 }: {
   longAgentId: string;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [document, setDocument] = useState<FriendDuties | null>(null);
   const [projects, setProjects] = useState<ChatProjectSummary[]>([]),
     [draft, setDraft] = useState<Draft | null>(null);
@@ -204,14 +209,14 @@ export function LongAgentDutiesSettings({
     <section className={styles.section} aria-label={t("longAgentSettings.dutiesTab")}>
       <div className={styles.sourceLine}>
         <span>{t("dutyV2.intro")}</span>
-        <button
+        <Button variant="secondary"
           className={styles.secondaryButton}
           disabled={busy || !!pending.current}
           onClick={() => edit(null)}
         >
           {t("dutyV2.new")}
-        </button>
-        <button
+        </Button>
+        <Button variant="secondary"
           className={styles.secondaryButton}
           disabled={busy}
           onClick={() => {
@@ -219,29 +224,29 @@ export function LongAgentDutiesSettings({
           }}
         >
           {t("dutyV2.refresh")}
-        </button>
+        </Button>
       </div>
       {error && (
         <div className={styles.error} role="alert">
-          {error}
+          <InterfaceFeedback message={error} />
         </div>
       )}
       {pending.current && !busy && (
-        <button
+        <Button variant="secondary"
           className={styles.secondaryButton}
           onClick={() => void submit(pending.current!)}
         >
           {t("dutyV2.retry")}
-        </button>
+        </Button>
       )}
       {notice && (
         <div className={styles.notice} role="status">
           {notice}
         </div>
       )}
-      {document?.projectionError && <p className={styles.error}>{document.projectionError}</p>}
-      {!document && <p role="status">{t("longAgentSettings.inspectionLoading")}</p>}
-      {document?.duties.length === 0 && (
+      {document?.projectionError && <p className={styles.error} role="alert"><InterfaceFeedback message={document.projectionError} /></p>}
+      {!document && !error && <p role="status">{t("longAgentSettings.inspectionLoading")}</p>}
+      {document && !document.projectionError && document.duties.length === 0 && (
         <p className={styles.help}>{t("dutyV2.empty")}</p>
       )}
       {draft && (
@@ -455,21 +460,21 @@ export function LongAgentDutiesSettings({
           </label>
           <p className={styles.help}>{t("dutyV2.budgetDisclaimer")}</p>
           <div className={styles.taskActions}>
-            <button
+            <Button variant="primary"
               className={styles.primaryButton}
               disabled={busy || !!pending.current}
               type="submit"
             >
               {t("common.save")}
-            </button>
-            <button
+            </Button>
+            <Button variant="secondary"
               className={styles.secondaryButton}
               disabled={busy || !!pending.current}
               type="button"
               onClick={() => setDraft(null)}
             >
               {t("common.cancel")}
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -513,27 +518,28 @@ export function LongAgentDutiesSettings({
             />
           </label>
           <div className={styles.taskActions}>
-            <button
+            <Button variant="primary"
               className={styles.primaryButton}
               disabled={busy || !!pending.current}
               type="submit"
             >
               {t("common.save")}
-            </button>
-            <button
+            </Button>
+            <Button variant="secondary"
               className={styles.secondaryButton}
               disabled={busy || !!pending.current}
               type="button"
               onClick={() => setCorrection(null)}
             >
               {t("common.cancel")}
-            </button>
+            </Button>
           </div>
         </form>
       )}
       <ul className={styles.taskList}>
         {document?.duties.map((duty) => (
           <li key={duty.id} className={styles.taskRow}>
+            <TaskResults agentId={longAgentId} scope={{ kind: "duty", id: duty.id }} />
             <div className={styles.taskHead}>
               <strong>{duty.name}</strong>
               <span>{t(`dutyV2.${duty.status}`)}</span>
@@ -560,7 +566,7 @@ export function LongAgentDutiesSettings({
             <p className={styles.help}>
               {t("dutyV2.nextStep")}: {duty.nextStep ?? t("dutyV2.noNextStep")}
               {duty.nextCheckAt
-                ? ` · ${t("dutyV2.nextCheck")}: ${new Date(duty.nextCheckAt).toLocaleString()}`
+                ? ` · ${t("dutyV2.nextCheck")}: ${new Date(duty.nextCheckAt).toLocaleString(locale)}`
                 : ""}
             </p>
             <p className={styles.help}>
@@ -576,33 +582,33 @@ export function LongAgentDutiesSettings({
                 ? t(duty.linkedTask.projection ? "taskV2.applied" : "taskV2.pendingApply")
                 : t("dutyV2.taskPending")}
               {duty.linkedTask?.projection?.nextAt
-                ? ` · ${t("dutyV2.nextAuto")}: ${new Date(duty.linkedTask.projection.nextAt).toLocaleString()}`
+                ? ` · ${t("dutyV2.nextAuto")}: ${new Date(duty.linkedTask.projection.nextAt).toLocaleString(locale)}`
                 : ""}
             </p>
             {duty.status !== "ended" && (
               <div className={styles.taskActions}>
-                <button
+                <Button variant="secondary"
                   className={styles.secondaryButton}
                   disabled={busy || !!pending.current}
                   onClick={() => action(duty, "advance")}
                 >
                   {t("dutyV2.advanceNow")}
-                </button>
-                <button
+                </Button>
+                <Button variant="secondary"
                   className={styles.secondaryButton}
                   disabled={busy || !!pending.current}
                   onClick={() => action(duty, duty.status === "paused" ? "resume" : "pause")}
                 >
                   {t(duty.status === "paused" ? "dutyV2.resume" : "dutyV2.pause")}
-                </button>
-                <button
+                </Button>
+                <Button variant="secondary"
                   className={styles.secondaryButton}
                   disabled={busy || !!pending.current}
                   onClick={() => edit(duty)}
                 >
                   {t("dutyV2.edit")}
-                </button>
-                <button
+                </Button>
+                <Button variant="secondary"
                   className={styles.secondaryButton}
                   disabled={busy || !!pending.current}
                   onClick={() =>
@@ -610,14 +616,14 @@ export function LongAgentDutiesSettings({
                   }
                 >
                   {t("dutyV2.correct")}
-                </button>
-                <button
+                </Button>
+                <Button variant="secondary"
                   className={styles.secondaryButton}
                   disabled={busy || !!pending.current}
                   onClick={() => action(duty, "end")}
                 >
                   {t("dutyV2.end")}
-                </button>
+                </Button>
               </div>
             )}
             {liveOccurrences(duty).length > 0 && (
@@ -628,7 +634,7 @@ export function LongAgentDutiesSettings({
                   .map((o) => (
                     <li key={`live-${o.id}`} className={styles.taskOccurrence}>
                       <span>
-                        {new Date(o.scheduledAt).toLocaleString()} ·{" "}
+                        {new Date(o.scheduledAt).toLocaleString(locale)} ·{" "}
                         {o.work?.execution
                           ? t(`friendWork.status.${o.work.execution.status}`)
                           : t(`taskV2.${o.state}`)}
@@ -641,7 +647,7 @@ export function LongAgentDutiesSettings({
                           {t("taskV2.openResult")}
                         </a>
                       )}
-                      <button
+                      <Button variant="secondary"
                         className={styles.secondaryButton}
                         disabled={busy || !!pending.current}
                         onClick={() =>
@@ -655,7 +661,7 @@ export function LongAgentDutiesSettings({
                         }
                       >
                         {t("taskV2.stopRun")}
-                      </button>
+                      </Button>
                     </li>
                   ))}
                 </ul>
@@ -673,10 +679,10 @@ export function LongAgentDutiesSettings({
                   return (
                     <li key={a.advancementKey} className={styles.taskOccurrence}>
                       <span>
-                        {new Date(a.at).toLocaleString()} · {t(`dutyV2.adv.${a.status}`)} ·{" "}
-                        {a.tokens} tokens
-                        {a.superseded ? ` · ${t("dutyV2.superseded")}` : ""}
+                        {new Date(a.at).toLocaleString(locale)} · {t(`dutyV2.adv.${a.status}`)} ·{" "}
+                        {a.tokens}{t("interface.tokens")}{a.superseded ? ` · ${t("dutyV2.superseded")}` : ""}
                       </span>
+                      {occurrence?.work && <TaskRunDetails agentId={longAgentId} workId={occurrence.work.work.id} sessionId={occurrence.work.work.sessionId} />}
                       {occurrence?.reason && <p>{occurrence.reason}</p>}
                       {occurrence?.work && (
                         <a
@@ -688,7 +694,7 @@ export function LongAgentDutiesSettings({
                       {occurrence &&
                         (occurrence.state === "accepted" ||
                           occurrence.work?.execution?.capabilities.cancel) && (
-                          <button
+                          <Button variant="secondary"
                             className={styles.secondaryButton}
                             disabled={busy || !!pending.current}
                             onClick={() =>
@@ -702,7 +708,7 @@ export function LongAgentDutiesSettings({
                             }
                           >
                             {t("taskV2.stopRun")}
-                          </button>
+                          </Button>
                         )}
                     </li>
                   );
@@ -720,7 +726,7 @@ export function LongAgentDutiesSettings({
                   .map((p) => (
                     <li key={p.id} className={styles.taskOccurrence}>
                       <span>
-                        {new Date(p.at).toLocaleString()} ·{" "}
+                        {new Date(p.at).toLocaleString(locale)} ·{" "}
                         {t(p.source === "agent" ? "dutyV2.byAgent" : "dutyV2.byUser")}
                         {p.superseded ? ` · ${t("dutyV2.superseded")}` : ""}
                         {!p.applied ? ` · ${t("dutyV2.notApplied")}` : ""}
@@ -756,7 +762,7 @@ export function LongAgentDutiesSettings({
                     .map((o) => (
                       <li key={`skip-${o.id}`} className={styles.taskOccurrence}>
                         <span>
-                          {new Date(o.scheduledAt).toLocaleString()} ·{" "}
+                          {new Date(o.scheduledAt).toLocaleString(locale)} ·{" "}
                           {t(`taskV2.${o.state}`)}
                         </span>
                         {o.reason && <p>{o.reason}</p>}

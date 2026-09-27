@@ -222,14 +222,14 @@ export async function sendConversationMessage(agentId: string, conversationId: s
 }
 
 export async function startConversationRound(agentId: string, conversationId: string, input: {
-  policy: "mention" | "round-robin" | "parallel" | "moderator" | "free"; targets?: string[];
+  policy: "mention" | "round-robin" | "parallel" | "moderator" | "free"; targets?: string[]; discussionId?: string;
 }, signal?: AbortSignal): Promise<string> {
   const payload = await jsonRequest(`${base(agentId)}/${encodeURIComponent(conversationId)}/discussions`, { method: "POST", body: JSON.stringify(input) }, signal);
   return text(obj(payload, "讨论响应").discussionId, "讨论 id");
 }
 
 export async function startConversationConsultation(agentId: string, conversationId: string, input: {
-  fromLongAgentId: string; toLongAgentId: string; question: string;
+  fromLongAgentId: string; toLongAgentId: string; question: string; discussionId?: string;
 }, signal?: AbortSignal): Promise<string> {
   const payload = await jsonRequest(`${base(agentId)}/${encodeURIComponent(conversationId)}/consult`, { method: "POST", body: JSON.stringify(input) }, signal);
   return text(obj(payload, "请教响应").discussionId, "讨论 id");

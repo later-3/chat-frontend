@@ -22,24 +22,33 @@
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   --bg-secondary: var(--bg-panel);
+  --accent-wash: color-mix(in srgb, var(--accent) 8%, transparent);
+  --accent-outline: color-mix(in srgb, var(--accent) 45%, transparent);
+  --accent-shadow: color-mix(in srgb, var(--accent) 20%, transparent);
+  --radius-control: 10px;
+  --radius-panel: 14px;
+  --radius-dialog: 20px;
+  --shadow-popover: 0 8px 32px #15101f20, 0 2px 8px #15101f10;
+  --shadow-dialog: 0 24px 80px #15101f30;
+  --overlay: #17132166;
   /* iOS safe-area insets (usable from JS/CSS everywhere) */
   --safe-area-top: env(safe-area-inset-top, 0px);
   --safe-area-right: env(safe-area-inset-right, 0px);
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --safe-area-left: env(safe-area-inset-left, 0px);
 
-  --bg: #FFFFFF;
-  --bg-panel: #F7F8FA;
-  --bg-hover: #EEF1F5;
-  --bg-selected: #E8EFFC;
-  --text: #20242C;
-  --text-muted: #596273;
-  --text-dim: #606B7C;
-  --border: #D8DDE6;
-  --border-control: #7C8798;
-  --accent: #245FD6;
-  --accent-hover: #1D52BE;
-  --accent-pressed: #194BAA;
+  --bg: #FAF9F7;
+  --bg-panel: #F2F1EE;
+  --bg-hover: #EAE8E5;
+  --bg-selected: #EEEAF9;
+  --text: #29272E;
+  --text-muted: #605C69;
+  --text-dim: #6C6673;
+  --border: #DBD7DF;
+  --border-control: #898290;
+  --accent: #6551B8;
+  --accent-hover: #5743A4;
+  --accent-pressed: #49378F;
   --on-accent: #FFFFFF;
   --success: #187044;
   --success-bg: #EAF7EF;
@@ -53,12 +62,12 @@
   --bg-subtle: var(--bg-panel);
 
   /* Mobile shell tokens: future themes override these without changing layout. */
-  --mobile-surface: #ffffff;
-  --mobile-surface-muted: #f7f8fa;
-  --mobile-control: #ffffff;
-  --mobile-border: #e1e4e8;
-  --mobile-accent: #2563eb;
-  --mobile-positive: #22a447;
+  --mobile-surface: var(--bg);
+  --mobile-surface-muted: var(--bg-panel);
+  --mobile-control: var(--bg);
+  --mobile-border: var(--border);
+  --mobile-accent: var(--accent);
+  --mobile-positive: var(--success);
   --mobile-radius-control: 14px;
   --mobile-radius-sheet: 22px;
   --mobile-nav-height: 64px;
@@ -66,19 +75,19 @@
 }
 
 html.dark {
-  --bg: #181A1E;
-  --bg-panel: #202329;
-  --bg-hover: #2B3039;
-  --bg-selected: #263653;
-  --text: #E8EBF0;
-  --text-muted: #ADB6C5;
-  --text-dim: #99A4B5;
-  --border: #383F4B;
-  --border-control: #758298;
-  --accent: #8AB4FF;
-  --accent-hover: #9DBFFF;
-  --accent-pressed: #A5C5FF;
-  --on-accent: #15233C;
+  --bg: #1C1B20;
+  --bg-panel: #242329;
+  --bg-hover: #302E36;
+  --bg-selected: #363047;
+  --text: #EEEDF2;
+  --text-muted: #BDB7C8;
+  --text-dim: #ACA5B7;
+  --border: #423D4B;
+  --border-control: #817889;
+  --accent: #BEB0FF;
+  --accent-hover: #CBBDFF;
+  --accent-pressed: #D3C7FF;
+  --on-accent: #251D40;
   --success: #79D5A2;
   --success-bg: #20382B;
   --warning: #F1C56B;
@@ -2696,3 +2705,67 @@ span.token.table {
   .prompt-resource-library.prompt-detail-open > nav { display:none; }
   .provider-requests-dialog { inset:0 !important; border-radius:0 !important; }
 }
+
+/* Common composer accessories use the same row and hit area as attachments/workflow selection. */
+.composer-memory-action { display:inline-flex; align-items:center; justify-content:center; gap:4px; width:32px; min-height:32px; flex-shrink:0; padding:0; border:0; border-radius:9px; background:transparent; color:var(--text-muted); cursor:pointer; }
+.composer-memory-action:hover { background:var(--bg-hover); color:var(--text); }
+.composer-memory-action:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.session-memory-setting { display:flex; align-items:center; gap:8px; padding:12px 20px; min-height:44px; font-size:14px; }
+@media (max-width:768px), (hover:none) and (pointer:coarse) and (max-height:500px) {
+  .composer-memory-action { width:44px; min-height:44px; }
+}
+
+/* Shared 2026 workspace language: quiet surfaces, clear choices, one accent. */
+.workspace-brand { color:var(--accent); }
+.workspace-nav-item { border-radius:var(--radius-control); }
+.workspace-nav-item.is-active { color:var(--accent); }
+.workspace-settings > header { min-height:96px; padding:24px 32px; }
+.workspace-settings h1 { font-size:24px; letter-spacing:-.025em; }
+.workspace-settings-content > h2 { font-size:22px; font-weight:600; color:var(--text); letter-spacing:-.02em; margin-bottom:8px; }
+.workspace-settings-nav { padding-top:32px; gap:6px; }
+.workspace-settings-nav button { display:flex; align-items:center; gap:10px; min-height:44px; }
+.workspace-settings-nav button[aria-current=page] { color:var(--accent); }
+.workspace-settings-content { max-width:760px; padding:32px; }
+.workspace-settings-group { border:0; border-radius:0; }
+.workspace-settings-group button { padding:18px 4px; min-height:76px; background:transparent; }
+.workspace-settings-group strong { font-size:15px; font-weight:550; }
+.workspace-settings-group small { max-width:58ch; font-size:13px; line-height:1.6; }
+.settings-section { padding:24px 0; border-bottom:1px solid var(--border); }
+.settings-section h3 { font-size:14px; font-weight:550; margin:0 0 6px; }
+.settings-section > p { color:var(--text-muted); font-size:13px; line-height:1.6; margin:0 0 16px; }
+.settings-theme-choices { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+.settings-theme-choices button { min-height:100px; display:flex; flex-direction:column; align-items:flex-start; gap:16px; padding:16px; border:1px solid var(--border); border-radius:var(--radius-panel); color:var(--text-muted); background:var(--bg-panel); cursor:pointer; }
+.settings-theme-choices button[aria-pressed=true] { border-color:var(--accent); background:var(--bg-selected); color:var(--accent); }
+.settings-segments { display:inline-flex; flex-wrap:wrap; gap:4px; padding:4px; border:1px solid var(--border); border-radius:12px; background:var(--bg-panel); }
+.settings-segments button { min-height:36px; padding:8px 20px; border:1px solid transparent; border-radius:8px; background:transparent; color:var(--text-muted); cursor:pointer; }
+.settings-segments button[aria-pressed=true] { background:var(--bg); border-color:var(--border); color:var(--text); }
+.settings-project-choice { margin-bottom:24px; }
+.workspace-settings :is(button,input):focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.surface-dialog { border-radius:var(--radius-dialog); box-shadow:var(--shadow-dialog); }
+.surface-dialog::backdrop { background:var(--overlay); }
+.surface-header { padding:20px 24px; }
+.surface-header h1 { font-weight:600; letter-spacing:-.02em; }
+:is(.configuration-dialog,.workflow-agent-dialog) :where(select,input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=color]):not([type=range]),textarea) { border-radius:var(--radius-control); min-height:40px; }
+:is(.configuration-dialog,.workflow-agent-dialog) :where(button) { border-radius:var(--radius-control); min-height:36px; }
+:is(.configuration-dialog,.workflow-agent-dialog) :where(fieldset) { min-width:0; }
+@media(max-width:768px), (hover:none) and (pointer:coarse) and (max-height:500px) {
+  .workspace-settings > header { min-height:80px; padding:16px; }
+  .workspace-settings-content { padding:24px 16px; }
+  .workspace-settings-nav { padding:8px 12px; }
+  .settings-theme-choices { gap:8px; }
+  .settings-theme-choices button { padding:12px; min-height:96px; }
+  .settings-segments button,.workspace-settings-group button { min-height:44px; }
+  .surface-dialog { border-radius:0; }
+  :is(.configuration-dialog,.workflow-agent-dialog) :where(select,input:not([type=checkbox]):not([type=radio]),textarea,button) { min-height:44px; }
+}
+
+.workspace-settings-nav svg { flex-shrink: 0; }
+
+.resource-nav-button { width:100%; border:0; font:inherit; text-align:left; background:transparent; }
+
+.interface-feedback-toggle { color: inherit; text-decoration: underline; text-underline-offset: 3px; font: inherit; padding: 2px 4px; border: 0; background: transparent; cursor: pointer; }
+.interface-feedback-details { display: block; margin-top: 6px; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-muted); font-size: .9em; }
+
+/* Shared Radix modal layer: no per-page focus or close implementation. */
+.surface-overlay { position:fixed; inset:0; z-index:1100; background:var(--overlay); }
+.surface-dialog[data-ui-dialog] { position:fixed; inset:0; z-index:1101; display:flex; flex-direction:column; }

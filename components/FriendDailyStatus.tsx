@@ -1,4 +1,7 @@
 "use client";
+
+import { InterfaceFeedback } from "./InterfaceFeedback";
+
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { fetchFriendDailyState, type FriendDailyAction, type FriendDailyState } from "@/lib/friend-daily-browser";
@@ -36,7 +39,7 @@ export function FriendDailyStatus({ longAgentId }: { longAgentId: string }) {
   const requests = state?.requests.filter((request) => request.status !== "completed" && request.status !== "cancelled") ?? [];
   return <section className={styles.dailySection} aria-label={t("longAgentSettings.dailyHeading")}>
     <div className={styles.dailyHead}><h3>{t("longAgentSettings.dailyHeading")}</h3><button disabled={busy} onClick={() => setRefresh((value) => value + 1)}>{t("longAgentSettings.dailyRefresh")}</button></div>
-    {error && <p className={styles.error} role="alert">{error}</p>}
+    {error && <p className={styles.error} role="alert"><InterfaceFeedback message={error} /></p>}
     {!state && !error && <p role="status">{t("longAgentSettings.inspectionLoading")}</p>}
     {state && <><p className={styles.help}>{state.today} · {state.timeZone} — {t("longAgentSettings.dailyHint")}</p>
       {state.days.length === 0 && <p className={styles.help}>{t("longAgentSettings.dailyEmpty")}</p>}
@@ -45,14 +48,14 @@ export function FriendDailyStatus({ longAgentId }: { longAgentId: string }) {
           <a href={`/?session=${encodeURIComponent(day.sessionId)}&projectId=${encodeURIComponent(longAgentId)}`}>{t("longAgentSettings.dailyHistory")}</a>
           {day.summary.status === "failed" && <button disabled={busy} onClick={() => void act({ action: "retry-summary", date: day.date })}>{t("longAgentSettings.dailyRetrySummary")}</button>}
         </div>
-        {day.summary.error && <p className={styles.taskPrompt}>{day.summary.error}</p>}
+        {day.summary.error && <p className={styles.taskPrompt}><InterfaceFeedback message={day.summary.error} /></p>}
         {day.summary.nextAttemptAt && <small>{t("longAgentSettings.dailyNextRetry")} {day.summary.nextAttemptAt}</small>}
       </li>)}</ul>
       {requests.length > 0 && <><h3>{t("longAgentSettings.dailyRequests")}</h3><ul className={styles.taskList}>{requests.map((request) => <li className={styles.taskRow} key={request.turnId}>
         <div className={styles.dailyHead}><strong>#{request.sequence} · {request.date}</strong><span>{label(request.status)} · {t(`longAgentSettings.dailySource_${request.source}`)}</span>
           {request.status === "queued" && <button disabled={busy} onClick={() => void act({ action: "cancel-request", turnId: request.turnId })}>{t("longAgentSettings.dailyCancel")}</button>}
           {request.status === "failed" && <button disabled={busy} onClick={() => void act({ action: "retry-request", turnId: request.turnId })}>{t("longAgentSettings.dailyRetryRequest")}</button>}
-        </div>{request.error && <p className={styles.taskPrompt}>{request.error}</p>}
+        </div>{request.error && <p className={styles.taskPrompt}><InterfaceFeedback message={request.error} /></p>}
       </li>)}</ul></>}
     </>}
   </section>;

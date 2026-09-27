@@ -1,5 +1,9 @@
 "use client";
 
+import { translateWorkflowCopy } from "@/lib/i18n/workflow-copy";
+
+import { InterfaceFeedback } from "./InterfaceFeedback";
+
 import { ConfigurationToggle as Toggle } from "./ConfigurationToggle";
 
 import { useDialogFocus } from "@/hooks/useDialogFocus";
@@ -44,6 +48,12 @@ function skillGroupLabel(skill: Skill): string {
   return skill.install?.skillsShUrl ? `${source} / skills.sh` : source;
 }
 
+function displayGroupLabel(label: string, t: ReturnType<typeof useI18n>["t"]): string {
+  const [scope, marketplace] = label.split(" / ");
+  const key = scope === "project" ? "skills.groupProject" : scope === "global" ? "skills.groupPersonal" : "skills.groupPath";
+  return marketplace ? `${t(key)} / ${marketplace}` : t(key);
+}
+
 function updateKey(skill: Skill): string | null {
   return skill.install
     ? `${skill.install.scope}\0${skill.install.package}`
@@ -51,7 +61,7 @@ function updateKey(skill: Skill): string | null {
 }
 
 function shortVersion(version?: string): string {
-  return version ? version.slice(0, 8) : "unknown";
+  return version ? version.slice(0, 8) : "—";
 }
 
 function SkillDetail({
@@ -104,13 +114,13 @@ function SkillDetail({
               flexShrink: 0,
               background:
                 label === "project"
-                  ? "rgba(99,102,241,0.12)"
+                  ? "var(--bg-selected)"
                   : "rgba(120,120,120,0.12)",
               color:
-                label === "project" ? "rgba(99,102,241,0.8)" : "var(--text-dim)",
+                label === "project" ? "var(--accent)" : "var(--text-dim)",
             }}
           >
-            {label}
+            {displayGroupLabel(label, t)}
           </span>
           <span
             style={{
@@ -149,8 +159,8 @@ function SkillDetail({
             </span>
           )}
           {saveError && (
-            <span style={{ fontSize: 12, color: "#f87171", overflowWrap: "anywhere" }}>
-              {saveError}
+            <span style={{ fontSize: 12, color: "var(--danger)", overflowWrap: "anywhere" }}>
+              <InterfaceFeedback message={saveError} />
             </span>
           )}
         </div>
@@ -160,9 +170,7 @@ function SkillDetail({
         <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
           <span
             style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500 }}
-          >
-            Source
-          </span>
+          >{t("interface.source")}</span>
           <a
             href={skill.install.skillsShUrl}
             target="_blank"
@@ -197,9 +205,7 @@ function SkillDetail({
         <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
           <span
             style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500 }}
-          >
-            Version
-          </span>
+          >{t("interface.version")}</span>
           <div
             style={{
               display: "flex",
@@ -290,7 +296,7 @@ function SkillDetail({
             )}
           </div>
           {updateError && (
-            <span style={{ fontSize: 12, color: "var(--danger)" }}>{updateError}</span>
+            <span style={{ fontSize: 12, color: "var(--danger)" }}><InterfaceFeedback message={updateError} /></span>
           )}
         </div>
       )}
@@ -299,7 +305,7 @@ function SkillDetail({
         <span
           style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500 }}
         >
-          Name
+          {t("design.resourceName")}
         </span>
         <span
           style={{
@@ -316,7 +322,7 @@ function SkillDetail({
         <span
           style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500 }}
         >
-          Description
+          {t("design.resourceDescription")}
         </span>
         <span
           style={{ fontSize: 14, color: "var(--text-muted)", lineHeight: 1.6 }}
@@ -517,13 +523,13 @@ function AddSkillPanel({
 
         {/* Errors */}
         {searchError && (
-          <div style={{ fontSize: 12, color: "#f87171" }}>{searchError}</div>
+          <div style={{ fontSize: 12, color: "var(--danger)" }}><InterfaceFeedback message={searchError} /></div>
         )}
         {installError && (
           <div
-            style={{ fontSize: 12, color: "#f87171", wordBreak: "break-word" }}
+            style={{ fontSize: 12, color: "var(--danger)", wordBreak: "break-word" }}
           >
-            {installError}
+            <InterfaceFeedback message={installError} />
           </div>
         )}
       </div>
@@ -646,8 +652,7 @@ function AddSkillPanel({
         !searching && (
           <div
             style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.8 }}
-          >
-            Search{" "}
+          >{t("interface.search")}{" "}
             <a
               href="https://skills.sh"
               target="_blank"
@@ -655,9 +660,7 @@ function AddSkillPanel({
               style={{ color: "var(--accent)", textDecoration: "none" }}
             >
               skills.sh
-            </a>{" "}
-            to discover and install skills for your agent.
-          </div>
+            </a>{" "}{t("interface.to.discover.and.install.skills.for.your.agent")}</div>
         )
       )}
     </div>
@@ -897,7 +900,7 @@ export function SkillsConfig({
     for (const workflow of skillTree.workflows) {
       for (const agent of workflow.agents) {
         const hit = agent.skills.find((skill) => skill.filePath === filePath);
-        if (hit) return { entry: hit, owner: `${t("skillsTree.workflow")} · ${workflow.name} / ${agent.name}` };
+        if (hit) return { entry: hit, owner: `${t("skillsTree.workflow")} · ${translateWorkflowCopy(workflow.workflowId, workflow.name, t)} / ${translateWorkflowCopy(workflow.workflowId, agent.name, t)}` };
       }
     }
     for (const agent of skillTree.longAgents) {
@@ -913,7 +916,7 @@ export function SkillsConfig({
     const isSelected = !addMode && selected === entry.filePath;
     const disabled = entry.disableModelInvocation;
     return (
-      <div
+      <button type="button" className="resource-nav-button" aria-pressed={isSelected}
         key={entry.filePath}
         onClick={() => {
           setSelected(entry.filePath);
@@ -963,7 +966,7 @@ export function SkillsConfig({
         {!inScope && (
           <span style={{ fontSize: 9, color: "var(--text-dim)", flexShrink: 0 }}>{t("skillsTree.readOnlyBadge")}</span>
         )}
-      </div>
+      </button>
     );
   };
 
@@ -976,7 +979,7 @@ export function SkillsConfig({
     const open = treeGroupsOpen[key] ?? false;
     return (
       <div key={key} style={{ marginBottom: 4 }}>
-        <div
+        <button type="button" className="resource-nav-button" aria-expanded={open}
           onClick={() => setTreeGroupsOpen((current) => ({ ...current, [key]: !open }))}
           style={{
             display: "flex",
@@ -993,12 +996,12 @@ export function SkillsConfig({
           }}
         >
           <span style={{ fontSize: 8 }}>{open ? "▾" : "▸"}</span>
-          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayGroupLabel(label, t)}</span>
           {options.badge && <span style={{ color: "var(--accent)", textTransform: "none" }}>{options.badge}</span>}
           <span>({entries.length})</span>
-        </div>
+        </button>
         {open && options.error && (
-          <div style={{ padding: "2px 8px 4px 21px", fontSize: 12, color: "#f87171" }}>{options.error}</div>
+          <div style={{ padding: "2px 8px 4px 21px", fontSize: 12, color: "var(--danger)" }}><InterfaceFeedback message={options.error} /></div>
         )}
         {open && entries.length === 0 && options.error === undefined && (
           <div style={{ padding: "2px 8px 4px 21px", fontSize: 12, color: "var(--text-dim)" }}>{t("skillsTree.empty")}</div>
@@ -1027,7 +1030,7 @@ export function SkillsConfig({
           const total = workflow.agents.reduce((count, agent) => count + agent.skills.length, 0);
           return (
             <div key={key} style={{ marginBottom: 4 }}>
-              <div
+              <button type="button" className="resource-nav-button" aria-expanded={open}
                 onClick={() => setTreeGroupsOpen((current) => ({ ...current, [key]: !open }))}
                 style={{
                   display: "flex",
@@ -1045,15 +1048,15 @@ export function SkillsConfig({
               >
                 <span style={{ fontSize: 8 }}>{open ? "▾" : "▸"}</span>
                 <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {t("skillsTree.workflow")} · {workflow.name}
+                  {t("skillsTree.workflow")} · {translateWorkflowCopy(workflow.workflowId, workflow.name, t)}
                 </span>
                 <span>({total})</span>
-              </div>
+              </button>
               {open && workflow.agents.map((agent) => (
                 <div key={agent.agentId}>
-                  <div style={{ padding: "2px 8px 2px 21px", fontSize: 12, color: "var(--text-muted)" }}>{agent.name}</div>
+                  <div style={{ padding: "2px 8px 2px 21px", fontSize: 12, color: "var(--text-muted)" }}>{translateWorkflowCopy(workflow.workflowId, agent.name, t)}</div>
                   {agent.error !== undefined && (
-                    <div style={{ padding: "2px 8px 4px 29px", fontSize: 12, color: "#f87171" }}>{agent.error}</div>
+                    <div style={{ padding: "2px 8px 4px 29px", fontSize: 12, color: "var(--danger)" }}><InterfaceFeedback message={agent.error} /></div>
                   )}
                   {agent.error === undefined && agent.skills.length === 0 && (
                     <div style={{ padding: "2px 8px 4px 29px", fontSize: 12, color: "var(--text-dim)" }}>{t("skillsTree.empty")}</div>
@@ -1074,7 +1077,7 @@ export function SkillsConfig({
   };
 
   return (
-    <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label="Skills" className="configuration-dialog"
+    <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("interface.skills")} className="configuration-dialog"
       style={{
         position: "fixed",
         inset: 0,
@@ -1167,7 +1170,7 @@ export function SkillsConfig({
           >
             <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
               {treeError !== null && (
-                <div style={{ padding: "4px 8px", fontSize: 12, color: "#f87171" }}>{treeError}</div>
+                <div style={{ padding: "4px 8px", fontSize: 12, color: "var(--danger)" }}><InterfaceFeedback message={treeError} /></div>
               )}
               {skillTree !== null ? renderSkillTreeView() : loading ? (
                 <div
@@ -1184,10 +1187,10 @@ export function SkillsConfig({
                   style={{
                     padding: "10px 8px",
                     fontSize: 12,
-                    color: "#f87171",
+                    color: "var(--danger)",
                   }}
                 >
-                  {error}
+                  <InterfaceFeedback message={error} />
                 </div>
               ) : skills.length === 0 ? (
                 <div
@@ -1242,7 +1245,7 @@ export function SkillsConfig({
                       !addMode && selected === skill.filePath;
                     const disabled = skill.disableModelInvocation;
                     return (
-                      <div
+                      <button type="button" className="resource-nav-button" aria-pressed={isSelected}
                         key={skill.filePath}
                         onClick={() => {
                           setSelected(skill.filePath);
@@ -1319,7 +1322,7 @@ export function SkillsConfig({
                             </span>
                           );
                         })()}
-                      </div>
+                      </button>
                     );
                   };
                   return groups.map(
@@ -1332,7 +1335,7 @@ export function SkillsConfig({
                       );
                       const dormantOpen = dormantGroupsOpen[grpLabel] ?? false;
                       return (
-                        <div key={grpLabel} style={{ marginBottom: 6 }}>
+                        <div key={displayGroupLabel(grpLabel, t)} style={{ marginBottom: 6 }}>
                           <div
                             style={{
                               padding: "4px 8px 3px",
@@ -1343,12 +1346,12 @@ export function SkillsConfig({
                               letterSpacing: "0.06em",
                             }}
                           >
-                            {grpLabel}
+                            {displayGroupLabel(grpLabel, t)}
                           </div>
                           {activeSkills.map(renderSkillRow)}
                           {dormantSkills.length > 0 && (
                             <>
-                              <div
+                              <button type="button" className="resource-nav-button" aria-expanded={dormantOpen}
                                 onClick={() =>
                                   setDormantGroupsOpen((current) => ({
                                     ...current,
@@ -1373,7 +1376,7 @@ export function SkillsConfig({
                                   {dormantOpen ? "▾" : "▸"}
                                 </span>
                                 {t("i18n.dormant")} ({dormantSkills.length})
-                              </div>
+                              </button>
                               {dormantOpen && dormantSkills.map(renderSkillRow)}
                             </>
                           )}
@@ -1392,7 +1395,7 @@ export function SkillsConfig({
                 flexShrink: 0,
               }}
             >
-              <div
+              <button type="button" className="resource-nav-button" aria-pressed={addMode}
                 onClick={() => setAddMode(true)}
                 style={{
                   display: "flex",
@@ -1427,7 +1430,7 @@ export function SkillsConfig({
                   <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
                  {t("i18n.addSkill")}
-              </div>
+              </button>
             </div>
           </div>
 

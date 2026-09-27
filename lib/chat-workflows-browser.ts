@@ -615,6 +615,7 @@ export interface ChatModelCatalogModel {
   readonly contextWindow: number;
   readonly maxTokens: number;
   readonly authConfigured: boolean;
+  readonly thinkingLevels?: readonly string[];
 }
 
 export interface ChatModelCatalog {
@@ -647,6 +648,10 @@ function parseModelCatalog(value: unknown, field: string): ChatModelCatalog {
       || typeof model.maxTokens !== "number" || !Number.isFinite(model.maxTokens)) {
       throw new Error(`Chat返回了无效的${field}.models[${index}]`);
     }
+    if (model.thinkingLevels !== undefined && (!Array.isArray(model.thinkingLevels)
+      || model.thinkingLevels.some(level => typeof level !== "string" || !thinkingLevels.includes(level)))) {
+      throw new Error(`Chat返回了无效的${field}.models[${index}].thinkingLevels`);
+    }
     return {
       provider: readString(model.provider, `${field}.models[${index}].provider`),
       modelId: readString(model.modelId, `${field}.models[${index}].modelId`),
@@ -655,6 +660,7 @@ function parseModelCatalog(value: unknown, field: string): ChatModelCatalog {
       contextWindow: model.contextWindow,
       maxTokens: model.maxTokens,
       authConfigured: model.authConfigured,
+      ...(model.thinkingLevels === undefined ? {} : { thinkingLevels: model.thinkingLevels as string[] }),
     };
   });
   return { providers, models, thinkingLevels };

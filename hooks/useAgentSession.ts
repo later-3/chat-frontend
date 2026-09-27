@@ -1,5 +1,8 @@
 "use client";
 
+import { navigationNeedsRevalidation, stashProjectSessionPayload } from "@/lib/session-preload";
+import { peekSessionView, fetchSessionView } from "@/lib/session-view-cache";
+
 import {
   readFriendCapabilities,
   acceptFriendMessage,
@@ -14,7 +17,7 @@ import { acceptTopicNodeMessage, type TopicNodeTarget } from "@/lib/topic-node-e
 import {
   useCallback,
   useEffect,
-  useMemo,
+  useLayoutEffect,
   useReducer,
   useRef,
   useState,
@@ -67,7 +70,8 @@ import {
 import { INITIAL_STREAMING_STATE, streamReducer } from "@/lib/streaming-message";
 import type { ClientAssistantMessageEvent } from "@/lib/streaming-message";
 import { normalizeToolCalls } from "@/lib/normalize";
-import type { SessionStatsInfo } from "@/lib/pi-types";
+import { useSessionMaintenance } from "@/hooks/useSessionMaintenance";
+import { useI18n } from "@/hooks/useI18n";
 import {
   parseWorkflowCallProjection,
 } from "@/lib/workflow-call-browser";
@@ -199,6 +203,8 @@ interface UseAgentSessionOptions {
    * shared observer drives the round. The read path stays the ordinary Session read.
    */
   topicNode?: TopicNodeTarget;
+  /** Topic node policy is a server fact; ordinary sessions keep their local preference. */
+  sessionMemoryEnabled?: boolean;
   session: SessionInfo | null;
   sessionRunning?: boolean;
   newSessionCwd: string | null;
@@ -223,12 +229,6 @@ interface UseAgentSessionOptions {
 interface ContextResponse {
   context?: SessionData["context"];
   error?: string;
-}
-
-interface ContextUsage {
-  percent: number | null;
-  contextWindow: number;
-  tokens: number | null;
 }
 
 interface PendingBash {
@@ -356,15 +356,13 @@ async function fetchSessionData(
   if (preloaded !== undefined) {
     body = preloaded;
   } else {
-    const query = new URLSearchParams({ projectId, deferThinking: "1", deferMedia: "1" });
-    const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}?${query.toString()}`, {
-      cache: "no-store",
-      signal: workflowRequestSignal(signal),
-    });
-    body = await response.json().catch(() => null);
-    const error = isRecord(body) && typeof body.error === "string" ? body.error : `HTTP ${response.status}`;
-    if (!response.ok) throw new Error(error);
+    body = await fetchSessionView(projectId, sessionId, signal);
+    stashProjectSessionPayload(projectId, sessionId, body);
   }
+  return parseSessionData(body, projectId);
+}
+
+function parseSessionData(body: unknown, projectId: string): SessionData {
   if (
     !isRecord(body)
     || !isRecord(body.session)
@@ -430,6 +428,7 @@ function createNoticeId(): string {
  * 这里不创建AgentSession，也不连接Pi Web原有的Agent SSE接口。
  */
 export function useAgentSession(opts: UseAgentSessionOptions) {
+  const { t } = useI18n();
   const {
     projectId,
     contextProjectId,
@@ -460,6 +459,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [forkingEntryId, setForkingEntryId] = useState<string | null>(null);
   const forkRequestRef = useRef<{ sessionId: string; entryId: string; requestId: string } | null>(null);
   const browsingHistoryRef = useRef(false);
+  const historyRequest = useRef(0);
+  const [browsingHistory, setBrowsingHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [entryIds, setEntryIds] = useState<string[]>([]);
@@ -482,7 +483,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [notices, setNotices] = useState<NoticeItem[]>([]);
   // Session-memory switch: one UI setting the owner flips BEFORE sending. Off = this round runs without
   // the Workflow's last (memory) node. It is remembered per session so "I keep it off" needs no repeats.
-  const [memoryEnabled, setMemoryEnabledState] = useState(true);
+  const [memoryPreference, setMemoryEnabledState] = useState(true);
+  const memoryEnabled = opts.sessionMemoryEnabled ?? memoryPreference;
   const setMemoryEnabled = useCallback((next: boolean) => {
     setMemoryEnabledState(next);
     try {
@@ -704,6 +706,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       setActiveRunStage(stage);
     }
     if (runEvent.type === "stage_start") {
+      setActivity(current => current === null ? current : { ...current, roundPhase: stage?.stageId === "remember" ? "remember" : "work" });
       dispatch({ type: "end" });
       setAgentPhase(waitingPhase);
       return;
@@ -821,6 +824,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             if (!controller.signal.aborted) {
               friendExecutionRef.current = next;
               setFriendExecution(next);
+              if (next.workflow?.runId !== undefined) activeWorkflowRunRef.current = {
+                runId: next.workflow.runId, workflowInvocationId: next.workflow.invocationId, projectId: next.projectId,
+              };
             }
           },
           snapshot: (snapshot) => {
@@ -866,14 +872,31 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   );
 
   const loadSession = useCallback(async (sessionId: string) => {
+    historyRequest.current++;
     browsingHistoryRef.current = false;
+    setBrowsingHistory(false);
     sessionLoadAbortRef.current?.abort();
     const controller = new AbortController();
     sessionLoadAbortRef.current = controller;
-    setLoading(true);
     setError(null);
     try {
-      const body = await fetchSessionData(sessionId, projectId, controller.signal, "navigation");
+      const cached = peekSessionView(projectId, sessionId);
+      if (cached !== undefined && takeProjectSessionPayload(sessionId) === undefined)
+        stashProjectSessionPayload(projectId, sessionId, cached, Date.now(), true);
+      const revalidate = navigationNeedsRevalidation(projectId, sessionId);
+      // The navigation response already exists when AppShell switches the keyed chat. Consume it
+      // synchronously inside the layout effect so the first paint has history AND the composer.
+      // Waiting even for an already-resolved Promise used to flash the full-pane loading state.
+      const preloaded = takeProjectSessionPayload(sessionId);
+      if (preloaded === undefined) setLoading(true);
+      const initial = preloaded === undefined
+        ? await fetchSessionData(sessionId, projectId, controller.signal, "navigation")
+        : parseSessionData(preloaded, projectId);
+      if (!mountedRef.current || sessionLoadAbortRef.current !== controller) return;
+      applySessionData(initial);
+      setLoading(false);
+      if (!revalidate) return;
+      const body = await fetchSessionData(sessionId, projectId, controller.signal, "refresh");
       if (!mountedRef.current || sessionLoadAbortRef.current !== controller) return;
       applySessionData(body);
     } catch (cause) {
@@ -890,25 +913,60 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [applySessionData, projectId]);
 
   const loadContext = useCallback(async (leafId: string | null) => {
-    browsingHistoryRef.current = true;
     const sessionId = sessionIdRef.current;
     if (!sessionId) return;
-    const query = new URLSearchParams({ projectId, deferThinking: "1", deferMedia: "1" });
+    const request = ++historyRequest.current;
+    browsingHistoryRef.current = true;
+    setBrowsingHistory(true);
+    const query = new URLSearchParams({ projectId, view: "chat", deferThinking: "1", deferMedia: "1" });
     if (leafId) query.set("leafId", leafId);
     const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/context?${query.toString()}`, {
       cache: "no-store",
     });
     const body = await response.json() as ContextResponse;
     if (!response.ok || !body.context) throw new Error(body.error ?? `HTTP ${response.status}`);
+    if (!mountedRef.current || sessionIdRef.current !== sessionId || request !== historyRequest.current) return;
     setMessages(body.context.messages);
     setEntryIds(body.context.entryIds);
     setEntryTimes(parseEntryTimes(body.context.entryTimes, body.context.entryIds.length));
     setActiveLeafId(leafId);
   }, [projectId]);
 
+  const refreshAfterMaintenance = useCallback(async () => {
+    const sessionId = sessionIdRef.current;
+    if (!sessionId || browsingHistoryRef.current) return;
+    const body = await fetchSessionData(sessionId, projectId, undefined, "refresh");
+    if (mountedRef.current && sessionIdRef.current === sessionId && !browsingHistoryRef.current) applySessionData(body);
+  }, [applySessionData, projectId]);
+  const maintenance = useSessionMaintenance(projectId, session?.id ?? data?.sessionId ?? null, data?.leafId, refreshAfterMaintenance);
+  const observedMaintenance = useRef<string | null>(null);
+  useEffect(() => {
+    const operation = maintenance.operation;
+    if (operation?.status === "running") observedMaintenance.current = operation.requestId;
+    else if (operation && observedMaintenance.current === operation.requestId) {
+      observedMaintenance.current = null;
+      if (operation.status === "cancelled") addNotice({ type: "info", message: t("sessionControls.cancelled") });
+    }
+  }, [maintenance.operation, addNotice, t]);
+  const handleReturnToCurrent = useCallback(async () => {
+    const sessionId = sessionIdRef.current;
+    if (!sessionId) return;
+    const request = ++historyRequest.current;
+    try {
+      const body = await fetchSessionData(sessionId, projectId, undefined, "refresh");
+      if (!mountedRef.current || sessionIdRef.current !== sessionId || request !== historyRequest.current) return;
+      browsingHistoryRef.current = false; setBrowsingHistory(false); applySessionData(body);
+    } catch (cause) { addNotice({ type: "error", message: cause instanceof Error ? cause.message : String(cause) }); }
+  }, [addNotice, applySessionData, projectId]);
+
   const handleSend = useCallback(async (message: string, images?: AttachedImage[]) => {
     const prompt = message.trim();
     if (!prompt && !images?.length) return;
+    if (browsingHistoryRef.current || maintenance.busy) {
+      restoreSubmission(message, images);
+      addNotice({ type: "info", message: t(browsingHistoryRef.current ? "sessionControls.chooseBranch" : "sessionControls.busy") });
+      return;
+    }
     if (agentRunning) {
       restoreSubmission(message, images);
       return;
@@ -1006,6 +1064,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         // streaming, tools, stop and recovery, so the node is a normal Session to the user.
         const accepted = await acceptTopicNodeMessage(topicNode, {
           requestId: pendingId ?? crypto.randomUUID(),
+          workflow: workflowId,
+          ...(memoryEnabled ? {} : { sessionMemory: "off" as const }),
           text: message,
           ...(images?.length ? { images: images.map(image => ({ type: "image" as const, data: image.data, mimeType: image.mimeType })) } : {}),
         }, controller.signal);
@@ -1019,6 +1079,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (selectedLongAgent !== undefined) {
         const accepted = await acceptFriendMessage(selectedLongAgent.id, {
           requestId: pendingId ?? crypto.randomUUID(),
+          workflow: workflowId,
           ...(sessionIdRef.current === null ? {} : { sessionId: sessionIdRef.current }),
           text: message, ...(friendExecutionRef.current?.workId
             ? { contextProjectId: friendExecutionRef.current.contextProjectId }
@@ -1163,7 +1224,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, [observeFriend, setRunPhase, handleConnection, addNotice, agentConfigsByWorkflow, agentRunning, applySessionData, composerDraftKey, handleRunEvent, longAgentId, longAgents, newSessionCwd, newSessionDraftKey, onAgentEnd, onConnectionFailure, onSessionCreated, onSessionOpen, projectId, contextProjectId, restoreSubmission, session?.cwd, topicNode, workflowConfigDraftKey, workflowId,
     // The send callback reads the switch, so it MUST be a dependency: otherwise it keeps the value from
     // the render that created it and a switched-off round still asks for session memory.
-    memoryEnabled]);
+    memoryEnabled, maintenance.busy, t]);
 
   const handlePlanReviewDecision = useCallback(async (decision: PlanReviewDecisionInput) => {
     const reference = activeWorkflowRunRef.current;
@@ -1243,20 +1304,36 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       addNotice({ type: "error", message: cause instanceof Error ? cause.message : String(cause) });
     } finally { setForkingEntryId(null); }
   }, [addNotice, agentRunning, forkingEntryId, longAgentId, onSessionForked, projectId]);
-  const handleNavigate = useCallback((leafId: string) => {
-    void loadContext(leafId).catch((cause) => addNotice({
-      type: "error",
-      message: cause instanceof Error ? cause.message : String(cause),
-    }));
-  }, [addNotice, loadContext]);
+  const handleNavigate = useCallback(async (entryId: string) => {
+    if (agentRunning || !maintenance.snapshot?.capabilities.continue) return false;
+    try {
+      const result = await maintenance.start("continue", { entryId });
+      if (result?.status !== "completed") return false;
+      if (result.editorText && composerDraftKey) setDraft(composerDraftKey, { value: result.editorText, images: [] });
+      await handleReturnToCurrent();
+      addNotice({ type: "success", message: t("sessionControls.continued") });
+      return true;
+    } catch (cause) {
+      // The write may have committed before its response/history refresh was lost. Require an
+      // explicit current-history read before sending, rather than showing one branch and writing another.
+      browsingHistoryRef.current = true;
+      setBrowsingHistory(true);
+      addNotice({ type: "error", message: cause instanceof Error ? cause.message : String(cause) });
+      return false;
+    }
+  }, [addNotice, agentRunning, maintenance.snapshot?.capabilities.continue, maintenance.start, handleReturnToCurrent, composerDraftKey, t]);
   const handleLeafChange = useCallback((leafId: string | null) => {
     void loadContext(leafId).catch((cause) => addNotice({
       type: "error",
       message: cause instanceof Error ? cause.message : String(cause),
     }));
   }, [addNotice, loadContext]);
-  const handleCompact = useCallback(async () => unsupported("上下文压缩由Chat Workflow负责"), [unsupported]);
-  const handleAbortCompaction = useCallback(async () => {}, []);
+  const handleCompact = useCallback(async (instructions?: string) => {
+    if (agentRunning || browsingHistoryRef.current || !maintenance.snapshot?.capabilities.compact) return false;
+    try { return (await maintenance.start("compact", instructions ? { instructions } : {})) !== null; }
+    catch (cause) { addNotice({ type: "error", message: cause instanceof Error ? cause.message : String(cause) }); return false; }
+  }, [addNotice, agentRunning, maintenance.snapshot?.capabilities.compact, maintenance.start]);
+  const handleAbortCompaction = maintenance.cancel;
   const sendDuringExecution = useCallback(
     async (message: string, behavior: "steer" | "followUp", images?: AttachedImage[]) => {
       const reference = friendExecutionRef.current;
@@ -1290,6 +1367,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           // A queued follow-up in a topic node keeps the node target: it must never become a daily turn.
           await acceptTopicNodeMessage(topicNode, {
             requestId: pendingId,
+            workflow: reference.workflow?.id ?? workflowId,
+            ...(memoryEnabled ? {} : { sessionMemory: "off" as const }),
             text: message,
             ...(images?.length
               ? { images: images.map((image) => ({ type: "image" as const, data: image.data, mimeType: image.mimeType })) }
@@ -1300,6 +1379,8 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           await acceptFriendMessage(longAgentId, {
             requestId: pendingId,
             sessionId: reference.sessionId,
+            workflow: reference.workflow?.id ?? workflowId,
+            ...(memoryEnabled ? {} : { sessionMemory: "off" as const }),
             text: message,
             ...(friendExecutionRef.current?.workId
               ? { contextProjectId: friendExecutionRef.current.contextProjectId }
@@ -1318,7 +1399,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         addNotice({ type: "error", message: cause instanceof Error ? cause.message : String(cause) });
       }
     },
-    [addNotice, composerDraftKey, contextProjectId, longAgentId, restoreSubmission, topicNode, unsupported],
+    [addNotice, composerDraftKey, contextProjectId, interactionRevision, longAgentId, memoryEnabled, restoreSubmission, topicNode, unsupported, workflowId],
   );
   const handleSteer = useCallback(
     (message: string, images?: AttachedImage[]) => {
@@ -1343,10 +1424,15 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const handleBuiltinSlashCommand = useCallback(async (message: string): Promise<BuiltinSlashCommandResult> => {
     const command = getBuiltinSlashCommand(message);
     if (!command) return { handled: false };
+    if (command.name === "session") return { handled: true, action: "openSessionStats" };
+    if (command.name === "compact") {
+      const accepted = await handleCompact(message.trim().slice("/compact".length).trim());
+      return accepted ? { handled: true } : { handled: true, error: t("sessionControls.unavailable") };
+    }
     const error = `当前会话不支持 /${command.name} 命令，请改用界面操作或普通文字描述；输入已保留`;
     addNotice({ type: "warning", message: error });
     return { handled: true, error };
-  }, [addNotice]);
+  }, [addNotice, handleCompact, t]);
   const loadSlashCommands = useCallback(async (): Promise<SlashCommandInfo[]> => [], []);
 
   useEffect(() => {
@@ -1360,7 +1446,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     };
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (session === null) return;
     sessionIdRef.current = session.id;
     if (workflowAbortRef.current === null && data?.sessionId !== session.id) {
@@ -1370,7 +1456,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
 
   useEffect(() => {
     const active = data?.activeWorkflowRun ?? data?.activePlanningExecution;
-    if (active === undefined || workflowAbortRef.current !== null) return;
+    if (active === undefined || data?.friendExecution?.workflow !== undefined || workflowAbortRef.current !== null) return;
     const reference: ChatWorkflowRunReference = {
       runId: active.runId,
       workflowInvocationId: active.workflowInvocationId,
@@ -1464,7 +1550,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       try {
         if (document.visibilityState === "visible" && workflowAbortRef.current === null && !browsingHistoryRef.current) {
           const body = await fetchSessionData(session.id, projectId, controller.signal);
-          if (!stopped && sessionIdRef.current === session.id && workflowAbortRef.current === null) applySessionData(body);
+          if (!stopped && sessionIdRef.current === session.id && workflowAbortRef.current === null && !browsingHistoryRef.current) applySessionData(body);
         }
         refreshFailed = false;
       } catch (cause) {
@@ -1490,15 +1576,20 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     onBranchDataChange?.(data?.tree ?? [], activeLeafId, handleLeafChange);
   }, [activeLeafId, data?.tree, handleLeafChange, onBranchDataChange]);
 
-  const sessionStats = useMemo<SessionStatsInfo | null>(() => null, []);
+  const sessionStats = maintenance.snapshot ? { ...maintenance.snapshot.stats, totalActiveMs: data?.totalActiveMs } : null;
+  const compactOperation = maintenance.operation?.kind === "compact" ? maintenance.operation : null;
 
   return {
     data, loading, error, activeLeafId, messages, entryIds, entryTimes, streamState,
     agentRunning, workflowId, longAgents, longAgentId, friendExecution, friendImages,
     workflowAgentConfigs: agentConfigsByWorkflow[workflowId] ?? {},
     promptResourceProposals: data?.promptResourceProposals ?? [],
-    retryInfo: null, contextUsage: null as ContextUsage | null, systemPrompt: null, forkingEntryId,
-    isCompacting: false, compactError: null, compactResult: null,
+    retryInfo: null, contextUsage: sessionStats?.contextUsage ?? null, systemPrompt: null, forkingEntryId,
+    isCompacting: maintenance.busy, compactError: maintenance.error ?? compactOperation?.error ?? null,
+    compactResult: compactOperation?.status === "completed" && compactOperation.result ? { reason: "manual", ...compactOperation.result } : null,
+    canCompact: maintenance.snapshot?.capabilities.compact === true && !browsingHistory,
+    canContinue: maintenance.snapshot?.capabilities.continue === true,
+    browsingHistory, handleReturnToCurrent,
     sessionStats,
     slashCommands: [] as SlashCommandInfo[], slashCommandsLoading: false,
     queuedMessages: EMPTY_QUEUE, notices,
@@ -1506,7 +1597,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     extensionCustomUi: null as Extract<ExtensionUiRequest, { method: "custom" }> | null,
     extensionStatuses: [] as ExtensionStatusItem[], extensionWidgets: [] as ExtensionWidgetItem[],
     respondToExtensionUi: () => {}, sendExtensionCustomInput: () => {},
-    activity, agentPhase, activeRunStage, planReview, reviewSubmitting, isNew,
+    activity: maintenance.busy ? maintenance.activity : activity, agentPhase, activeRunStage, planReview, reviewSubmitting, isNew,
     sessionIdRef,
     handleSend, handleAbort, handlePlanReviewDecision, handleFork, handleNavigate,
     handleCompact, handleSteer, handleFollowUp, handlePromptWithStreamingBehavior,

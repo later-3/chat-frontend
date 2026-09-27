@@ -133,10 +133,18 @@ export function parseAgentEvent(value: unknown): AgentEventLike {
     }
     return value as AgentEventLike;
   }
-  if (value.type === "auto_retry_start") {
+  if (value.type === "summarization_retry_finished") return { type: value.type };
+  if (value.type === "summarization_retry_attempt_start") {
+    if (value.source !== "branchSummary" && (value.source !== "compaction" || !["manual", "threshold", "overflow"].includes(String(value.reason)))) {
+      throw new Error("Invalid summary retry source");
+    }
+    return value as AgentEventLike;
+  }
+  if (value.type === "auto_retry_start" || value.type === "summarization_retry_scheduled") {
     if (!Number.isSafeInteger(value.attempt) || (value.attempt as number) < 1
       || !Number.isSafeInteger(value.maxAttempts) || (value.maxAttempts as number) < (value.attempt as number)
-      || typeof value.delayMs !== "number" || !Number.isFinite(value.delayMs) || value.delayMs < 0) {
+      || typeof value.delayMs !== "number" || !Number.isFinite(value.delayMs) || value.delayMs < 0
+      || (value.type === "summarization_retry_scheduled" && typeof value.errorMessage !== "string")) {
       throw new Error("Chat Workflow返回了无效重试事件");
     }
     return value as AgentEventLike;
@@ -148,6 +156,12 @@ export function parseAgentEvent(value: unknown): AgentEventLike {
   if (value.type === "compaction_start" || value.type === "compaction_end") {
     if (!["manual", "threshold", "overflow"].includes(String(value.reason))) throw new Error("Chat Workflow返回了无效压缩原因");
     if (value.type === "compaction_end" && (typeof value.aborted !== "boolean" || typeof value.willRetry !== "boolean")) throw new Error("Chat Workflow返回了无效压缩结果");
+    if (value.errorMessage !== undefined && typeof value.errorMessage !== "string") throw new Error("Chat Workflow返回了无效压缩错误");
+    if (value.result !== undefined && (!isRecord(value.result)
+      || ![value.result.tokensBefore, value.result.estimatedTokensAfter].every(tokenCount =>
+        typeof tokenCount === "number" && Number.isFinite(tokenCount) && tokenCount >= 0))) {
+      throw new Error("Chat Workflow返回了无效压缩用量");
+    }
     return value as AgentEventLike;
   }
   throw new Error(`Chat Workflow返回了不支持的Agent事件: ${value.type}`);

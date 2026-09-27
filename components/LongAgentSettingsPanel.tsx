@@ -1,10 +1,18 @@
 "use client";
+import { LongAgentActivitySettings } from "./LongAgentActivitySettings";
+import { PageHeader } from "./ui/PageHeader";
+import { useConfirmation } from "./ui/Confirmation";
+import { Button } from "./ui/Button";
+
+import { translateWorkflowCopy } from "@/lib/i18n/workflow-copy";
+
+import { InterfaceFeedback } from "./InterfaceFeedback";
 
 import { useDialogFocus } from "@/hooks/useDialogFocus";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { IconActivity, IconArrowLeft, IconBook2, IconBrain, IconClock, IconMessages, IconRefresh, IconSend, IconSettings, IconUsersGroup } from "@tabler/icons-react";
+import { IconBook2, IconBrain, IconClock, IconRefresh, IconSettings } from "@tabler/icons-react";
 import { useI18n } from "@/hooks/useI18n";
 import { fetchChatModelCatalog, type ChatModelCatalog } from "@/lib/chat-workflows-browser";
 import {
@@ -39,11 +47,9 @@ import { LongAgentAvatarEditor } from "./LongAgentAvatarEditor";
 import { LongAgentGroupSettings } from "./LongAgentGroupSettings";
 import { LongAgentMemorySettings } from "./LongAgentMemorySettings";
 import { LongAgentTasksSettings } from "./LongAgentTasksSettings";
-import { LongAgentDeliverablesSettings } from "./LongAgentDeliverablesSettings";
 import { LongAgentDutiesSettings } from "./LongAgentDutiesSettings";
-import { LongAgentActivitySettings } from "./LongAgentActivitySettings";
-import { LongAgentConversationsPanel } from "./LongAgentConversationsPanel";
-import { LongAgentTopicsPanel } from "./LongAgentTopicsPanel";
+import { ModelSelection, ThinkingSelection } from "./ModelSelection";
+import { SearchSelect } from "./SearchSelect";
 
 /**
  * 可选系统Tool清单只来自Backend `/api/tools`；这里只提供已知地址的本地化标签，
@@ -95,7 +101,7 @@ interface Draft {
   pluginSourcesText: string;
 }
 
-type SettingsTab = "runtime" | "tasks" | "duties" | "deliverables" | "activity" | "conversations" | "topics" | "agent-group" | "agent-memory";
+type SettingsTab = "runtime" | "tasks" | "duties" | "agent-memory";
 
 function lines(value: string): string[] {
   return [...new Set(value.split("\n").map((item) => item.trim()).filter(Boolean))];
@@ -179,6 +185,7 @@ function updateFromDraft(
 }
 
 export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved }: Props) {
+  const confirm = useConfirmation();
   const { t } = useI18n();
   const pageRef = useDialogFocus<HTMLElement>(() => back());
   const [agentId, setAgentId] = useState(
@@ -305,8 +312,8 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
   }, []);
 
   const runLifecycle = useCallback(async (action: "archive" | "restore" | "delete") => {
-    if (action === "archive" && !window.confirm(t("longAgent.archiveConfirm"))) return;
-    if (action === "delete" && !window.confirm(t("longAgent.deleteConfirm"))) return;
+    if (action === "archive" && !await confirm(t("longAgent.archiveConfirm"), t("longAgent.archive"))) return;
+    if (action === "delete" && !await confirm(t("longAgent.deleteConfirm"), t("longAgent.delete"))) return;
     setLifecycleBusy(true);
     setError(null);
     try {
@@ -332,14 +339,14 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
     return () => controller.abort();
   }, [agentId, load]);
 
-  const selectAgent = (nextAgentId: string) => {
+  const selectAgent = async (nextAgentId: string) => {
     if (nextAgentId === agentId) return;
-    if (hasUnsavedChanges && !window.confirm(t("longAgentSettings.discardConfirm"))) return;
+    if (hasUnsavedChanges && !await confirm(t("longAgentSettings.discardConfirm"), t("common.discard"))) return;
     setTabDirty(false);
     setAgentId(nextAgentId);
   };
-  const back = () => {
-    if (hasUnsavedChanges && !window.confirm(t("longAgentSettings.discardConfirm"))) return;
+  const back = async () => {
+    if (hasUnsavedChanges && !await confirm(t("longAgentSettings.discardConfirm"), t("common.discard"))) return;
     onBack();
   };
   const save = async () => {
@@ -435,33 +442,31 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
     else current.delete(value);
     set(key, [...current].join("\n"));
   };
+  const [usageOpen, setUsageOpen] = useState(false);
+  const [identityOpen, setIdentityOpen] = useState(false);
   const tabs = [
     { id: "runtime", label: t("longAgentSettings.runtimeTab"), icon: IconSettings },
     { id: "tasks", label: t("longAgentSettings.tasksTab"), icon: IconClock },
     { id: "duties", label: t("longAgentSettings.dutiesTab"), icon: IconBook2 },
-    { id: "deliverables", label: t("longAgentSettings.deliverablesTab"), icon: IconSend },
-    { id: "activity", label: t("longAgentSettings.activityTab"), icon: IconActivity },
-    { id: "conversations", label: t("longAgentSettings.conversationsTab"), icon: IconMessages },
-    { id: "topics", label: t("longAgentSettings.topicsTab"), icon: IconMessages },
-    { id: "agent-group", label: t("longAgentSettings.agentGroupTab"), icon: IconUsersGroup },
     { id: "agent-memory", label: t("longAgentSettings.agentMemoryTab"), icon: IconBrain },
   ] as const;
-  const handleTabKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft" && event.key !== "Home" && event.key !== "End") return;
+  const handleTabKeyDown = async (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp" && event.key !== "ArrowRight" && event.key !== "ArrowLeft" && event.key !== "Home" && event.key !== "End") return;
     event.preventDefault();
+    const tabList = event.currentTarget;
     const current = tabs.findIndex((tab) => tab.id === activeTab);
     const next = event.key === "Home" ? 0
       : event.key === "End" ? tabs.length - 1
-        : (current + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
-    if (tabDirty && !window.confirm(t("longAgentSettings.discardConfirm"))) return;
+        : (current + ((event.key === "ArrowRight" || event.key === "ArrowDown") ? 1 : -1) + tabs.length) % tabs.length;
+    if (tabDirty && !await confirm(t("longAgentSettings.discardConfirm"), t("common.discard"))) return;
     setTabDirty(false);
     setActiveTab(tabs[next].id);
-    const buttons = event.currentTarget.querySelectorAll<HTMLButtonElement>("[role=tab]");
+    const buttons = tabList.querySelectorAll<HTMLButtonElement>("[role=tab]");
     buttons[next]?.focus();
   };
-  const selectTab = (nextTab: SettingsTab) => {
+  const selectTab = async (nextTab: SettingsTab) => {
     if (nextTab === activeTab) return;
-    if (tabDirty && !window.confirm(t("longAgentSettings.discardConfirm"))) return;
+    if (tabDirty && !await confirm(t("longAgentSettings.discardConfirm"), t("common.discard"))) return;
     setTabDirty(false);
     setActiveTab(nextTab);
   };
@@ -474,38 +479,31 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
       aria-modal="true"
       aria-labelledby="long-agent-settings-title"
     >
-      <header className={styles.pageHeader}>
-        <button type="button" className={styles.backButton} onClick={back}>
-          <IconArrowLeft size={18} stroke={1.8} aria-hidden="true" />
-          {t("longAgentSettings.back")}
-        </button>
-        <div className={styles.titleGroup}>
-          <h1 id="long-agent-settings-title">{t("longAgentSettings.title")}</h1>
-          <p>{t("longAgentSettings.subtitle")}</p>
-        </div>
+      <PageHeader title={t("longAgentSettings.title")} titleId="long-agent-settings-title"
+        description={t("longAgentSettings.subtitle")} onBack={() => void back()} backLabel={t("interface.back")}>
         {selectedSummary !== null && (
           <>
-            <button
+            <Button variant="secondary"
               type="button"
               className={styles.secondaryButton}
               disabled={saving || lifecycleBusy}
               onClick={() => void runLifecycle(selectedSummary.status === "archived" ? "restore" : "archive")}
             >
               {selectedSummary.status === "archived" ? t("longAgent.restore") : t("longAgent.archive")}
-            </button>
+            </Button>
             {selectedSummary.status === "archived" && (
-              <button
+              <Button variant="secondary"
                 type="button"
                 className={styles.secondaryButton}
                 disabled={saving || lifecycleBusy}
                 onClick={() => void runLifecycle("delete")}
               >
                 {t("longAgent.delete")}
-              </button>
+              </Button>
             )}
           </>
         )}
-        <button
+        <Button variant="secondary"
           type="button"
           className={styles.secondaryButton}
           onClick={() => void load(agentId)}
@@ -513,60 +511,15 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
         >
           <IconRefresh size={16} stroke={1.8} aria-hidden="true" />
           {t("common.refresh")}
-        </button>
-      </header>
+        </Button>
+      </PageHeader>
 
       <div className={styles.workspace}>
         <nav className={styles.agentNav} aria-label={t("longAgentSettings.agentList")}>
-          <div className={styles.navHeading}>
-            <strong>{t("longAgentSettings.agents")}</strong>
-            <span>{agents.length}</span>
-          </div>
-          <div className={styles.agentList}>
-            {agents.map((agent) => (
-              <button
-                key={agent.id}
-                type="button"
-                className={agent.id === agentId ? styles.activeAgent : styles.agentItem}
-                onClick={() => selectAgent(agent.id)}
-                aria-current={agent.id === agentId ? "page" : undefined}
-              >
-                <span className={styles.agentItemName}>{agent.name}</span>
-                <span className={styles.agentItemMeta}>
-                  {agent.available ? t("longAgentSettings.enabled") : t("longAgentSettings.disabled")}
-                </span>
-              </button>
-            ))}
-          </div>
-        </nav>
-
-        <main className={styles.main}>
-          {loading ? (
-            <div className={styles.state} role="status">{t("longAgentSettings.loading")}</div>
-          ) : error && (!document || !draft) ? (
-            <div className={styles.state} role="alert">
-              <strong>{t("longAgentSettings.loadFailed")}</strong>
-              <span>{error}</span>
-              <button type="button" className={styles.secondaryButton} onClick={() => void load(agentId)}>
-                {t("longAgentSettings.retry")}
-              </button>
-            </div>
-          ) : document && draft ? (
-            <div className={styles.settingsShell}>
-              <div className={styles.agentHeading}>
-                <div>
-                  <span className={styles.eyebrow}>{selectedSummary?.id ?? document.agent.id}</span>
-                  <h2>{draft.name}</h2>
-                </div>
-                {activeTab === "runtime" && (
-                  <label className={styles.enabledControl}>
-                    <input type="checkbox" checked={draft.enabled} onChange={(event) => set("enabled", event.target.checked)} />
-                    <span>{draft.enabled ? t("longAgentSettings.enabled") : t("longAgentSettings.disabled")}</span>
-                  </label>
-                )}
-              </div>
-
-              <div className={styles.settingsTabs} role="tablist" aria-label={t("longAgentSettings.sections")} onKeyDown={handleTabKeyDown}>
+          <SearchSelect label={t("longAgentSettings.agentList")} value={agentId}
+            options={agents.map(agent => ({ value:agent.id, label:agent.name, detail:agent.available ? t("longAgentSettings.enabled") : t("longAgentSettings.disabled") }))}
+            onChange={selectAgent} disabled={saving || lifecycleBusy} />
+              <div className={styles.settingsTabs} role="tablist" aria-orientation="vertical" aria-label={t("longAgentSettings.sections")} onKeyDown={handleTabKeyDown}>
                 {tabs.map((tab) => {
                   const Icon = tab.icon;
                   return (
@@ -587,6 +540,34 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                   );
                 })}
               </div>
+        </nav>
+
+        <main className={styles.main}>
+          {loading ? (
+            <div className={styles.state} role="status">{t("longAgentSettings.loading")}</div>
+          ) : error && (!document || !draft) ? (
+            <div className={styles.state} role="alert">
+              <strong>{t("longAgentSettings.loadFailed")}</strong>
+              <span><InterfaceFeedback message={error} /></span>
+              <Button variant="secondary" type="button" className={styles.secondaryButton} onClick={() => void load(agentId)}>
+                {t("longAgentSettings.retry")}
+              </Button>
+            </div>
+          ) : document && draft ? (
+            <div className={styles.settingsShell}>
+              <div className={styles.agentHeading}>
+                <div>
+                  <span className={styles.eyebrow}>{selectedSummary?.id ?? document.agent.id}</span>
+                  <h2>{draft.name}</h2>
+                </div>
+                {activeTab === "runtime" && (
+                  <label className={styles.enabledControl}>
+                    <input type="checkbox" checked={draft.enabled} onChange={(event) => set("enabled", event.target.checked)} />
+                    <span>{draft.enabled ? t("longAgentSettings.enabled") : t("longAgentSettings.disabled")}</span>
+                  </label>
+                )}
+              </div>
+
 
               <div
                 id={`long-agent-${activeTab}-panel`}
@@ -601,7 +582,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                       <span>{t("longAgentSettings.nextTurnEffective")}</span>
                     </div>
                     {notice && <div className={styles.notice} role="status">{notice}</div>}
-                    {error && <div className={styles.error} role="alert">{error}</div>}
+                    {error && <div className={styles.error} role="alert"><InterfaceFeedback message={error} /></div>}
 
                     <fieldset className={styles.section}>
                       <legend>{t("longAgentSettings.identity")}</legend>
@@ -616,7 +597,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                       <div className={styles.twoColumns}>
                         <label>{t("longAgentSettings.name")}<input value={draft.name} maxLength={80} onChange={(event) => set("name", event.target.value)} /></label>
                         <label>{t("longAgentSettings.timeZone")}<input value={draft.timeZone} onChange={(event) => set("timeZone", event.target.value)} placeholder="Asia/Shanghai" /><span className={styles.fieldHint}>{t("longAgentSettings.timeZoneHint")}</span></label>
-                        <label>{t("longAgentSettings.defaultProject")}<select value={draft.defaultProjectId} onChange={(event) => set("defaultProjectId", event.target.value)}>{!projects.some((project) => project.projectId === draft.defaultProjectId) && <option value={draft.defaultProjectId}>{draft.defaultProjectId}</option>}{projects.map((project) => <option key={project.projectId} value={project.projectId} disabled={!project.available}>{project.cachedName} · {project.projectId}</option>)}</select></label>
+                        <label>{t("longAgentSettings.defaultProject")}<select value={draft.defaultProjectId} onChange={(event) => set("defaultProjectId", event.target.value)}>{!projects.some((project) => project.projectId === draft.defaultProjectId) && <option value={draft.defaultProjectId}>{draft.defaultProjectId}</option>}{projects.filter(project => project.kind === "project" || project.projectId === draft.defaultProjectId || project.projectId === document.agent.id).map((project) => <option key={project.projectId} value={project.projectId} disabled={!project.available}>{project.kind === "project" ? project.cachedName : t("design.noCollaboration")}</option>)}</select></label>
                       </div>
                       <label>{t("longAgentSettings.description")}<textarea value={draft.description} rows={3} maxLength={500} onChange={(event) => set("description", event.target.value)} /></label>
                     </fieldset>
@@ -642,24 +623,24 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                         </dd>
                       </dl>
                       <div className={styles.twoColumns}>
-                        <label>{t("longAgentSettings.model")}<select value={draft.modelKey} onChange={(event) => set("modelKey", event.target.value)}><option value="">{t("longAgentSettings.projectDefaultModel")}{document.agent.effective.model && document.agent.effective.modelSource === "chat-default"
-                          ? `（${document.agent.effective.model.provider}/${document.agent.effective.model.modelId}）`
-                          : ""}</option>{draft.modelKey && !modelOptions.some((model) => `${model.provider}/${model.modelId}` === draft.modelKey) && <option value={draft.modelKey}>{draft.modelKey} · {t("longAgentSettings.unavailable")}</option>}{modelOptions.map((model) => <option key={`${model.provider}/${model.modelId}`} value={`${model.provider}/${model.modelId}`} disabled={!model.authConfigured}>{model.name} · {model.modelId}{model.authConfigured ? "" : ` · ${t("longAgentSettings.notAuthenticated")}`}</option>)}</select></label>
-                        <label>{t("longAgentSettings.thinking")}<select value={draft.thinkingLevel} onChange={(event) => set("thinkingLevel", event.target.value)}><option value="">{t("longAgentSettings.modelDefault")}{document.agent.effective.thinkingLevel && document.agent.effective.thinkingSource === "chat-default"
-                          ? `（${document.agent.effective.thinkingLevel}）`
-                          : ""}</option>{(modelCatalog?.thinkingLevels ?? []).map((level) => <option key={level} value={level}>{level}</option>)}</select></label>
+                        <ModelSelection models={modelOptions} value={draft.modelKey} onChange={value => set("modelKey", value)} inheritLabel={t("workspaceNav.inheritModel")} />
+                        <ThinkingSelection value={draft.thinkingLevel} onChange={value => set("thinkingLevel", value)} inheritLabel={t("design.inheritDefault")}
+                          capabilitiesPending={draft.modelKey === "" && document.agent.definition.model !== null}
+                          levels={modelOptions.find(model => `${model.provider}/${model.modelId}` === (draft.modelKey || (document.agent.effective.model ? `${document.agent.effective.model.provider}/${document.agent.effective.model.modelId}` : "")))?.thinkingLevels ?? []} />
                       </div>
+                      <details className={styles.promptOptions}><summary>{t("design.promptOptions")}</summary><div className={styles.advancedBody}>
                       <label>{t("longAgentSettings.systemPrompt")}<select value={draft.systemPromptMode} onChange={(event) => set("systemPromptMode", event.target.value as Draft["systemPromptMode"])}><option value="pi-default">{t("longAgentSettings.piDefaultPrompt")}</option><option value="replace">{t("longAgentSettings.replacePrompt")}</option></select></label>
                       {draft.systemPromptMode === "replace" && <label>{t("longAgentSettings.systemPromptText")}<textarea value={draft.systemPromptText} rows={8} onChange={(event) => set("systemPromptText", event.target.value)} /></label>}
                       <label>{t("longAgentSettings.responseTemplate")}<textarea rows={3} value={draft.responseTemplateText} placeholder={"project：{{project}}"} onChange={(event) => set("responseTemplateText", event.target.value)} /><span className={styles.fieldHint}>{t("longAgentSettings.responseTemplateHint")}</span></label>
                       <label>{t("longAgentSettings.customInstructions")}<textarea value={draft.customInstructionsText} rows={8} placeholder={t("longAgentSettings.instructionSeparator", { separator: LONG_AGENT_INSTRUCTION_SEPARATOR })} onChange={(event) => set("customInstructionsText", event.target.value)} /><span className={styles.fieldHint}>{t("longAgentSettings.instructionSeparator", { separator: LONG_AGENT_INSTRUCTION_SEPARATOR })}</span></label>
+                      </div></details>
                     </fieldset>
 
-                    <fieldset className={styles.section}>
-                      <legend>{t("longAgentSettings.chatTools")}</legend>
+                    <details className={`${styles.section} ${styles.advancedSection}`}>
+                      <summary>{t("longAgentSettings.chatTools")}</summary><div className={styles.advancedBody}>
                       <label>{t("longAgentSettings.toolMode")}<select value={draft.toolMode} onChange={(event) => set("toolMode", event.target.value as Draft["toolMode"])}><option value="pi-default">{t("longAgentSettings.piDefaultTools")}</option><option value="explicit">{t("longAgentSettings.explicitTools")}</option><option value="none">{t("longAgentSettings.noTools")}</option></select></label>
                       <p className={styles.help}>{t("longAgentSettings.chatToolsHelp")}</p>
-                      {toolCatalogError && <div className={styles.error} role="alert">{toolCatalogError}</div>}
+                      {toolCatalogError && <div className={styles.error} role="alert"><InterfaceFeedback message={toolCatalogError} /></div>}
                       <div className={styles.checkGrid}>
                         {(toolCatalog ?? []).map((tool) => {
                           const labelKey = CHAT_TOOL_LABEL_KEYS[tool.address];
@@ -680,12 +661,12 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                           ))}
                       </div>
                       {draft.toolMode === "explicit" && <div className={styles.twoColumns}><label>{t("longAgentSettings.toolNames")}<textarea rows={4} value={draft.toolNamesText} placeholder={t("longAgentSettings.onePerLine")} onChange={(event) => set("toolNamesText", event.target.value)} /></label><label>{t("longAgentSettings.excludedToolNames")}<textarea rows={4} value={draft.excludedToolNamesText} placeholder={t("longAgentSettings.onePerLine")} onChange={(event) => set("excludedToolNamesText", event.target.value)} /></label></div>}
-                    </fieldset>
+                    </div></details>
 
-                    <fieldset className={styles.section}>
-                      <legend>{t("longAgentSettings.skillSelection")}</legend>
+                    <details className={`${styles.section} ${styles.advancedSection}`}>
+                      <summary>{t("longAgentSettings.skillSelection")}</summary><div className={styles.advancedBody}>
                       <p className={styles.help}>{t("longAgentSettings.skillSelectionHint")}</p>
-                      {skillTreeError && <div className={styles.error} role="alert">{skillTreeError}</div>}
+                      {skillTreeError && <div className={styles.error} role="alert"><InterfaceFeedback message={skillTreeError} /></div>}
                       {skillTree === null && skillTreeError === null && <small>{t("longAgentSettings.inspectionLoading")}</small>}
                       {skillTree !== null && (
                         <div className={styles.checkGrid}>
@@ -698,7 +679,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                             })),
                             ...skillTree.workflows.flatMap((workflow) => workflow.agents.map((agent) => ({
                               key: `workflow:${workflow.workflowId}/${agent.agentId}`,
-                              label: `${t("longAgentSettings.skillOwnerWorkflow")} · ${workflow.name} / ${agent.name}`,
+                              label: `${t("longAgentSettings.skillOwnerWorkflow")} · ${translateWorkflowCopy(workflow.workflowId, workflow.name, t)} / ${translateWorkflowCopy(workflow.workflowId, agent.name, t)}`,
                               entries: agent.skills,
                             }))),
                             ...skillTree.longAgents.map((agent) => ({
@@ -726,16 +707,16 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                           ))}
                         </div>
                       )}
-                    </fieldset>
+                    </div></details>
 
-                    <fieldset className={styles.section}>
-                      <legend>{t("longAgentSettings.resources")}</legend>
+                    <details className={`${styles.section} ${styles.advancedSection}`}>
+                      <summary>{t("longAgentSettings.resources")}</summary><div className={styles.advancedBody}>
                       <label>{t("longAgentSettings.resourceMode")}<select value={draft.resourceMode} onChange={(event) => set("resourceMode", event.target.value as Draft["resourceMode"])}><option value="inherit">{t("longAgentSettings.inheritResources")}</option><option value="explicit">{t("longAgentSettings.explicitResources")}</option></select></label>
                       {draft.resourceMode === "explicit" && (
                         <div className={styles.resourcePicker}>
                           <p className={styles.help}>{t("longAgentSettings.resourceCatalogHint")}</p>
-                          {resourceCatalogError && <div className={styles.error} role="alert">{resourceCatalogError}</div>}
-                          <h4>Extensions</h4>
+                          {resourceCatalogError && <div className={styles.error} role="alert"><InterfaceFeedback message={resourceCatalogError} /></div>}
+                          <h4>{t("interface.extensions")}</h4>
                           {resourceCatalog !== null && resourceCatalog.extensions.length > 0 ? (
                             <div className={styles.checkGrid}>
                               {resourceCatalog.extensions.map((extension) => (
@@ -752,7 +733,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                           ) : (
                             <small>{t("longAgentSettings.resourceCatalogEmpty")}</small>
                           )}
-                          <h4>Plugins</h4>
+                          <h4>{t("interface.plugins")}</h4>
                           {resourceCatalog !== null && resourceCatalog.plugins.length > 0 ? (
                             <div className={styles.checkGrid}>
                               {resourceCatalog.plugins.map((plugin) => (
@@ -762,20 +743,20 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                                     checked={lines(draft.pluginSourcesText).includes(plugin.source)}
                                     onChange={(event) => toggleResourcePath("pluginSourcesText", plugin.source, event.target.checked)}
                                   />
-                                  <span><strong>{plugin.source}</strong><code>{plugin.scope} · {plugin.status} · {plugin.skills} Skills · {plugin.extensions} Extensions</code></span>
+                                  <span><strong>{plugin.source}</strong><code>{plugin.scope} · {plugin.status} · {plugin.skills}{t("interface.skills.2")}{plugin.extensions}{t("interface.extensions")}</code></span>
                                 </label>
                               ))}
                             </div>
                           ) : (
                             <small>{t("longAgentSettings.resourceCatalogEmpty")}</small>
                           )}
-                          <div className={styles.resourceGrid}><label>Skills<textarea rows={4} value={draft.skillPathsText} placeholder={t("longAgentSettings.onePerLine")} onChange={(event) => set("skillPathsText", event.target.value)} /></label><label>Extensions<textarea rows={4} value={draft.extensionPathsText} placeholder={t("longAgentSettings.onePerLine")} onChange={(event) => set("extensionPathsText", event.target.value)} /></label><label>Plugins<textarea rows={4} value={draft.pluginSourcesText} placeholder={t("longAgentSettings.onePerLine")} onChange={(event) => set("pluginSourcesText", event.target.value)} /></label></div>
+                          <div className={styles.resourceGrid}><label>{t("interface.skills")}<textarea rows={4} value={draft.skillPathsText} placeholder={t("longAgentSettings.onePerLine")} onChange={(event) => set("skillPathsText", event.target.value)} /></label><label>{t("interface.extensions")}<textarea rows={4} value={draft.extensionPathsText} placeholder={t("longAgentSettings.onePerLine")} onChange={(event) => set("extensionPathsText", event.target.value)} /></label><label>{t("interface.plugins")}<textarea rows={4} value={draft.pluginSourcesText} placeholder={t("longAgentSettings.onePerLine")} onChange={(event) => set("pluginSourcesText", event.target.value)} /></label></div>
                         </div>
                       )}
-                    </fieldset>
+                    </div></details>
 
-                    <fieldset className={styles.section}>
-                      <legend>{t("longAgentSettings.channel")}</legend>
+                    <details className={`${styles.section} ${styles.advancedSection}`}>
+                      <summary>{t("longAgentSettings.channel")}</summary><div className={styles.advancedBody}>
                       {document.channel === null ? (
                         <p className={styles.help}>{t("longAgentSettings.channelUnbound")}</p>
                       ) : (
@@ -788,19 +769,19 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                           <p className={styles.securityNote}>{t("longAgentSettings.channelCredentialBoundary")}</p>
                         </>
                       )}
-                    </fieldset>
+                    </div></details>
 
                     <div className={styles.actions}>
                       <span>{dirty ? t("longAgentSettings.unsaved") : t("longAgentSettings.savedState")}</span>
-                      <button type="button" className={styles.secondaryButton} disabled={!dirty || saving} onClick={() => { if (initialDraft) setDraft(initialDraft); }}>{t("longAgentSettings.reset")}</button>
-                      <button type="submit" className={styles.primaryButton} disabled={!dirty || saving}>{saving ? t("common.saving") : t("common.save")}</button>
+                      <Button variant="secondary" type="button" className={styles.secondaryButton} disabled={!dirty || saving} onClick={() => { if (initialDraft) setDraft(initialDraft); }}>{t("longAgentSettings.reset")}</Button>
+                      <Button variant="primary" type="submit" className={styles.primaryButton} disabled={!dirty || saving}>{saving ? t("common.saving") : t("common.save")}</Button>
                     </div>
                   </form>
                 )}
                 {activeTab === "runtime" && (
                   <section className={styles.section} aria-label={t("longAgentSettings.effectiveAssembly")}>
                     <h3>{t("longAgentSettings.effectiveAssembly")}</h3>
-                    {inspectionError && <div className={styles.error} role="alert">{inspectionError}</div>}
+                    {inspectionError && <div className={styles.error} role="alert"><InterfaceFeedback message={inspectionError} /></div>}
                     {inspection === null && inspectionError === null && <small>{t("longAgentSettings.inspectionLoading")}</small>}
                     {inspection !== null && (
                       <EffectiveSkillsList
@@ -820,13 +801,13 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                     )}
                   </section>
                 )}
-                {activeTab === "tasks" && <LongAgentTasksSettings longAgentId={document.agent.id} />}
+                {activeTab === "runtime" && <details className={styles.section} onToggle={event => { if (event.currentTarget.open) setIdentityOpen(true); }}>
+                  <summary>{t("longAgentSettings.groupIdentity")}</summary>
+                  {identityOpen && <LongAgentGroupSettings longAgentId={document.agent.id} onDirtyChange={setTabDirty} />}
+                </details>}
+                {activeTab === "runtime" && <details className={styles.section} onToggle={event => setUsageOpen(event.currentTarget.open)}><summary>{t("longAgentSettings.activityHeading")}</summary>{usageOpen && <LongAgentActivitySettings longAgentId={document.agent.id} />}</details>}
+            {activeTab === "tasks" && <LongAgentTasksSettings longAgentId={document.agent.id} />}
                 {activeTab === "duties" && <LongAgentDutiesSettings longAgentId={document.agent.id} />}
-                {activeTab === "deliverables" && <LongAgentDeliverablesSettings longAgentId={document.agent.id} />}
-                {activeTab === "activity" && <LongAgentActivitySettings longAgentId={document.agent.id} />}
-                {activeTab === "conversations" && <LongAgentConversationsPanel longAgentId={document.agent.id} agents={agents.map((agent) => ({ id: agent.id, name: agent.name }))} />}
-                {activeTab === "topics" && <LongAgentTopicsPanel initialAgentId={document.agent.id} agents={agents.map((agent) => ({ id: agent.id, name: agent.name }))} />}
-                {activeTab === "agent-group" && <LongAgentGroupSettings longAgentId={document.agent.id} onDirtyChange={setTabDirty} />}
                 {activeTab === "agent-memory" && <LongAgentMemorySettings longAgentId={document.agent.id} onDirtyChange={setTabDirty} />}
               </div>
             </div>

@@ -1,8 +1,14 @@
 "use client";
+import { useConfirmation } from "./ui/Confirmation";
+import { Button } from "./ui/Button";
 
+import { InterfaceFeedback } from "./InterfaceFeedback";
+
+import { IconX, IconArrowLeft, IconPlus } from "@tabler/icons-react";
+import styles from "./ModelsConfig.module.css";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, createContext, useContext, useId } from "react";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import type { ModelCatalogPreset, ModelCatalogRecommendation } from "@/lib/model-catalog";
@@ -174,29 +180,28 @@ function withCurrentOption(options: readonly string[], current: string | undefin
 
 // ── Form field helpers ────────────────────────────────────────────────────────
 
+const FieldName = createContext<string | undefined>(undefined);
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <label style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500 }}>{label}</label>
-      {children}
-    </div>
-  );
+  const id = useId();
+  return <div className={styles.field}><span id={id} className={styles.fieldLabel}>{label}</span><FieldName.Provider value={id}>{children}</FieldName.Provider></div>;
 }
 
 const inputStyle = {
-  padding: "6px 9px",
+  minHeight: 40,
+  padding: "9px 12px",
   background: "var(--bg-panel)",
   border: "1px solid var(--border)",
-  borderRadius: 5,
+  borderRadius: 10,
   color: "var(--text)",
-  fontSize: 12,
+  fontSize: 14,
   outline: "none",
   width: "100%",
   boxSizing: "border-box" as const,
 };
 
 function TextInput({ value, onChange, placeholder, mono }: { value: string; onChange: (v: string) => void; placeholder?: string; mono?: boolean }) {
-  return <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+  const labelId = useContext(FieldName);
+  return <input aria-labelledby={labelId} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
     style={{ ...inputStyle, fontFamily: mono ? "var(--font-mono)" : "inherit" }} />;
 }
 
@@ -220,6 +225,7 @@ function SecretTextInput({
   style?: React.CSSProperties;
 }) {
   const [visible, setVisible] = useState(false);
+  const labelId = useContext(FieldName);
   const { t } = useI18n();
 
   useEffect(() => {
@@ -229,6 +235,7 @@ function SecretTextInput({
   return (
     <div style={{ position: "relative", width: "100%", ...style }}>
       <input
+        aria-labelledby={labelId}
         type={visible ? "text" : "password"}
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -279,15 +286,17 @@ function SecretTextInput({
 }
 
 function NumInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
-  return <input type="number" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={inputStyle} />;
+  const labelId = useContext(FieldName);
+  return <input aria-labelledby={labelId} type="number" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={inputStyle} />;
 }
 
 function Select({ value, onChange, options, required }: { value: string; onChange: (v: string) => void; options: readonly string[]; required?: boolean }) {
+  const labelId = useContext(FieldName);
   const { t } = useI18n();
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)}
+    <select aria-labelledby={labelId} value={value} onChange={(e) => onChange(e.target.value)}
       style={{ ...inputStyle, color: value ? "var(--text)" : "var(--text-dim)" }}>
-       {!required && <option value="">— {t("i18n.default")} / none —</option>}
+       {!required && <option value="">— {t("i18n.default")}{t("interface..none")}</option>}
       {options.map((o) => <option key={o} value={o}>{o}</option>)}
     </select>
   );
@@ -413,7 +422,7 @@ function ProviderDetail({ name, provider, apiOptions, onChange, onRename, onDele
       </div>
 
        <Field label={t("i18n.providerName")}>
-        <TextInput value={editingName} onChange={setEditingName} placeholder="provider-name" mono />
+        <TextInput value={editingName} onChange={setEditingName} placeholder={t("interface.provider.name")} mono />
         {editingName !== name && editingName.trim() && (
           <button onClick={() => onRename(editingName.trim())}
             style={{ marginTop: 4, padding: "3px 10px", background: "var(--accent)", border: "none", borderRadius: 4, color: "var(--on-accent)", cursor: "pointer", fontSize: 12, alignSelf: "flex-start" }}>
@@ -422,16 +431,16 @@ function ProviderDetail({ name, provider, apiOptions, onChange, onRename, onDele
         )}
       </Field>
 
-      <Field label="Base URL">
+      <Field label={t("interface.base.url")}>
         <TextInput value={provider.baseUrl ?? ""} onChange={(v) => set("baseUrl", v || undefined)}
           placeholder="https://api.example.com/v1" mono />
       </Field>
 
-      <Field label="API Key">
+      <Field label={t("interface.api.key")}>
         <SecretTextInput value={provider.apiKey ?? ""} onChange={(v) => set("apiKey", v || undefined)}
-          placeholder="ENV_VAR_NAME, !shell-command, or literal key" mono />
+          placeholder={t("interface.env.var.name.shell.command.or.a.key")} mono />
         <span style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2 }}>
-          Prefix with <code style={{ fontFamily: "var(--font-mono)" }}>!</code> to run a shell command, or use an env var name
+          {t("design.keySourceHint")}
         </span>
       </Field>
 
@@ -439,13 +448,13 @@ function ProviderDetail({ name, provider, apiOptions, onChange, onRename, onDele
         <Select value={provider.api ?? "openai-completions"} onChange={(v) => set("api", v)} options={withCurrentOption(apiOptions, provider.api)} required />
       </Field>
 
-      <Field label="Headers">
+      <Field label={t("design.headers")}>
         <HeaderListEditor
           headers={provider.headers}
           onChange={(headers) => set("headers", headers)}
         />
         <span style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2 }}>
-          Added to every request from this provider (e.g. User-Agent). Useful for gateways with bot detection.
+          {t("design.headersHint")}
         </span>
       </Field>
 
@@ -555,139 +564,26 @@ function ProviderDetail({ name, provider, apiOptions, onChange, onRename, onDele
 
 // ── ThinkingLevelMap editor ───────────────────────────────────────────────────
 
-const LEVEL_COLORS: Record<string, string> = {
-  off:     "var(--text-dim)",
-  minimal: "#6b7280",
-  low:     "#60a5fa",
-  medium:  "#a78bfa",
-  high:    "#f472b6",
-  xhigh:   "#fb923c",
-  max:     "var(--danger)",
-};
-
-function ThinkingLevelMapEditor({
-  value,
-  levels,
-  onChange,
-}: {
-  value: Record<string, string | null> | undefined;
-  levels: readonly string[];
-  onChange: (v: Record<string, string | null> | undefined) => void;
+function ThinkingLevelMapEditor({ value, levels, onChange }: {
+  value:Record<string,string|null>|undefined; levels:readonly string[]; onChange:(value:Record<string,string|null>|undefined)=>void;
 }) {
+  const { t } = useI18n();
   const map = value ?? {};
-
-  const setLevel = (level: string, entry: string | null | "omit") => {
-    const next = { ...map };
-    if (entry === "omit") {
-      delete next[level];
-    } else {
-      next[level] = entry;
-    }
+  function update(level:string, value:string|null|undefined) {
+    const next={...map};
+    if (value === undefined) delete next[level]; else next[level]=value;
     onChange(Object.keys(next).length ? next : undefined);
-  };
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      {levels.map((level) => {
-        const raw = map[level];
-        const state: "omit" | "null" | "string" =
-          !(level in map) ? "omit" : raw === null ? "null" : "string";
-        const strVal = typeof raw === "string" ? raw : "";
-        const color = LEVEL_COLORS[level] ?? "var(--text-dim)";
-
-        const btnBase: React.CSSProperties = {
-          padding: "4px 10px",
-          fontSize: 12,
-          border: "none",
-          cursor: "pointer",
-          fontWeight: 400,
-          transition: "background 0.1s, color 0.1s",
-          whiteSpace: "nowrap",
-          background: "var(--bg-panel)",
-          color: "var(--text-dim)",
-        };
-        const btnActive: React.CSSProperties = {
-          background: "var(--accent)",
-          color: "var(--on-accent)",
-          fontWeight: 600,
-        };
-        const btnActiveDisabled: React.CSSProperties = {
-          background: "var(--danger-bg)",
-          color: "var(--danger)",
-          fontWeight: 600,
-        };
-
-        return (
-          <div
-            key={level}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "5px 4px",
-              borderRadius: 6,
-              background: "transparent",
-              border: "1px solid transparent",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 5, width: 68, flexShrink: 0 }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0, opacity: state === "null" ? 0.3 : 1 }} />
-              <span style={{
-                fontSize: 12,
-                fontFamily: "var(--font-mono)",
-                color: state === "null" ? "var(--text-dim)" : "var(--text-muted)",
-                textDecoration: state === "null" ? "line-through" : "none",
-              }}>
-                {level}
-              </span>
-            </div>
-
-            <div style={{ display: "flex", borderRadius: 5, border: "1px solid var(--border)", overflow: "hidden", flexShrink: 0 }}>
-              <button
-                onClick={() => setLevel(level, "omit")}
-                style={{ ...btnBase, ...(state === "omit" ? btnActive : {}) }}
-              >
-                Default
-              </button>
-              <button
-                onClick={() => setLevel(level, null)}
-                style={{ ...btnBase, borderLeft: "1px solid var(--border)", ...(state === "null" ? btnActiveDisabled : {}) }}
-              >
-                Disabled
-              </button>
-            </div>
-
-            <div style={{ display: "flex", borderRadius: 5, border: `1px solid ${state === "string" ? "var(--accent)" : "var(--border)"}`, overflow: "hidden", transition: "border-color 0.1s" }}>
-              <button
-                onClick={() => setLevel(level, strVal || level)}
-                style={{ ...btnBase, ...(state === "string" ? btnActive : {}), borderRight: "1px solid var(--border)", flexShrink: 0 }}
-              >
-                Custom
-              </button>
-              <input
-                value={strVal}
-                onChange={(e) => setLevel(level, e.target.value)}
-                onFocus={() => { if (state !== "string") setLevel(level, strVal || level); }}
-                placeholder={level}
-                maxLength={10}
-                style={{
-                  width: "12ch",
-                  background: state === "string" ? "var(--bg)" : "var(--bg-panel)",
-                  border: "none",
-                  outline: "none",
-                  color: state === "string" ? "var(--text)" : "var(--text-dim)",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 12,
-                  padding: "4px 7px",
-                  transition: "background 0.1s, color 0.1s",
-                }}
-              />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
+  }
+  return <div className={styles.thinkingMap}>{levels.map(level => {
+    const state = !(level in map) ? "default" : map[level] === null ? "disabled" : "custom";
+    return <div key={level} className={styles.thinkingRow}>
+      <span><strong>{t(`design.thinking.${level}`)}</strong><code>{level}</code></span>
+      <div className="settings-segments" role="group" aria-label={t(`design.thinking.${level}`)}>
+        {(["default","disabled","custom"] as const).map(mode=><button type="button" key={mode} aria-pressed={state === mode} onClick={()=>update(level,mode === "default" ? undefined : mode === "disabled" ? null : level)}>{t(mode === "default" ? "design.thinkingMapDefault" : mode === "disabled" ? "design.thinkingMapDisabled" : "design.thinkingMapCustom")}</button>)}
+      </div>
+      {state === "custom" && <input value={map[level] ?? ""} aria-label={t("design.thinkingMapping",{level})} onChange={event=>update(level,event.target.value)} maxLength={40} />}
+    </div>;
+  })}</div>;
 }
 
 // ── Model detail ──────────────────────────────────────────────────────────────
@@ -726,6 +622,7 @@ function HeaderListEditor({ headers, onChange }: {
   headers: Record<string, string> | undefined;
   onChange: (h: Record<string, string> | undefined) => void;
 }) {
+  const { t } = useI18n();
   const [rows, setRows] = useState<HeaderRow[]>(() => Object.entries(headers ?? {}).map(
     ([name, value], id) => ({ id, name, value }),
   ));
@@ -756,10 +653,10 @@ function HeaderListEditor({ headers, onChange }: {
       {rows.map((row) => (
         <div key={row.id} style={{ display: "flex", gap: 6 }}>
           <input value={row.name} onChange={(e) => setEntry(row.id, { name: e.target.value })}
-            placeholder="Header-Name" style={{ ...inputStyle, fontFamily: "var(--font-mono)", flex: 1 }} />
+            aria-label={t("design.headerName")} placeholder={t("interface.header.name")} style={{ ...inputStyle, fontFamily: "var(--font-mono)", flex: 1 }} />
           <input value={row.value} onChange={(e) => setEntry(row.id, { value: e.target.value })}
-            placeholder="value" style={{ ...inputStyle, fontFamily: "var(--font-mono)", flex: 1 }} />
-          <button onClick={() => removeEntry(row.id)} style={rowBtnStyle}>✕</button>
+            aria-label={t("design.headerValue")} placeholder={t("interface.value")} style={{ ...inputStyle, fontFamily: "var(--font-mono)", flex: 1 }} />
+          <button aria-label={t("design.removeHeader")} onClick={() => removeEntry(row.id)} style={rowBtnStyle}><IconX size={16}/></button>
         </div>
       ))}
       <button onClick={() => setRows((current) => [
@@ -767,7 +664,7 @@ function HeaderListEditor({ headers, onChange }: {
         { id: nextRowIdRef.current++, name: "", value: "" },
       ])}
         style={{ padding: "5px 9px", background: "none", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-muted)", cursor: "pointer", fontSize: 12, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, alignSelf: "flex-start" }}>
-        + Add header
+        <IconPlus size={16}/>{t("design.addHeader")}
       </button>
     </div>
   );
@@ -1050,10 +947,10 @@ function ModelDetail({
                 maxWidth: 260,
                 height: 24,
                 padding: "0 8px",
-                border: `1px solid ${testState.phase === "error" ? "#fecaca" : testState.phase === "success" ? "#bbf7d0" : "var(--border)"}`,
+                border: `1px solid ${testState.phase === "error" ? "var(--danger)" : testState.phase === "success" ? "var(--success)" : "var(--border)"}`,
                 borderRadius: 4,
-                background: testState.phase === "error" ? "#fee2e2" : testState.phase === "success" ? "#dcfce7" : "#e5e7eb",
-                color: "#111827",
+                background: testState.phase === "error" ? "var(--danger-bg)" : testState.phase === "success" ? "var(--success-bg)" : "var(--bg-panel)",
+                color: "var(--text)",
                 fontSize: 12,
                 display: "inline-flex",
                 alignItems: "center",
@@ -1101,8 +998,8 @@ function ModelDetail({
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <Field label="ID *"><TextInput value={model.id} onChange={(v) => set("id", v)} placeholder="model-id" mono /></Field>
-        <Field label="Name"><TextInput value={model.name ?? ""} onChange={(v) => set("name", v || undefined)} placeholder="Display name" /></Field>
+        <Field label="ID *"><TextInput value={model.id} onChange={(v) => set("id", v)} placeholder={t("interface.model.id")} mono /></Field>
+        <Field label={t("design.modelName")}><TextInput value={model.name ?? ""} onChange={(v) => set("name", v || undefined)} placeholder={t("interface.display.name")} /></Field>
       </div>
 
       <div style={{ padding: "2px 0" }}>
@@ -1446,8 +1343,8 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
            <SectionTitle>{t("i18n.subscription")}</SectionTitle>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.loggedIn ? "#4ade80" : "var(--border)", display: "inline-block" }} />
-          <span style={{ fontSize: 12, color: provider.loggedIn ? "#4ade80" : "var(--text-dim)" }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.loggedIn ? "var(--success)" : "var(--border)", display: "inline-block" }} />
+          <span style={{ fontSize: 12, color: provider.loggedIn ? "var(--success)" : "var(--text-dim)" }}>
              {provider.loggedIn ? t("i18n.connected") : t("i18n.notConnected")}
           </span>
         </div>
@@ -1457,7 +1354,7 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
       <div style={{ minHeight: 48 }}>
         {loginState.phase === "idle" && (
           <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-             {provider.loggedIn ? "Already connected. You can re-login or disconnect." : `Connect your ${provider.name} account.`}
+             {provider.loggedIn ? t("interface.already.connected.sign.in.again.or.disconnect") : `Connect your ${provider.name} account.`}
           </p>
         )}
         {loginState.phase === "connecting" && (
@@ -1485,15 +1382,12 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
               {loginState.phase === "auth"
-                ? "Complete sign-in in the browser, then copy the redirect URL from the address bar and paste it below."
+                ? t("interface.complete.sign.in.in.the.browser.then.paste.the.redirect.url.below")
                 : loginState.message}
             </p>
             {loginState.phase === "auth" && (
-              <p style={{ margin: 0, fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5 }}>
-                If the browser window did not open,{" "}
-                <a href={loginState.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", wordBreak: "break-all" }}>
-                  click here to open the login page
-                </a>
+              <p style={{ margin: 0, fontSize: 12, color: "var(--text-dim)", lineHeight: 1.5 }}>{t("interface.if.the.browser.window.did.not.open")}{" "}
+                <a href={loginState.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", wordBreak: "break-all" }}>{t("interface.open.the.sign.in.page")}</a>
                 .
               </p>
             )}
@@ -1503,7 +1397,7 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") submitCode(loginState.token, inputValue); }}
-                placeholder={loginState.phase === "auth" ? "http://localhost:1455/auth/callback?code=…" : (loginState.placeholder ?? "Enter value…")}
+                placeholder={loginState.phase === "auth" ? "http://localhost:1455/auth/callback?code=…" : (loginState.placeholder ?? t("interface.enter.a.value"))}
                 style={{ flex: 1, padding: "6px 9px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text)", fontSize: 12, outline: "none", fontFamily: "var(--font-mono)", boxSizing: "border-box" }}
               />
               <button
@@ -1518,9 +1412,7 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
         )}
         {loginState.phase === "device_code" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-              Open the verification page and enter this code:
-            </p>
+            <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>{t("interface.open.the.verification.page.and.enter.this.code")}</p>
             <div style={{ padding: "8px 10px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text)", fontSize: 16, fontWeight: 700, fontFamily: "var(--font-mono)", letterSpacing: 0 }}>
               {loginState.userCode}
             </div>
@@ -1536,10 +1428,10 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
           <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>{loginState.message}</p>
         )}
         {loginState.phase === "success" && (
-             <p style={{ margin: 0, fontSize: 12, color: "#4ade80" }}>{t("i18n.connectedSuccessfully")}</p>
+             <p style={{ margin: 0, fontSize: 12, color: "var(--success)" }}>{t("i18n.connectedSuccessfully")}</p>
         )}
         {loginState.phase === "error" && (
-          <p style={{ margin: 0, fontSize: 12, color: "#f87171" }}>{loginState.message}</p>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--danger)" }}>{loginState.message}</p>
         )}
       </div>
 
@@ -1637,10 +1529,10 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-         <SectionTitle>API Key</SectionTitle>
+         <SectionTitle>{t("interface.api.key")}</SectionTitle>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.configured ? "#4ade80" : "var(--border)", display: "inline-block" }} />
-          <span style={{ fontSize: 12, color: provider.configured ? "#4ade80" : "var(--text-dim)" }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.configured ? "var(--success)" : "var(--border)", display: "inline-block" }} />
+          <span style={{ fontSize: 12, color: provider.configured ? "var(--success)" : "var(--text-dim)" }}>
              {provider.configured ? t("i18n.configured") : t("i18n.notConfigured")}
           </span>
         </div>
@@ -1648,17 +1540,17 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
 
       <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
         {provider.configured
-          ? `API key is stored. Enter a new key below to replace it, or disconnect to remove it.`
+          ? t("interface.an.api.key.is.saved.replace.it.below.or.disconnect.to.remove.it")
           : `Enter your ${provider.displayName} API key to enable ${provider.modelCount} model${provider.modelCount !== 1 ? "s" : ""}.`}
       </p>
 
-      <Field label="API Key">
+      <Field label={t("interface.api.key")}>
         <div style={{ display: "flex", gap: 6 }}>
           <SecretTextInput
             value={apiKey}
             onChange={setApiKey}
             onKeyDown={(e) => { if (e.key === "Enter" && apiKey.trim()) handleSave(); }}
-            placeholder={provider.configured ? "Enter new key to replace…" : "sk-…"}
+            placeholder={provider.configured ? t("interface.enter.a.replacement.key") : "sk-…"}
             style={{ flex: 1 }}
             autoComplete="off"
             spellCheck={false}
@@ -1687,7 +1579,7 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
         </div>
       </Field>
 
-      {error && <p style={{ margin: 0, fontSize: 12, color: "#f87171" }}>{error}</p>}
+      {error && <p style={{ margin: 0, fontSize: 12, color: "var(--danger)" }}><InterfaceFeedback message={error} /></p>}
 
       {provider.configured && (
         <button
@@ -1792,9 +1684,8 @@ function AddProviderPicker({
   };
 
 
-
   return (
-    <div ref={pickerRef} role="dialog" aria-modal="true" aria-label="Provider" tabIndex={-1}
+    <div ref={pickerRef} role="dialog" aria-modal="true" aria-label={t("interface.provider")} tabIndex={-1}
       style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -1809,7 +1700,7 @@ function AddProviderPicker({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
-             placeholder={t("i18n.searchProviders")}
+             aria-label={t("i18n.searchProviders")} placeholder={t("i18n.searchProviders")}
             style={{ flex: 1, background: "none", border: "none", outline: "none", color: "var(--text)", fontSize: 13, boxSizing: "border-box" }}
           />
         </div>
@@ -1831,7 +1722,7 @@ function AddProviderPicker({
                   onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-panel)"; }}
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>OpenAI / Anthropic compatible</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t("interface.openai.anthropic.compatible")}</div>
                      <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2 }}>{t("i18n.customEndpoint")}</div>
                   </div>
                   <span style={{ width: 26, height: 26, borderRadius: 5, background: "var(--bg-hover)", border: "1px dashed var(--border)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -1860,7 +1751,7 @@ function AddProviderPicker({
               ))}
 
               {availableApiKey.length > 0 && (
-                <div style={{ gridColumn: "1 / -1", paddingTop: availableOAuth.length > 0 ? 6 : 0, fontSize: 12, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>API Key</div>
+                <div style={{ gridColumn: "1 / -1", paddingTop: availableOAuth.length > 0 ? 6 : 0, fontSize: 12, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("interface.api.key")}</div>
               )}
               {availableApiKey.map((p) => (
                 <button key={p.id} onClick={() => { onSelectApiKey(p.id); onClose(); }}
@@ -1870,7 +1761,7 @@ function AddProviderPicker({
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.displayName}</div>
-                    <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2 }}>{p.modelCount} models</div>
+                    <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2 }}>{p.modelCount}{t("interface.models")}</div>
                   </div>
                   <ProviderIcon id={p.id} size={28} />
                 </button>
@@ -1887,13 +1778,14 @@ function AddProviderPicker({
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function ModelsConfig({ onClose }: { onClose: () => void }) {
+  const confirm = useConfirmation();
   const isMobile = useIsMobile();
   const { t } = useI18n();
   const [config, setConfig] = useState<ModelsJson>({ providers: {} });
   const [savedConfig, setSavedConfig] = useState(() => JSON.stringify({ providers: {} }));
   const dirty = JSON.stringify(config) !== savedConfig;
-  const requestClose = () => {
-    if (dirty && !window.confirm(t("longAgentSettings.discardConfirm"))) return;
+  const requestClose = async () => {
+    if (dirty && !await confirm(t("longAgentSettings.discardConfirm"), t("common.discard"))) return;
     onClose();
   };
   const modalRef = useDialogFocus(requestClose);
@@ -1908,6 +1800,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedOk, setSavedOk] = useState(false);
+  const [showProviderList, setShowProviderList] = useState(false);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [oauthProviders, setOauthProviders] = useState<OAuthProvider[]>([]);
   const [apiKeyProviders, setApiKeyProviders] = useState<ApiKeyProvider[]>([]);
@@ -1971,6 +1864,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
     while (config.providers?.[finalName]) finalName = `new-provider-${n++}`;
     setConfig((prev) => ({ ...prev, providers: { ...(prev.providers ?? {}), [finalName]: { api: "openai-completions" } } }));
     setSelection({ type: "provider", name: finalName });
+    setShowProviderList(false);
   }, [config.providers]);
 
   const updateProvider = useCallback((name: string, p: ProviderEntry) => {
@@ -2122,45 +2016,38 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
   return (
     <>
-    <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label="Models" className="configuration-dialog" style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}
+    <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("common.models")} className={`configuration-dialog ${styles.overlay}`} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}
       onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
-      <div style={{ width: isMobile ? "calc(100vw - 16px)" : 860, maxWidth: "calc(100vw - 16px)", height: isMobile ? "calc(100dvh - 16px)" : "78vh", maxHeight: "calc(100dvh - 16px)", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", overflow: "hidden" }}>
+      <div className={styles.dialog}>
 
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("common.models")}</span>
-            <code style={{ fontSize: 12, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>{modelsConfigPath}</code>
+<span className={styles.subtitle} title={modelsConfigPath}>{t("design.providerHint")}</span>
           </div>
-          <button onClick={requestClose} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "2px 6px" }}>×</button>
+          <Button iconOnly variant="ghost" type="button" aria-label={t("common.close")} className="workspace-icon" onClick={requestClose}><IconX size={20}/></Button>
         </div>
 
         {/* Body */}
-        <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
+        <div className={styles.body} data-show-list={showProviderList || selection === null || undefined}>
 
           {/* Left: tree */}
-          <div style={{
-            width: isMobile ? "100%" : 210,
-            maxHeight: isMobile ? "40vh" : undefined,
-            borderRight: isMobile ? "none" : "1px solid var(--border)",
-            borderBottom: isMobile ? "1px solid var(--border)" : "none",
-            display: "flex", flexDirection: "column", flexShrink: 0, background: "var(--bg-panel)",
-          }}>
+          <div className={styles.navigation} aria-label={t("design.providerList")}>
             <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
               {/* Active OAuth subscriptions */}
               {activeOAuth.map((p) => {
                 const isSelected = selection?.type === "oauth" && selection.providerId === p.id;
                 return (
-                  <div
-                    key={p.id}
-                    onClick={() => setSelection({ type: "oauth", providerId: p.id })}
+                  <button type="button" className={styles.navItem} key={p.id}
+                    onClick={() => {setSelection({ type: "oauth", providerId: p.id });setShowProviderList(false);}}
                     style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 8px", borderRadius: 5, cursor: "pointer", background: isSelected ? "var(--bg-selected)" : "none" }}
                     onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "var(--bg-hover)"; }}
                     onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = "none"; }}
                   >
                     <ProviderIcon id={p.id} size={16} />
                     <span style={{ fontSize: 12, color: "var(--text)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
-                  </div>
+                  </button>
                 );
               })}
 
@@ -2168,16 +2055,15 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
               {activeApiKey.map((p) => {
                 const isSelected = selection?.type === "apikey" && selection.providerId === p.id;
                 return (
-                  <div
-                    key={p.id}
-                    onClick={() => setSelection({ type: "apikey", providerId: p.id })}
+                  <button type="button" className={styles.navItem} key={p.id}
+                    onClick={() => {setSelection({ type: "apikey", providerId: p.id });setShowProviderList(false);}}
                     style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 8px", borderRadius: 5, cursor: "pointer", background: isSelected ? "var(--bg-selected)" : "none" }}
                     onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "var(--bg-hover)"; }}
                     onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = "none"; }}
                   >
                     <ProviderIcon id={p.id} size={16} />
                     <span style={{ fontSize: 12, color: "var(--text)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.displayName}</span>
-                  </div>
+                  </button>
                 );
               })}
 
@@ -2195,8 +2081,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                 return (
                   <div key={pName} style={{ marginBottom: 2 }}>
                     {/* Provider row */}
-                    <div
-                      onClick={() => setSelection({ type: "provider", name: pName })}
+                    <button type="button" className={styles.navItem} onClick={() => {setSelection({ type: "provider", name: pName });setShowProviderList(false);}}
                       style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 8px", borderRadius: 5, cursor: "pointer", background: isProviderSelected ? "var(--bg-selected)" : "none" }}
                       onMouseEnter={(e) => { if (!isProviderSelected) e.currentTarget.style.background = "var(--bg-hover)"; }}
                       onMouseLeave={(e) => { if (!isProviderSelected) e.currentTarget.style.background = "none"; }}
@@ -2211,38 +2096,36 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
                       <span style={{ fontSize: 12, fontWeight: isProviderSelected ? 600 : 400, color: "var(--text)", fontFamily: "var(--font-mono)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {pName}
                       </span>
-                    </div>
+                    </button>
 
                     {/* Model rows */}
                     {models.map((m, i) => {
                       const isModelSelected = selection?.type === "model" && selection.providerName === pName && selection.index === i;
                       return (
-                        <div
-                          key={i}
-                          onClick={() => setSelection({ type: "model", providerName: pName, index: i })}
+                        <button type="button" className={styles.navItem} key={i}
+                          onClick={() => {setSelection({ type: "model", providerName: pName, index: i });setShowProviderList(false);}}
                           style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px 5px 26px", borderRadius: 5, cursor: "pointer", background: isModelSelected ? "var(--bg-selected)" : "none" }}
                           onMouseEnter={(e) => { if (!isModelSelected) e.currentTarget.style.background = "var(--bg-hover)"; }}
                           onMouseLeave={(e) => { if (!isModelSelected) e.currentTarget.style.background = "none"; }}
                         >
                           <span style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: m.id ? "var(--text-muted)" : "var(--text-dim)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                             {m.id || t("i18n.newModel")}
+                             {m.name || m.id || t("i18n.newModel")}
                           </span>
                           {m.reasoning && (
-                            <span style={{ fontSize: 9, padding: "1px 4px", background: "rgba(99,102,241,0.12)", color: "rgba(99,102,241,0.8)", borderRadius: 3, flexShrink: 0 }}>T</span>
+                            <span style={{ fontSize: 12, padding: "2px 6px", background: "var(--bg-selected)", color: "var(--accent)", borderRadius: 3, flexShrink: 0 }}>T</span>
                           )}
-                        </div>
+                        </button>
                       );
                     })}
 
                     {/* Add model button */}
-                    <div
-                      onClick={(e) => { e.stopPropagation(); addModel(pName); }}
+                    <button type="button" className={styles.navItem} onClick={(e) => { e.stopPropagation(); addModel(pName); }}
                       style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px 4px 26px", borderRadius: 5, cursor: "pointer", color: "var(--text-dim)" }}
                       onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
                     >
                        <span style={{ fontSize: 11 }}>+ {t("i18n.model")}</span>
-                    </div>
+                    </button>
                   </div>
                 );
               })}
@@ -2264,7 +2147,8 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           </div>
 
           {/* Right: detail */}
-          <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+          <div className={styles.detail}>
+            {isMobile && selection && <Button variant="ghost" type="button" className={styles.back} onClick={()=>setShowProviderList(true)}><IconArrowLeft size={18}/>{t("design.backToProviders")}</Button>}
             {loading ? null : detailContent ?? (
               <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 13 }}>
                  {t("i18n.selectProviderModel")}
@@ -2275,7 +2159,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
         {/* Footer */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "10px 18px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
-          {saveError && <span style={{ fontSize: 12, color: "#f87171", flex: 1 }}>{saveError}</span>}
+          {saveError && <span style={{ fontSize: 12, color: "var(--danger)", flex: 1 }}><InterfaceFeedback message={saveError} /></span>}
           <button onClick={requestClose} style={{ padding: "6px 14px", background: "none", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-muted)", cursor: "pointer", fontSize: 13 }}>
              {t("i18n.cancel")}
           </button>

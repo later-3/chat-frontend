@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceFeedback } from "./InterfaceFeedback";
+
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { IconArrowRight, IconRefresh } from "@tabler/icons-react";
@@ -113,10 +115,10 @@ export function TopicCreationRequests({ longAgentId, sourceSessionId, focusedReq
     {selectedId !== null && createPortal(<SurfaceDialog title={t("topics.creationTasks")} onClose={() => setSelectedId(null)}>
       <div className={styles.content} data-topic-creation-review data-creation-run={selected?.runId}>
         {error && <p role="alert">{t("topics.creationOffline")}</p>}
-        {actionError && <p role="alert">{actionError}</p>}
+        {actionError && <p role="alert"><InterfaceFeedback message={actionError} /></p>}
         {!selected ? <p role="status">{t("topics.creationCollecting")}</p> : <>
           <p role="status">{review ? statusText(selected) : submittedReview === selected.review?.reviewId ? t("topics.creationCollecting") : statusText(selected)}</p>
-          {selected.error && <p role="alert">{selected.error}</p>}
+          {selected.error && <p role="alert"><InterfaceFeedback message={selected.error} /></p>}
           {review && <PlanReviewCard key={review.reviewId} review={review} submitting={busy} onDecision={decide}
             title={t("topics.creationReviewTitle", { revision: review.planRevision })} approveLabel={t("topics.creationApprove")} />}
           {selected.node && <a className={styles.primary} data-topic-creation-enter href={topicNodeUrl(longAgentId, selected.node)}

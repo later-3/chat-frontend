@@ -335,6 +335,8 @@ export interface SessionTreeNode {
 }
 
 export interface SessionInfo {
+  /** Backend-derived group navigation; never an execution owner. */
+  groupConversation?: { conversationId: string; longAgentId: string; role: "public" | "participant" };
   path: string;
   id: string;
   cwd: string;
@@ -376,6 +378,8 @@ export interface SessionInfo {
   /** Chat管理的Pi Session；继续执行仍必须经过Chat Workflow。 */
   sessionSource?: "pi" | "chat";
   readOnly?: boolean;
+  /** Backend-owned node binding preserves the authorized send route from any Session navigation. */
+  topicNode?: { longAgentId: string; topicId: string; nodeId: string };
 }
 
 export interface SessionContext {

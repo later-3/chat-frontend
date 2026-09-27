@@ -448,14 +448,17 @@ export async function sendLongAgentMessage(input: {
 export async function startProjectLongAgent(input: {
   readonly longAgentId: string;
   readonly projectId: string;
+  readonly date?: string;
 }, signal?: AbortSignal): Promise<ProjectLongAgentStarted> {
   const response = await fetch(`/api/long-agents/${encodeURIComponent(input.longAgentId)}/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ projectId: input.projectId }),
+    body: JSON.stringify({ projectId: input.projectId, ...(input.date === undefined ? {} : { date: input.date }) }),
     ...(signal === undefined ? {} : { signal }),
   });
-  return parseProjectLongAgentStarted(await responseBody(response));
+  const started = parseProjectLongAgentStarted(await responseBody(response));
+  if (started.longAgentId !== input.longAgentId) throw new Error("Friend response identity mismatch");
+  return started;
 }
 
 export interface CreatedLongAgent {
@@ -660,16 +663,21 @@ export interface LongAgentFeedPost {
 /** 活动日历：某 Long Agent 每天的轮次、token 与工具调用。 */
 export async function fetchLongAgentActivity(
   longAgentId: string,
-  range: { readonly from: string; readonly to: string },
+  range: { readonly from: string; readonly to: string } | undefined,
   signal?: AbortSignal,
 ): Promise<readonly LongAgentActivityDay[]> {
   const response = await fetch(
-    `/api/long-agents/${encodeURIComponent(longAgentId)}/activity?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`,
+    `/api/long-agents/${encodeURIComponent(longAgentId)}/activity${range ? `?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}` : ""}`,
     { cache: "no-store", credentials: "same-origin", ...(signal === undefined ? {} : { signal }) },
   );
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) throw new Error(readMessage(body, "读取活动记录失败", response.status));
-  if (!isRecord(body) || !Array.isArray(body.days)) throw new Error("Chat返回了无效的活动记录");
+  const count = (v: unknown) => typeof v === "number" && Number.isFinite(v) && v >= 0;
+  if (!isRecord(body) || body.longAgentId !== longAgentId || typeof body.timeZone !== "string" || !Array.isArray(body.days)
+    || !body.days.every(day => isRecord(day) && typeof day.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(day.date)
+      && count(day.sessions) && count(day.turns) && isRecord(day.tokens) && count(day.tokens.input) && count(day.tokens.output) && count(day.tokens.total)
+      && Array.isArray(day.tools) && day.tools.every(tool => isRecord(tool) && typeof tool.name === "string" && count(tool.count))
+      && Array.isArray(day.models) && day.models.every(model => typeof model === "string"))) throw new Error("Chat返回了无效的活动记录");
   return body.days as readonly LongAgentActivityDay[];
 }
 

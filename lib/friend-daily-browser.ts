@@ -1,9 +1,19 @@
 /** Browser projection only; Backend owns the calendar, queue and recovery. */
+export interface FriendCalendarSession {
+  sessionId: string;
+  projectId: string;
+  dates: string[];
+  kind: "daily" | "work" | "topic" | "session";
+  title: string;
+  createdAt?: string;
+}
 export interface FriendDailyState {
   schemaVersion: 1;
   longAgentId: string;
   timeZone: string;
   today: string;
+  /** Present on an annual read; actual native history, distinct from lifecycle day bindings. */
+  sessions?: FriendCalendarSession[];
   days: { date: string; sessionId: string; timeZone: string; summary: {
     status: "pending" | "running" | "completed" | "failed"; attempts: number;
     error: string | null; nextAttemptAt: string | null;
@@ -15,7 +25,7 @@ export interface FriendDailyState {
 function record(value: unknown): value is Record<string, unknown> { return !!value && typeof value === "object" && !Array.isArray(value); }
 function text(value: unknown): value is string { return typeof value === "string" && value.length > 0; }
 function nullable(value: unknown): boolean { return value === null || text(value); }
-function date(value: unknown): boolean { return text(value) && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)); }
+function date(value: unknown): boolean { return text(value) && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value; }
 export function parseFriendDailyState(value: unknown): FriendDailyState {
   if (!record(value) || value.schemaVersion !== 1 || !text(value.longAgentId) || !text(value.timeZone) || !date(value.today)
     || !Array.isArray(value.days) || !Array.isArray(value.requests)) throw new Error("Invalid Friend calendar response");
@@ -33,16 +43,30 @@ export function parseFriendDailyState(value: unknown): FriendDailyState {
       || !["chat-web", "channel", "scheduled"].includes(String(request.source)) || !nullable(request.contextProjectId) || !nullable(request.error)
       || !["queued", "running", "completed", "failed", "interrupted", "cancelled"].includes(String(request.status))) throw new Error("Invalid Friend request response");
   }
+  if (value.sessions !== undefined) {
+    if (!Array.isArray(value.sessions)) throw new Error("Invalid Friend history response");
+    const seen = new Set<string>();
+    for (const session of value.sessions) {
+      if (!record(session) || !text(session.sessionId) || session.projectId !== value.longAgentId
+        || (session.createdAt !== undefined && (!text(session.createdAt) || !Number.isFinite(Date.parse(session.createdAt))))
+        || typeof session.title !== "string" || !["daily", "work", "topic", "session"].includes(String(session.kind))
+        || !Array.isArray(session.dates) || session.dates.length === 0 || !session.dates.every(date)
+        || new Set(session.dates).size !== session.dates.length || seen.has(session.sessionId)) throw new Error("Invalid Friend history response");
+      seen.add(session.sessionId);
+    }
+  }
   return value as unknown as FriendDailyState;
 }
 export type FriendDailyAction = { action: "retry-summary"; date: string } | { action: "cancel-request" | "retry-request"; turnId: string };
-export async function fetchFriendDailyState(longAgentId: string, signal?: AbortSignal, action?: FriendDailyAction): Promise<FriendDailyState> {
-  const response = await fetch(`/api/long-agents/${encodeURIComponent(longAgentId)}/daily`, {
+export async function fetchFriendDailyState(longAgentId: string, signal?: AbortSignal, action?: FriendDailyAction, year?: number): Promise<FriendDailyState> {
+  if (year !== undefined && (!Number.isInteger(year) || year < 1970 || year > 9999)) throw new Error("Invalid calendar year");
+  const response = await fetch(`/api/long-agents/${encodeURIComponent(longAgentId)}/daily${year === undefined ? "" : `?year=${year}`}`, {
     ...(action ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(action) } : {}), signal,
   });
   const body: unknown = await response.json();
   if (!response.ok) throw new Error(record(body) && text(body.statusMessage) ? body.statusMessage : `HTTP ${response.status}`);
   const parsed = parseFriendDailyState(body);
   if (parsed.longAgentId !== longAgentId) throw new Error("Friend response identity mismatch");
+  if (year !== undefined && (!parsed.sessions || parsed.sessions.some(session => session.dates.some(date => !date.startsWith(`${year}-`))))) throw new Error("Invalid Friend annual history response");
   return parsed;
 }

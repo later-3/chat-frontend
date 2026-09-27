@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceFeedback } from "./InterfaceFeedback";
+
 import { useEffect, useState, useRef, useCallback, useMemo, type CSSProperties, type MouseEvent } from "react";
 import {
   Prism as SyntaxHighlighter,
@@ -353,8 +355,7 @@ function DiffView({ patch }: { patch: string }) {
                 borderBottom: "1px solid var(--border)",
               }}
             >
-              ... {seg.count} unchanged lines ...
-            </div>
+              ... {seg.count}{t("interface.unchanged.lines")}</div>
           );
           return result;
         }
@@ -525,7 +526,7 @@ function ImageViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
         <span style={{ fontFamily: "var(--font-mono)" }} title={filePath}>
           {getRelativeFilePath(filePath, cwd)}
         </span>
-        <span style={{ marginLeft: "auto" }}>{ext || "image"}</span>
+        <span style={{ marginLeft: "auto" }}>{ext || t("interface.image")}</span>
         {naturalSize && <span>{naturalSize.w} × {naturalSize.h}</span>}
         {formatSizeStr && <span>{formatSizeStr}</span>}
         <span
@@ -542,7 +543,7 @@ function ImageViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
               boxShadow: watching ? "none" : "none",
             }}
           />
-          {watching ? "live" : "static"}
+          {watching ? t("interface.live") : t("interface.static")}
         </span>
         <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
       </div>
@@ -562,7 +563,7 @@ function ImageViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
         }}
       >
         {error ? (
-          <div style={{ color: "var(--danger)", fontSize: 13 }}>{error}</div>
+          <div style={{ color: "var(--danger)", fontSize: 13 }}><InterfaceFeedback message={error} /></div>
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -695,7 +696,7 @@ function AudioViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
         <span style={{ fontFamily: "var(--font-mono)" }} title={filePath}>
           {getRelativeFilePath(filePath, cwd)}
         </span>
-        <span style={{ marginLeft: "auto" }}>{ext || "audio"}</span>
+        <span style={{ marginLeft: "auto" }}>{ext || t("interface.audio")}</span>
         {duration != null && <span>{formatDuration(duration)}</span>}
         {size != null && <span>{formatSize(size)}</span>}
         <span
@@ -712,7 +713,7 @@ function AudioViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
               boxShadow: watching ? "none" : "none",
             }}
           />
-          {watching ? "live" : "static"}
+          {watching ? t("interface.live") : t("interface.static")}
         </span>
         <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
       </div>
@@ -729,7 +730,7 @@ function AudioViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }: Pr
         <div style={{ width: "min(680px, 100%)" }}>
           {error && (
             <div style={{ color: "var(--danger)", fontSize: 13, marginBottom: 12, textAlign: "center" }}>
-              {error}
+              <InterfaceFeedback message={error} />
             </div>
           )}
           <audio
@@ -880,7 +881,7 @@ function DocumentViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }:
         <span style={{ fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={filePath}>
           {getRelativeFilePath(filePath, cwd)}
         </span>
-        <span style={{ marginLeft: "auto" }}>{ext === "docx" ? "docx preview" : "pdf"}</span>
+        <span style={{ marginLeft: "auto" }}>{ext === "docx" ? t("interface.word.preview") : "pdf"}</span>
         {size != null && <span>{formatSize(size)}</span>}
         <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />
         <span
@@ -897,13 +898,13 @@ function DocumentViewer({ filePath, cwd, sourceSessionId, watchEnabled = true }:
               boxShadow: watching ? "none" : "none",
             }}
           />
-          {watching ? "live" : "static"}
+          {watching ? t("interface.live") : t("interface.static")}
         </span>
       </div>
       <div style={{ flex: 1, minHeight: 0, background: "var(--bg-panel)" }}>
         {error ? (
           <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, color: "var(--danger)", fontSize: 13, textAlign: "center" }}>
-            {error}
+            <InterfaceFeedback message={error} />
           </div>
         ) : (
           <iframe
@@ -1308,7 +1309,7 @@ function TextFileViewer({
   if (error && !isDeletedDiff) {
     return (
       <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--danger)", fontSize: 13 }}>
-        {error}
+        <InterfaceFeedback message={error} />
       </div>
     );
   }

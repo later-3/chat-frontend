@@ -1,5 +1,9 @@
 "use client";
 
+import { InterfaceFeedback } from "./InterfaceFeedback";
+
+import { useI18n } from "@/hooks/useI18n";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchPromptResourceDrafts,
@@ -21,8 +25,8 @@ function matchesDraft(draft: PromptResourceDraft, query: string): boolean {
     .some((value) => value.toLocaleLowerCase().includes(normalized));
 }
 
-function targetLabel(value: PromptResource | PromptResourceDraft): string {
-  return value.target.type === "personal" ? "Personal" : `Project · ${value.target.projectId}`;
+function targetLabel(value: PromptResource | PromptResourceDraft, t: ReturnType<typeof useI18n>["t"]): string {
+  return value.target.type === "personal" ? t("prompt.targetPersonal") : t("prompt.targetProject", { project: value.target.projectId });
 }
 
 export function PromptResourcesConfig({
@@ -32,6 +36,7 @@ export function PromptResourcesConfig({
   readonly projectId: string;
   readonly onClose: () => void;
 }) {
+  const { t: tr, locale } = useI18n();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -123,77 +128,77 @@ export function PromptResourcesConfig({
   return (
     <dialog
       ref={dialogRef}
-      className="workflow-agent-dialog configuration-dialog" aria-label="规则与经验库"
+      className="workflow-agent-dialog configuration-dialog" aria-label={tr("interface.rules.and.experiences.2")}
       onCancel={(event) => { event.preventDefault(); close(); }}
       onClick={(event) => { if (event.target === event.currentTarget) close(); }}
     >
       <div className={`workflow-agent-dialog-shell prompt-resource-library${detailOpen ? " prompt-detail-open" : ""}`}>
         <header>
-          <div><strong>规则与经验库</strong><small>Personal与当前Project的Agent Prompt资源；草稿不会进入Agent配置。</small></div>
-          <button type="button" onClick={close} aria-label="关闭">×</button>
+          <div><strong>{tr("interface.rules.and.experiences.2")}</strong><small>{tr("interface.personal.and.project.prompt.resources.drafts.are.excluded.from.agent.configuration")}</small></div>
+          <button type="button" onClick={close} aria-label={tr("interface.close")}>×</button>
         </header>
-        <nav aria-label="Prompt资源">
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索名称、目的、内容、标签或来源" aria-label="搜索规则与经验" />
-          {drafts.length > 0 && <p>待确认草稿</p>}
+        <nav aria-label={tr("interface.prompt.resources")}>
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={tr("interface.search.names.purposes.content.tags.or.sources")} aria-label={tr("interface.search.rules.and.experiences")} />
+          {drafts.length > 0 && <p>{tr("interface.drafts.awaiting.confirmation")}</p>}
           {drafts.map((draft) => {
             const key = `draft:${promptResourceAddress(draft.target, draft.id)}`;
             return (
               <button key={key} type="button" className={key === selectedKey ? "active" : ""} onClick={() => { setSelectedKey(key); setDetailOpen(true); }}>
-                <strong>{draft.title}</strong><small>草稿 · {targetLabel(draft)} · {draft.id}</small>
+                <strong>{draft.title}</strong><small>{tr("interface.draft")}{targetLabel(draft, tr)} · {draft.id}</small>
               </button>
             );
           })}
-          {resources.length > 0 && <p>已确认资源</p>}
+          {resources.length > 0 && <p>{tr("interface.confirmed.resources")}</p>}
           {resources.map((resource) => {
             const key = `resource:${promptResourceAddress(resource.target, resource.id)}`;
             return (
               <button key={key} type="button" className={key === selectedKey ? "active" : ""} onClick={() => { setSelectedKey(key); setDetailOpen(true); }}>
                 <strong>{resource.title}</strong>
-                <small>{targetLabel(resource)} · v{resource.revision} · {resource.status === "active" ? "启用" : "已归档"}</small>
+                <small>{targetLabel(resource, tr)} · v{resource.revision} · {resource.status === "active" ? tr("interface.enabled") : tr("interface.archived")}</small>
               </button>
             );
           })}
-          {!loading && drafts.length === 0 && resources.length === 0 && <p>没有匹配的规则、经验或草稿。</p>}
+          {!loading && drafts.length === 0 && resources.length === 0 && <p>{tr("interface.no.matching.rules.experiences.or.drafts")}</p>}
         </nav>
         <main>
-          <button type="button" className="catalog-back workspace-button" onClick={() => setDetailOpen(false)}>返回资源列表</button>
-          {error && <p className="workflow-agent-error">{error}</p>}
-          {loading && value === undefined ? <p>正在读取规则库…</p> : value && (
+          <button type="button" className="catalog-back workspace-button" onClick={() => setDetailOpen(false)}>{tr("interface.back.to.resources")}</button>
+          {error && <p className="workflow-agent-error"><InterfaceFeedback message={error} /></p>}
+          {loading && value === undefined ? <p>{tr("interface.loading.resources")}</p> : value && (
             <div className="workflow-agent-inspection prompt-resource-detail">
               <section>
                 <h2>{value.title}</h2>
                 <div className="workflow-agent-chip-list">
-                  <span className="active">{selected?.type === "draft" ? "草稿" : value.kind === "rule" ? "规则" : "经验"}</span>
-                  <span>{targetLabel(value)}</span>
-                  <span>{value.status === "active" ? "启用" : "已归档"}</span>
-                  {selected?.type === "resource" && <span>版本 {selected.value.revision}</span>}
+                  <span className="active">{selected?.type === "draft" ? tr("interface.draft.2") : value.kind === "rule" ? tr("interface.rule") : tr("interface.experience")}</span>
+                  <span>{targetLabel(value, tr)}</span>
+                  <span>{value.status === "active" ? tr("interface.enabled") : tr("interface.archived")}</span>
+                  {selected?.type === "resource" && <span>{tr("interface.version")}{selected.value.revision}</span>}
                   {value.tags.map((tag) => <span key={tag}>{tag}</span>)}
                 </div>
               </section>
-              <section><h3>目的</h3><p>{value.purpose}</p></section>
-              <details open><summary>Prompt内容</summary><pre>{value.content}</pre></details>
+              <section><h3>{tr("interface.purpose")}</h3><p>{value.purpose}</p></section>
+              <details open><summary>{tr("interface.prompt.content")}</summary><pre>{value.content}</pre></details>
               <details>
-                <summary>来源（{value.sources.length}）</summary>
+                <summary>{tr("interface.sources")}{value.sources.length}）</summary>
                 <div className="workflow-agent-detail-list">
                   {value.sources.map((source, index) => (
                     <article key={`${source.sessionId ?? "manual"}-${index}`}>
-                      <strong>{source.type === "session" ? `Session ${source.sessionId}` : "手动创建"}</strong>
-                      <small>{source.projectId ? `Project ${source.projectId} · ` : ""}{new Date(source.capturedAt).toLocaleString()}</small>
-                      {source.workflowInvocationId && <small>Workflow Invocation: {source.workflowInvocationId}</small>}
-                      <p>{source.context || "没有来源摘要"}</p>
-                      {source.entryIds.length > 0 && <small>Entries: {source.entryIds.join(", ")}</small>}
+                      <strong>{source.type === "session" ? `Session ${source.sessionId}` : tr("interface.created.manually")}</strong>
+                      <small>{source.projectId ? `${tr("prompt.targetProject", { project: source.projectId })} · ` : ""}{new Date(source.capturedAt).toLocaleString(locale)}</small>
+                      {source.workflowInvocationId && <small>{tr("interface.workflow.invocation")}{source.workflowInvocationId}</small>}
+                      <p>{source.context || tr("interface.no.source.summary")}</p>
+                      {source.entryIds.length > 0 && <small>{tr("interface.entries")}{source.entryIds.join(", ")}</small>}
                     </article>
                   ))}
                 </div>
               </details>
               {selected?.type === "resource" && (
                 <details>
-                  <summary>版本历史（{history.length}）</summary>
+                  <summary>{tr("interface.revision.history")}{history.length}）</summary>
                   <div className="workflow-agent-detail-list">
                     {[...history].reverse().map((revision) => (
                       <article key={revision.revision}>
-                        <strong>v{revision.revision} · {revision.status === "active" ? "启用" : "已归档"}</strong>
-                        <small>{new Date(revision.createdAt).toLocaleString()}</small>
+                        <strong>v{revision.revision} · {revision.status === "active" ? tr("interface.enabled") : tr("interface.archived")}</strong>
+                        <small>{new Date(revision.createdAt).toLocaleString(locale)}</small>
                         <p>{revision.purpose}</p>
                       </article>
                     ))}

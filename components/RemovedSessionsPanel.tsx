@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceFeedback } from "./InterfaceFeedback";
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { IconArchive, IconRefresh, IconRestore, IconTrash, IconX } from "@tabler/icons-react";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
@@ -28,7 +30,7 @@ export function RemovedSessionsPanel({
   readonly onClose: () => void;
   readonly onChanged: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const availableProjects = useMemo(() => projects.filter((project) => project.available), [projects]);
   const [projectId, setProjectId] = useState(() => (
     availableProjects.some((project) => project.projectId === initialProjectId)
@@ -184,7 +186,7 @@ export function RemovedSessionsPanel({
           </label>
         </div>
 
-        {error && <div role="alert" style={{ margin: "12px 14px 0", padding: "9px 11px", border: "1px solid rgba(239,68,68,0.35)", borderRadius: 7, background: "rgba(239,68,68,0.07)", color: "var(--danger)", fontSize: 12 }}>{error}</div>}
+        {error && <div role="alert" style={{ margin: "12px 14px 0", padding: "9px 11px", border: "1px solid rgba(239,68,68,0.35)", borderRadius: 7, background: "rgba(239,68,68,0.07)", color: "var(--danger)", fontSize: 12 }}><InterfaceFeedback message={error} /></div>}
 
         <div style={{ flex: 1, minHeight: 160, overflowY: "auto", padding: 14 }}>
           {loading ? (
@@ -199,8 +201,8 @@ export function RemovedSessionsPanel({
                   <div title={sessionTitle(session)} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text)", fontSize: 12, fontWeight: 550 }}>{sessionTitle(session)}</div>
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 4, color: "var(--text-dim)", fontSize: 12 }}>
                     <span>{t("sidebar.messagesCount", { count: session.messageCount })}</span>
-                    <span>{t("removedSessions.removedAt", { time: new Date(session.removedAt).toLocaleString() })}</span>
-                    <span>{t("removedSessions.purgeAt", { time: new Date(session.purgeAt).toLocaleString() })}</span>
+                    <span>{t("removedSessions.removedAt", { time: new Date(session.removedAt).toLocaleString(locale) })}</span>
+                    <span>{t("removedSessions.purgeAt", { time: new Date(session.purgeAt).toLocaleString(locale) })}</span>
                   </div>
                 </div>
                 {confirmPurgeId === session.id ? (

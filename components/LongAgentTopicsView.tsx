@@ -1,4 +1,8 @@
 "use client";
+import { PageHeader } from "./ui/PageHeader";
+import { Button } from "./ui/Button";
+
+import { InterfaceFeedback } from "./InterfaceFeedback";
 
 import { useEffect, useState } from "react";
 import { IconArrowLeft, IconRefresh } from "@tabler/icons-react";
@@ -30,22 +34,17 @@ export function LongAgentTopicsView({ onBack }: { onBack: () => void }) {
   }, [reloadKey]);
 
   return <div className={styles.root} data-topics-view-root>
-    <header className={styles.header}>
-      <button type="button" className={styles.back} onClick={onBack} aria-label={t("topics.back")} data-topics-back>
-        <IconArrowLeft size={20} stroke={1.7} />
-      </button>
-      <h2>{t("topics.viewTitle")}</h2>
-      <label className={styles.friendField}>{t("topics.friend")}
+    <PageHeader title={t("topics.viewTitle")} onBack={onBack}>      <label className={styles.friendField}>{t("topics.friend")}
         <select value={agentId} onChange={(event) => { setAgentId(event.target.value); setReloadKey((key) => key + 1); }} data-topics-friend-select>
           {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
         </select>
       </label>
-      <button type="button" className={styles.back} onClick={() => setReloadKey((key) => key + 1)} aria-label={t("topics.refresh")}>
+      <Button variant="ghost" type="button" className={styles.back} onClick={() => setReloadKey((key) => key + 1)} aria-label={t("topics.refresh")}>
         <IconRefresh size={18} stroke={1.7} />
-      </button>
-    </header>
+      </Button>
+    </PageHeader>
     <div className={styles.body}>
-      {error !== null && <p role="alert" className={styles.error}>{error}</p>}
+      {error !== null && <p role="alert" className={styles.error}><InterfaceFeedback message={error} /></p>}
       {agentId !== "" && <LongAgentTopicsPanel key={`${agentId}:${String(reloadKey)}`} initialAgentId={agentId} agents={agents} />}
     </div>
   </div>;

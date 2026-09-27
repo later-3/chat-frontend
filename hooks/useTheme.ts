@@ -118,6 +118,9 @@ function nextPreference(preference: ThemePreference): ThemePreference {
 
 export function useTheme() {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const setTheme = useCallback((preference: ThemePreference) => {
+    setThemeState(preference, resolveTheme(preference), true);
+  }, []);
 
   const toggleTheme = useCallback((origin?: ToggleOrigin) => {
     const current = ensureState();
@@ -169,6 +172,7 @@ export function useTheme() {
     theme: snapshot.theme,
     preference: snapshot.preference,
     toggleTheme,
+    setTheme,
     isDark: snapshot.theme === "dark",
   };
 }

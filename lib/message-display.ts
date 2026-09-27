@@ -1,8 +1,7 @@
 import type { AgentMessage, AssistantContentBlock, AssistantMessage, ThinkingContent, ToolCallContent } from "./types";
 
 export function isSessionMemoryResponse(message: AgentMessage): boolean {
-  return message.role === "assistant" && message.chatWorkflow?.workflowId === "session-memory"
-    && message.chatWorkflow.stageId === "remember";
+  return message.role === "assistant" && message.chatWorkflow?.stageId === "remember";
 }
 
 /** Memory bookkeeping must not replace the answer to the user's question after a refresh. */

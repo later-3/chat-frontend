@@ -221,7 +221,7 @@ export function MobileWorkspaceHeader({
               </button>
               <button type="button" disabled={!settingsAvailable} onClick={() => { setMenuOpen(false); onOpenTools(); }}>
                 <IconAdjustmentsHorizontal size={21} stroke={1.7} aria-hidden="true" />
-                <span>Tools</span>
+                <span>{t("interface.tools")}</span>
               </button>
               <button type="button" disabled={!settingsAvailable} onClick={() => { setMenuOpen(false); onOpenSkills(); }}>
                 <IconLayersLinked size={21} stroke={1.7} aria-hidden="true" />
@@ -229,7 +229,7 @@ export function MobileWorkspaceHeader({
               </button>
               <button type="button" onClick={() => { setMenuOpen(false); onOpenPromptResources(); }}>
                 <IconBook2 size={21} stroke={1.7} aria-hidden="true" />
-                <span>规则与经验</span>
+                <span>{t("interface.rules.and.experiences")}</span>
               </button>
               <button type="button" disabled={!settingsAvailable} onClick={() => { setMenuOpen(false); onOpenPlugins(); }}>
                 <IconPlug size={21} stroke={1.7} aria-hidden="true" />

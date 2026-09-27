@@ -37,12 +37,18 @@ export function observeChatAutoScroll(container: HTMLElement, content: HTMLEleme
   return {
     update(nextActivityKey: string) {
       if (disposed || nextActivityKey === activityKey) return;
+      const firstPaint = activityKey === undefined;
       activityKey = nextActivityKey;
       // A new message, token or tool action resumes following. An unchanged poll
       // or loading older history leaves the user's reading position untouched.
       attached = true;
       activityPending = true;
-      schedule();
+      if (firstPaint && container.clientHeight > 0) {
+        // Called from ChatWindow's layout effect: never paint the top, then jump to the bottom.
+        container.scrollTop = container.scrollHeight;
+        previousTop = container.scrollTop;
+        activityPending = false;
+      } else schedule();
     },
     dispose() {
       if (disposed) return;

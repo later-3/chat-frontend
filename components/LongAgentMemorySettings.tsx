@@ -1,4 +1,8 @@
 "use client";
+import { useConfirmation } from "./ui/Confirmation";
+import { Button } from "./ui/Button";
+
+import { InterfaceFeedback } from "./InterfaceFeedback";
 
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -50,6 +54,7 @@ function isCoreMemory(path: string): boolean {
 }
 
 export function LongAgentMemorySettings({ longAgentId, onDirtyChange }: Props) {
+  const confirm = useConfirmation();
   const { t } = useI18n();
   const [memory, setMemory] = useState<LongAgentMemoryList | null>(null);
   const [editor, setEditor] = useState<EditorDraft | null>(null);
@@ -87,6 +92,7 @@ export function LongAgentMemorySettings({ longAgentId, onDirtyChange }: Props) {
 
   useEffect(() => {
     const controller = new AbortController();
+    setMemory(null);
     setEditor(null);
     setBaseline(null);
     setResults(null);
@@ -96,7 +102,7 @@ export function LongAgentMemorySettings({ longAgentId, onDirtyChange }: Props) {
   }, [loadList]);
 
   const openFile = async (path: string, discardDraft = false) => {
-    if (!discardDraft && dirty && !window.confirm(t("longAgentSettings.memoryDiscardConfirm"))) return;
+    if (!discardDraft && dirty && !await confirm(t("longAgentSettings.memoryDiscardConfirm"))) return;
     setFileLoading(true);
     setError(null);
     setNotice(null);
@@ -113,8 +119,8 @@ export function LongAgentMemorySettings({ longAgentId, onDirtyChange }: Props) {
     }
   };
 
-  const createFile = () => {
-    if (dirty && !window.confirm(t("longAgentSettings.memoryDiscardConfirm"))) return;
+  const createFile = async () => {
+    if (dirty && !await confirm(t("longAgentSettings.memoryDiscardConfirm"))) return;
     const next = { path: "", content: "", expectedRevision: null };
     setEditor(next);
     setBaseline(next);
@@ -150,7 +156,7 @@ export function LongAgentMemorySettings({ longAgentId, onDirtyChange }: Props) {
 
   const deleteFile = async () => {
     if (!editor?.expectedRevision || deleting || isCoreMemory(editor.path)) return;
-    if (!window.confirm(t("longAgentSettings.memoryDeleteConfirm", { path: editor.path }))) return;
+    if (!await confirm(t("longAgentSettings.memoryDeleteConfirm", { path: editor.path }), t("common.delete"))) return;
     setDeleting(true);
     setError(null);
     setNotice(null);
@@ -189,12 +195,12 @@ export function LongAgentMemorySettings({ longAgentId, onDirtyChange }: Props) {
 
   const reloadCurrent = async () => {
     if (!editor?.expectedRevision) return;
-    if (!window.confirm(t("longAgentSettings.memoryReloadConfirm"))) return;
+    if (!await confirm(t("longAgentSettings.memoryReloadConfirm"))) return;
     await openFile(editor.path, true);
   };
 
   return (
-    <div className={styles.memoryTab}>
+    <div className={styles.memoryTab} data-agent-memory={longAgentId}>
       <div className={styles.sourceLine}>
         <span>{t("longAgentSettings.nanoMemorySource")}</span>
         <span>{t("longAgentSettings.nextTurnEffective")}</span>
@@ -212,21 +218,21 @@ export function LongAgentMemorySettings({ longAgentId, onDirtyChange }: Props) {
             onChange={(event) => setQuery(event.target.value)}
           />
           {results !== null && (
-            <button type="button" className={styles.iconButton} aria-label={t("longAgentSettings.clearSearch")} onClick={() => { setResults(null); setQuery(""); }}>
+            <Button iconOnly variant="ghost" type="button" className={styles.iconButton} aria-label={t("longAgentSettings.clearSearch")} onClick={() => { setResults(null); setQuery(""); }}>
               <IconX size={16} aria-hidden="true" />
-            </button>
+            </Button>
           )}
-          <button type="submit" className={styles.secondaryButton} disabled={!query.trim() || searching}>
+          <Button variant="secondary" type="submit" className={styles.secondaryButton} disabled={!query.trim() || searching}>
             {searching ? t("longAgentSettings.searching") : t("longAgentSettings.search")}
-          </button>
+          </Button>
         </form>
-        <button type="button" className={styles.secondaryButton} onClick={createFile}>
+        <Button variant="secondary" type="button" className={styles.secondaryButton} onClick={createFile}>
           <IconFilePlus size={17} aria-hidden="true" />
           {t("longAgentSettings.newMemoryFile")}
-        </button>
-        <button type="button" className={styles.iconButton} aria-label={t("common.refresh")} onClick={() => void loadList()} disabled={loading}>
+        </Button>
+        <Button iconOnly variant="ghost" type="button" className={styles.iconButton} aria-label={t("common.refresh")} onClick={() => void loadList()} disabled={loading}>
           <IconRefresh size={17} aria-hidden="true" />
-        </button>
+        </Button>
       </div>
 
       {memory?.stale && (
@@ -237,9 +243,9 @@ export function LongAgentMemorySettings({ longAgentId, onDirtyChange }: Props) {
       )}
       {notice && <div className={styles.notice} role="status">{notice}</div>}
       {error && (
-        <div className={conflict ? styles.warning : styles.error} role="alert">
+        <div className={conflict ? styles.warning : styles.error} role="alert" data-agent-memory-error>
           {conflict && <IconAlertTriangle size={17} aria-hidden="true" />}
-          <span>{conflict ? t("longAgentSettings.memoryConflict") : error}</span>
+          <span><InterfaceFeedback message={conflict ? t("longAgentSettings.memoryConflict") : error} /></span>
           {conflict && editor?.expectedRevision && (
             <button type="button" className={styles.inlineButton} onClick={() => void reloadCurrent()}>
               {t("longAgentSettings.loadLatest")}
@@ -254,7 +260,7 @@ export function LongAgentMemorySettings({ longAgentId, onDirtyChange }: Props) {
             <h3 id="agent-memory-files-heading">
               {results === null ? t("longAgentSettings.memoryFilesTitle") : t("longAgentSettings.searchResults")}
             </h3>
-            <span>{results === null ? memory?.files.length ?? 0 : results.length}</span>
+            <span>{results === null ? memory?.files.length ?? "—" : results.length}</span>
           </div>
           {loading && memory === null ? (
             <div className={styles.listState} role="status">{t("longAgentSettings.memoryLoading")}</div>
@@ -276,7 +282,7 @@ export function LongAgentMemorySettings({ longAgentId, onDirtyChange }: Props) {
                 ))}
               </ul>
             ) : (
-              <div className={styles.listState}>{t("longAgentSettings.memoryEmpty")}</div>
+              <div className={styles.listState}>{t(error && memory === null ? "longAgentSettings.memoryUnavailable" : "longAgentSettings.memoryEmpty")}</div>
             )
           ) : results.length > 0 ? (
             <ul className={styles.searchResultList}>
@@ -311,10 +317,10 @@ export function LongAgentMemorySettings({ longAgentId, onDirtyChange }: Props) {
                       {deleting ? t("longAgentSettings.deleting") : t("longAgentSettings.delete")}
                     </button>
                   )}
-                  <button type="button" className={styles.primaryButton} onClick={() => void saveFile()} disabled={!dirty || saving || deleting}>
+                  <Button variant="primary" type="button" className={styles.primaryButton} onClick={() => void saveFile()} disabled={!dirty || saving || deleting}>
                     <IconDeviceFloppy size={16} aria-hidden="true" />
                     {saving ? t("common.saving") : t("common.save")}
-                  </button>
+                  </Button>
                 </div>
               </div>
               <label className={styles.editorField}>

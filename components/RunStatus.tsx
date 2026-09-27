@@ -1,3 +1,5 @@
+
+import { InterfaceFeedback } from "./InterfaceFeedback";
 import { createContext, useEffect, useState } from "react";
 import { IconLoader2, IconCheck, IconAlertCircle, IconPlayerPause } from "@tabler/icons-react";
 import { useI18n } from "@/hooks/useI18n";
@@ -14,7 +16,7 @@ export function RunStatus({ activity, busy }: { activity: RunActivity | null; bu
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [busy]);
-  if (activity === null || (!busy && activity.phase === "completed")) return null;
+  if (activity === null || (!busy && activity.phase === "completed" && activity.compaction === undefined)) return null;
   const phase = activity.phase;
   const waitingHuman = phase === "review";
   const runningTools = Object.values(activity.tools).filter(tool => tool.status === "running");
@@ -32,13 +34,23 @@ export function RunStatus({ activity, busy }: { activity: RunActivity | null; bu
   const Icon = warning ? IconAlertCircle : waitingHuman || phase === "cancelled" || phase === "detached" ? IconPlayerPause : busy ? IconLoader2 : IconCheck;
   return (
     <div data-run-status data-round-phase={busy ? activity.roundPhase : undefined} style={{ maxWidth: 820, margin: "0 auto", padding: "8px 16px", fontSize: 13, color: "var(--text-muted)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      {(busy || phase !== "completed") && <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <Icon size={16} aria-hidden className={busy && !waitingHuman && !warning ? "animate-spin motion-reduce:animate-none" : undefined} style={{ flexShrink: 0 }} />
         <span aria-hidden>{busy && activity.roundPhase === "remember" ? `${t("topics.rememberRunning")} · ${label}` : label}</span>
         <span role="status" aria-live="polite" className="sr-only">{busy && activity.roundPhase === "remember" ? `${t("topics.rememberRunning")} · ${announcement}` : announcement}</span>
         {busy && !waitingHuman && <span aria-hidden style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{t("runStatus.elapsed", { seconds: Math.max(0, Math.floor((now - activity.since) / 1000)) })}</span>}
-      </div>
-      {activity.error && <div style={{ marginTop: 4, fontSize: 12 }}>{activity.error}</div>}
+      </div>}
+      {activity.error && (busy || phase !== "completed") && <div style={{ marginTop: 4, fontSize: 12 }}><InterfaceFeedback message={activity.error} /></div>}
+      {activity.compaction && activity.compaction.status !== "running" && (
+        <div data-compaction-status={activity.compaction.status} role="status" style={{ marginTop: 4, fontSize: 12, overflowWrap: "anywhere" }}>
+          {t(`runStatus.compaction.${activity.compaction.status}`)}
+          {activity.compaction.status === "completed" && activity.compaction.result && ` ${t("runStatus.compaction.estimate", {
+            before: activity.compaction.result.tokensBefore,
+            after: activity.compaction.result.estimatedTokensAfter,
+          })}`}
+          {activity.compaction.error && <InterfaceFeedback message={activity.compaction.error} />}
+        </div>
+      )}
       {busy && !waitingHuman && now - activity.lastEventAt >= 30_000 && (
         <div style={{ marginTop: 4, fontSize: 12 }}>
           {t("runStatus.quiet")}

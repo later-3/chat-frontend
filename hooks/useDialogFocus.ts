@@ -30,8 +30,10 @@ export function useDialogFocus<T extends HTMLElement = HTMLDivElement>(onClose: 
     if (topLayer() === root) (items()[0] ?? root).focus();
     const keydown = (event: KeyboardEvent) => {
       if (topLayer() !== root || event.defaultPrevented) return;
+      // The searchable choice owns Escape until its top-layer popup closes.
+      if (event.key === "Escape" && root.querySelector("[popover]:popover-open")) return;
       // Native dialogs above this legacy layer own their own focus/cancel event.
-      if (document.activeElement instanceof Element && document.activeElement.closest("dialog[open]")) return;
+      if (document.activeElement instanceof Element && document.activeElement.closest("dialog[open], [data-ui-dialog]")) return;
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopImmediatePropagation();

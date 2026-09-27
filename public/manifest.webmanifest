@@ -6,10 +6,10 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#1a1a1a",
-  "theme_color": "#1a1a1a",
+  "background_color": "#FAF9F7",
+  "theme_color": "#FAF9F7",
   "categories": ["developer", "productivity"],
-  "lang": "zh-CN",
+  "lang": "en",
   "icons": [
     { "src": "/lifeos-astronaut-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "/lifeos-astronaut-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },

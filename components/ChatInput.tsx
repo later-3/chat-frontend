@@ -1,4 +1,9 @@
 "use client";
+import { Button } from "./ui/Button";
+
+import { translateWorkflowCopy } from "@/lib/i18n/workflow-copy";
+
+import { InterfaceFeedback } from "./InterfaceFeedback";
 
 import React, { useRef, useState, useCallback, useEffect, useLayoutEffect, useImperativeHandle, useSyncExternalStore, forwardRef, KeyboardEvent } from "react";
 import type { BuiltinSlashCommandResult, CompactResultInfo, PromptResourceProposal, QueuedMessages, SlashCommandInfo } from "@/hooks/useAgentSession";
@@ -55,6 +60,7 @@ export interface AttachedImage {
 
 interface Props {
   projectId: string;
+  toolbarAction?: React.ReactNode;
   onSend: (message: string, images?: AttachedImage[]) => void;
   onAbort: () => void;
   stopLabel?: string;
@@ -352,10 +358,8 @@ function QueuedMessageRow({ kind, text }: { kind: "steer" | "follow-up"; text: s
 
 
 
-
-
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
-  projectId,
+  projectId, toolbarAction,
   onSend, onAbort, stopLabel, stopping, onSteer, onFollowUp, isStreaming, workflowId, onWorkflowChange, workflowAgentConfigs, promptResourceProposals, onWorkflowAgentConfigsChange,
   longAgentId, friendImages = false,
   onCompact, onAbortCompaction, isCompacting, compactError, compactResult,
@@ -431,7 +435,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const selectedWorkflow = visibleWorkflows.find((workflow) => workflow.id === workflowId);
   // Image input is gated per Workflow; the backend re-validates at the HTTP
   // boundary, this only keeps the composer honest before submitting.
-  const imagesAllowed = longAgentId === null ? selectedWorkflow?.supportsImageInput !== false : friendImages;
+  const imagesAllowed = selectedWorkflow?.supportsImageInput !== false && (longAgentId === null || friendImages);
   const attachImageTitle = !imagesAllowed
     ? longAgentId !== null ? t("chat.longAgentTextOnly") : t("chat.workflowNoImages")
     : t("chat.attachImage");
@@ -1309,7 +1313,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     ? Math.max(0, compactResult.tokensBefore - compactResult.estimatedTokensAfter)
     : 0;
   const compactResultText = compactResult
-    ? `${compactResult.reason && compactResult.reason !== "manual" ? `${compactResult.reason[0].toUpperCase()}${compactResult.reason.slice(1)} ` : t("chat.compacted")} ${formatTokenCount(compactResult.tokensBefore)} -> ${formatTokenCount(compactResult.estimatedTokensAfter)} tokens (${t("chat.tokensSaved", { saved: formatTokenCount(compactSavedTokens) })})`
+    ? t("sessionControls.compacted", { before: formatTokenCount(compactResult.tokensBefore), after: formatTokenCount(compactResult.estimatedTokensAfter), saved: formatTokenCount(compactSavedTokens) })
     : null;
   const pushStatusLabel = (() => {
     switch (pushStatus) {
@@ -1351,7 +1355,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   useEffect(() => {
     if (!isMobile) setControlsMenuOpen(false);
   }, [isMobile]);
-
 
 
   return (
@@ -1451,19 +1454,19 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           <p>{t("draft.verifyBeforeResend")}</p>
           <pre>{pendingSubmission.text}</pre>
           <div>
-            <button type="button" className="workspace-button" onClick={() => {
+            <Button variant="secondary" type="button" className="workspace-button" onClick={() => {
               setValue(current => current === pendingSubmission.text ? current : mergeRestoredSubmissionText(pendingSubmission.text, current));
               setMissingImages(current => current + pendingSubmission.missingImages);
               if (draftKey) clearPendingSubmission(draftKey, pendingSubmission.id);
-            }}>{t("draft.restoreUnconfirmed")}</button>
-            <button type="button" className="workspace-button" onClick={() => {
+            }}>{t("draft.restoreUnconfirmed")}</Button>
+            <Button variant="secondary" type="button" className="workspace-button" onClick={() => {
               if (draftKey) clearPendingSubmission(draftKey, pendingSubmission.id);
-            }}>{t("draft.clearVerified")}</button>
+            }}>{t("draft.clearVerified")}</Button>
           </div>
         </details>}
         {missingImages > 0 && <div className="workspace-draft-warning" role="status">
           <span>{t("draft.missingImages", { count: missingImages })}</span>
-          <button type="button" className="workspace-button" onClick={() => setMissingImages(0)}>{t("common.close")}</button>
+          <Button variant="secondary" type="button" className="workspace-button" onClick={() => setMissingImages(0)}>{t("common.close")}</Button>
         </div>}
         {/* Retry banner */}
         {retryInfo && (
@@ -1502,7 +1505,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               background: "rgba(239,68,68,0.07)",
               border: "1px solid rgba(239,68,68,0.3)",
               borderRadius: 6,
-              color: "#ef4444",
+              color: "var(--danger)",
               fontFamily: "var(--font-mono)",
               fontSize: 12,
               lineHeight: 1.5,
@@ -1510,7 +1513,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               overflowWrap: "anywhere",
             }}
           >
-            {compactError}
+            <InterfaceFeedback message={compactError} />
           </div>
         )}
         {/* Image previews */}
@@ -1563,7 +1566,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               }}
             >
               <div
-                title="Input history"
+                title={t("interface.input.history")}
                 style={{
                   height: 30,
                   padding: "0 10px",
@@ -1953,7 +1956,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <button
                   onClick={() => sendQueued("steer")}
                   disabled={!canQueueStreamingMessage}
-                  title="Interrupt the current run and inject this message now"
+                  title={t("interface.interrupt.the.current.run.and.send.this.message.now")}
                   style={{
                     display: "flex", alignItems: "center", gap: 5,
                     padding: isMobile ? "12px 14px" : "7px 12px",
@@ -1977,7 +1980,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <button
                   onClick={() => sendQueued("followup")}
                   disabled={!canQueueStreamingMessage}
-                  title="Queue this message after the agent finishes"
+                  title={t("interface.send.this.message.after.the.agent.finishes")}
                   style={{
                     display: "flex", alignItems: "center", gap: 5,
                     padding: isMobile ? "12px 14px" : "7px 12px",
@@ -2017,7 +2020,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 fontSize: 13,
                 fontWeight: 600,
                 letterSpacing: "-0.01em",
-                boxShadow: (value.trim() || attachedImages.length) ? "0 1px 3px rgba(37,99,235,0.25)" : "none",
+                boxShadow: (value.trim() || attachedImages.length) ? "0 1px 3px var(--accent-shadow)" : "none",
                 transition: "background 0.15s, box-shadow 0.15s",
               }}
             >
@@ -2039,7 +2042,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         )}
 
         {/* Bottom bar: left | center (context) | right */}
-        <div className={isMobile ? "mobile-composer-controls" : undefined} style={{
+        <div data-chat-toolbar className={isMobile ? "mobile-composer-controls" : undefined} style={{
           marginTop: 8,
           display: isMobile ? "grid" : "flex",
           gridTemplateColumns: isMobile ? "minmax(0, 1fr) auto" : undefined,
@@ -2080,7 +2083,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               </svg>
             </button>
             {/* Long Agent identity lives in the sidebar coworker panel; the composer never repeats it. */}
-            {longAgentId === null && (
+            {(
               <select
                 value={workflowId}
                 onChange={(event) => onWorkflowChange(event.target.value as ChatWorkflowId)}
@@ -2102,18 +2105,19 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 }}
               >
                 {visibleWorkflows.map((workflow) => (
-                  <option key={workflow.id} value={workflow.id} title={workflow.description}>
-                    {workflow.name}
+                  <option key={workflow.id} value={workflow.id} title={translateWorkflowCopy(workflow.id, workflow.description, t)}>
+                    {translateWorkflowCopy(workflow.id, workflow.name, t)}
                   </option>
                 ))}
               </select>
             )}
+            {toolbarAction}
             {!isMobile && longAgentId === null && <button
               type="button"
               onClick={() => setWorkflowAgentDialogOpen(true)}
               disabled={isStreaming || longAgentId !== null || !cwd || selectedWorkflow?.agents.length === 0}
-              aria-label="配置当前 Workflow 的 Agent"
-              title="查看和配置当前 Workflow 的 Agent"
+              aria-label={t("interface.configure.workflow.agents")}
+              title={t("interface.view.and.configure.this.workflow.s.agents")}
               style={{
                 flexShrink: 0,
                 display: "flex",
@@ -2151,7 +2155,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   background: "rgba(239,68,68,0.08)",
                   border: "1px solid rgba(239,68,68,0.3)",
                   borderRadius: 9,
-                  color: "#ef4444",
+                  color: "var(--danger)",
                   cursor: "pointer",
                   fontSize: 12, fontWeight: 600,
                   whiteSpace: "nowrap", letterSpacing: "-0.01em",
@@ -2219,7 +2223,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       width: 7,
                       height: 7,
                       borderRadius: 999,
-                      background: pushStatus === "on" ? "#10b981" : pushStatus === "unverified" ? "#f59e0b" : "#ef4444",
+                      background: pushStatus === "on" ? "var(--success)" : pushStatus === "unverified" ? "var(--warning)" : "var(--danger)",
                       boxShadow: "0 0 0 2px var(--bg)",
                     }}
                   />
@@ -2291,13 +2295,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 }}
               >
                 <IconAdjustmentsHorizontal size={16} stroke={1.8} />
-                <span>Workflow Agents</span>
+                <span>{t("interface.workflow.agents")}</span>
               </button>
             )}
-            {!isStreaming && longAgentId === null && onCompact && (
+            {(!isStreaming || isCompacting) && onCompact && (
               <div className={isMobile ? "mobile-settings-tile-wrapper" : undefined} style={{ position: "relative" }}>
                 <button
                   onClick={isCompacting ? onAbortCompaction : onCompact}
+                  data-session-compact={isCompacting ? "running" : "idle"}
                   disabled={isStreaming && !isCompacting}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
@@ -2307,7 +2312,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     background: isCompacting ? "rgba(239,68,68,0.08)" : "none",
                     border: "none",
                     borderRadius: 9,
-                    color: isCompacting ? "#ef4444" : "var(--text-muted)",
+                    color: isCompacting ? "var(--danger)" : "var(--text-muted)",
                     cursor: (isStreaming && !isCompacting) ? "not-allowed" : "pointer",
                     fontSize: 12, opacity: (isStreaming && !isCompacting) ? 0.5 : 1,
                     transition: "background 0.12s, color 0.12s",
@@ -2315,11 +2320,11 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   onMouseEnter={(e) => {
                     if (isStreaming && !isCompacting) return;
                     e.currentTarget.style.background = isCompacting ? "rgba(239,68,68,0.16)" : "var(--bg-hover)";
-                    e.currentTarget.style.color = isCompacting ? "#ef4444" : "var(--text)";
+                    e.currentTarget.style.color = isCompacting ? "var(--danger)" : "var(--text)";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = isCompacting ? "rgba(239,68,68,0.08)" : "none";
-                    e.currentTarget.style.color = isCompacting ? "#ef4444" : "var(--text-muted)";
+                    e.currentTarget.style.color = isCompacting ? "var(--danger)" : "var(--text-muted)";
                   }}
                    title={isCompacting ? t("chat.stopCompaction") : t("chat.compactContext")}
                    aria-label={isCompacting ? t("chat.stopCompaction") : t("chat.compactContext")}
@@ -2335,7 +2340,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 </button>
               </div>
             )}
-
 
             {onSoundToggle !== undefined && (
               <button
@@ -2411,7 +2415,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     : pushStatus === "unverified"
                       ? "#d97706"
                     : pushStatus === "error" || pushStatus === "denied"
-                      ? "#ef4444"
+                      ? "var(--danger)"
                       : "var(--text-dim)",
                   cursor: ["checking", "unsupported", "enabling", "disabling", "denied"].includes(pushStatus) ? "not-allowed" : "pointer",
                   opacity: pushStatus === "on" ? 1 : 0.6,

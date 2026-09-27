@@ -1,4 +1,7 @@
 "use client";
+
+import { InterfaceFeedback } from "./InterfaceFeedback";
+
 import { composerDraftKey } from "@/lib/composer-context";
 import { registerAbortHandler } from "@/hooks/useKeyboardShortcuts";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -16,6 +19,7 @@ import { ChatMinimap, useMessageRefs } from "./ChatMinimap";
 import { ExtensionStatusBar } from "./ExtensionStatusBar";
 import { useI18n } from "@/hooks/useI18n";
 import { useAgentSession, type NoticeItem } from "@/hooks/useAgentSession";
+import { useTopicMemoryControl } from "@/hooks/useTopicMemoryControl";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -26,6 +30,7 @@ import type { TopicNodeTarget } from "@/lib/topic-node-execution";
 import { MarkdownBody } from "./MarkdownBody";
 import { PlanReviewCard } from "./PlanReviewCard";
 import { SessionMemoryPanel } from "./SessionMemoryPanel";
+import { IconNotebook } from "@tabler/icons-react";
 import { SurfaceDialog } from "./SurfaceDialog";
 import { TopicCreationRequests } from "./TopicCreationRequests";
 import {
@@ -49,6 +54,7 @@ interface Props {
   contextBlockedReason?: string | null;
   /** Topic node target: sends go through the node route, everything else uses the shared Session surface. */
   topicNode?: TopicNodeTarget;
+  onSessionMemoryChanged?: () => void;
   session: SessionInfo | null;
   sessionRunning?: boolean;
   newSessionCwd: string | null;
@@ -129,7 +135,9 @@ function withAssistantBlocks(
   return next;
 }
 
-export function ChatWindow({ projectId, deviceId, contextProjectId, interactionRevision, contextBlockedReason, topicNode, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onConnectionFailure, soundEnabled = true, onSoundToggle, playDoneSound = () => {}, unlockAudio }: Props) {
+export function ChatWindow({ projectId, deviceId, contextProjectId, interactionRevision, contextBlockedReason, topicNode: requestedTopicNode, onSessionMemoryChanged, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onConnectionFailure, soundEnabled = true, onSoundToggle, playDoneSound = () => {}, unlockAudio }: Props) {
+  const topicNode = requestedTopicNode ?? session?.topicNode;
+  const sessionMemoryControl = useTopicMemoryControl(topicNode, onSessionMemoryChanged);
   const { t, locale } = useI18n();
   // The session-memory bar: one view button and the ONE switch the owner sets before sending.
   const [memoryOpen, setMemoryOpen] = useState(false);
@@ -163,7 +171,7 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
     data, activeLeafId, loading, error, messages, entryIds, entryTimes, streamState,
     agentRunning, bashRunning, pendingBash, workflowId, longAgentId, friendExecution, friendImages, workflowAgentConfigs, promptResourceProposals,
     retryInfo, contextUsage, forkingEntryId,
-    isCompacting, compactError, compactResult, sessionStats,
+    isCompacting, compactError, compactResult, sessionStats, canCompact, canContinue, browsingHistory, handleReturnToCurrent,
     slashCommands, slashCommandsLoading, queuedMessages,
     notices, extensionDialog, extensionCustomUi, extensionStatuses, extensionWidgets, respondToExtensionUi, sendExtensionCustomInput,
     activity, agentPhase, activeRunStage, planReview, reviewSubmitting,
@@ -180,8 +188,9 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
     projectId, deviceId, contextProjectId, interactionRevision, contextBlockedReason, topicNode, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd: wrappedOnAgentEnd, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked,
     chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsPanelOpen,
     onConnectionFailure,
+    sessionMemoryEnabled: sessionMemoryControl?.enabled,
   });
-  const sessionBusy = agentRunning || bashRunning;
+  const sessionBusy = agentRunning || bashRunning || isCompacting;
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -192,8 +201,8 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
 
   // Register the abort handler for the global Esc shortcut
   useEffect(() => {
-    registerAbortHandler(sessionBusy ? handleAbort : null);
-  }, [sessionBusy, handleAbort]);
+    registerAbortHandler(isCompacting ? handleAbortCompaction : sessionBusy ? handleAbort : null);
+  }, [sessionBusy, isCompacting, handleAbort, handleAbortCompaction]);
 
   // --- Lazy-load historical messages ---
   // Only render the last N messages initially. When the user scrolls to the
@@ -340,21 +349,15 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
 
   const memoryStorageProjectId = longAgentId ?? projectId;
   const memorySessionId = session?.id ?? sessionIdRef.current ?? null;
-  const sessionMemoryBar = !readOnly && memorySessionId !== null ? (
-    <div className="flex items-center gap-2 px-4 pb-1 text-[11px] text-text-muted" data-session-memory-bar>
-      <button type="button" className="rounded border border-border px-2 py-0.5 hover:bg-bg-secondary" data-session-memory-open
-        onClick={() => setMemoryOpen(true)}>
-        {t("topics.memoryPanel")}{memoryCount === 0 ? "" : ` · ${String(memoryCount)}`}
-      </button>
-      <label className="flex cursor-pointer items-center gap-1">
-        <input type="checkbox" checked={memoryEnabled} data-session-memory-toggle
-          onChange={(event) => setMemoryEnabled(event.target.checked)} />
-        记录会话记忆
-      </label>
-    </div>
+  const memoryAction = !readOnly && memorySessionId !== null ? (
+    <button type="button" className="composer-memory-action" data-session-memory-open data-memory-enabled={memoryEnabled}
+      aria-label={t("topics.memoryPanel")} title={t("topics.memoryPanel")} onClick={() => setMemoryOpen(true)}>
+      <IconNotebook size={18} aria-hidden="true" />
+      {memoryCount > 0 && <span>{memoryCount}</span>}
+    </button>
   ) : null;
 
-  const chatInputElement = <>{sessionMemoryBar}{readOnly ? (
+  const chatInputElement = <>{readOnly ? (
     <div
       role="note"
       style={{
@@ -367,16 +370,21 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
         fontSize: 12,
         lineHeight: 1.5,
       }}
-    >
-      当前Session为只读记录，不能继续执行或修改。
+    >{t("interface.this.session.is.read.only.execution.and.changes.are.unavailable")}</div>
+  ) : browsingHistory ? (
+    <div role="status" className="mx-4 mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-border bg-bg-secondary px-4 py-3 text-sm">
+      <span className="flex-1 text-text-muted">{t("sessionControls.browsing")}</span>
+      <button className="rounded-md px-3 py-2 hover:bg-bg-hover" onClick={() => void handleReturnToCurrent()}>{t("sessionControls.returnCurrent")}</button>
+      {canContinue && entryIds.at(-1) && !sessionBusy && <button className="rounded-md bg-accent px-3 py-2 text-white" onClick={() => void handleNavigate(entryIds.at(-1)!)}>{t("sessionControls.continueHere")}</button>}
     </div>
   ) : (
     <ChatInput
       key={session?.owner.type === "long-agent" ? composerDraftKey(session.id, true, contextProjectId) : "ordinary-composer"}
       ref={chatInputRef}
+      toolbarAction={memoryAction}
       projectId={projectId}
       onSend={handleSend}
-      onAbort={handleAbort}
+      onAbort={isCompacting ? handleAbortCompaction : handleAbort}
       stopLabel={activity?.phase === "stopping" ? t("runStatus.stopping") : undefined}
       stopping={activity?.phase === "stopping"}
       onSteer={agentRunning && longAgentId !== null && friendExecution?.capabilities.steer && (friendExecution.workId !== undefined || friendExecution.contextProjectId === (contextProjectId ?? null)) ? handleSteer : undefined}
@@ -390,7 +398,7 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
       workflowAgentConfigs={workflowAgentConfigs}
       promptResourceProposals={promptResourceProposals}
       onWorkflowAgentConfigsChange={setWorkflowAgentConfigs}
-      onCompact={session || isNew ? handleCompact : undefined}
+      onCompact={canCompact ? () => { void handleCompact(); } : undefined}
       onAbortCompaction={handleAbortCompaction}
       isCompacting={isCompacting}
       compactError={compactError}
@@ -424,7 +432,7 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
   if (error) {
     return (
       <div className="flex h-full items-center justify-center text-red-400">
-        {error}
+        <InterfaceFeedback message={error} />
       </div>
     );
   }
@@ -432,7 +440,9 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
   return (
     <ToolActivityContext value={{ tools: activity?.tools ?? {}, busy: sessionBusy }}>
     <div
-      className="relative flex h-full min-w-0 flex-col overflow-hidden"
+      className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+      data-rendered-session={data?.sessionId ?? undefined}
+      data-rendered-message-count={messages.length}
       style={{ paddingBottom: readOnly ? "env(safe-area-inset-bottom)" : undefined }}
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
@@ -441,28 +451,39 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
     >
       {memoryOpen && memorySessionId !== null && (
         <SurfaceDialog title={t("topics.memoryPanel")} onClose={() => setMemoryOpen(false)}>
+          {sessionMemoryControl && !sessionMemoryControl.ready ? <div role="status">
+            {sessionMemoryControl.error
+              ? <button type="button" onClick={sessionMemoryControl.retry}>{t("longAgentSettings.retry")}</button>
+              : t("common.loading")}
+          </div> : <label className="session-memory-setting">
+            <input type="checkbox" checked={memoryEnabled} data-session-memory-toggle
+              disabled={sessionMemoryControl?.busy}
+              onChange={(event) => (sessionMemoryControl?.onChange ?? setMemoryEnabled)(event.target.checked)} />
+            {t("friendCalendar.recordMemory")}
+          </label>}
+          {sessionMemoryControl?.error && <p role="alert" className="text-[var(--danger)]"><InterfaceFeedback message={sessionMemoryControl.error} /></p>}
           <SessionMemoryPanel storageProjectId={memoryStorageProjectId} sessionId={memorySessionId} onCount={setMemoryCount} />
         </SurfaceDialog>
       )}
       {isDragOver && (
-        <div className="pointer-events-none absolute inset-0 z-50 flex animate-[drop-zone-in_0.15s_ease_both] items-center justify-center bg-[rgba(37,99,235,0.06)] backdrop-blur-[1px]">
+        <div className="pointer-events-none absolute inset-0 z-50 flex animate-[drop-zone-in_0.15s_ease_both] items-center justify-center bg-[var(--accent-wash)] backdrop-blur-[1px]">
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             {[0, 0.8, 1.6].map((delay) => (
               <div
                 key={delay}
-                className="absolute h-[720px] w-[720px] rounded-full border-[1.5px] border-solid border-[rgba(37,99,235,0.5)] animate-[drop-ripple_2.4s_ease-out_infinite_backwards]"
+                className="absolute h-[720px] w-[720px] rounded-full border-[1.5px] border-solid border-[var(--accent-outline)] animate-[drop-ripple_2.4s_ease-out_infinite_backwards]"
                 style={{ transformOrigin: "center", animationDelay: `${delay}s` }}
               />
             ))}
           </div>
           <svg
             width="280" height="280" viewBox="0 0 140 140" fill="none" xmlns="http://www.w3.org/2000/svg"
-            className="drop-shadow-[0_6px_18px_rgba(37,99,235,0.18)]"
+            className="drop-shadow-[0_6px_18px_var(--accent-shadow)]"
           >
-            <rect x="28" y="44" width="84" height="60" rx="8" fill="rgba(37,99,235,0.08)" stroke="rgba(37,99,235,0.50)" strokeWidth="1.8"/>
-            <path d="M36 100 L54 72 L68 88 L80 74 L104 100Z" fill="rgba(37,99,235,0.16)" stroke="rgba(37,99,235,0.40)" strokeWidth="1.4" strokeLinejoin="round"/>
-            <circle cx="96" cy="58" r="8" fill="rgba(37,99,235,0.22)" stroke="rgba(37,99,235,0.55)" strokeWidth="1.6"/>
-            <g stroke="rgba(37,99,235,0.45)" strokeWidth="1.4" strokeLinecap="round">
+            <rect x="28" y="44" width="84" height="60" rx="8" fill="var(--accent-wash)" stroke="var(--accent-outline)" strokeWidth="1.8"/>
+            <path d="M36 100 L54 72 L68 88 L80 74 L104 100Z" fill="var(--accent-wash)" stroke="var(--accent-outline)" strokeWidth="1.4" strokeLinejoin="round"/>
+            <circle cx="96" cy="58" r="8" fill="var(--accent-shadow)" stroke="var(--accent-outline)" strokeWidth="1.6"/>
+            <g stroke="var(--accent-outline)" strokeWidth="1.4" strokeLinecap="round">
               <line x1="96" y1="46" x2="96" y2="43"/>
               <line x1="96" y1="70" x2="96" y2="73"/>
               <line x1="84" y1="58" x2="81" y2="58"/>
@@ -499,7 +520,7 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
           zIndex: 40,
           display: "flex",
           justifyContent: "center",
-          padding: `0 ${CHAT_COLUMN_PADDING}px`,
+          padding: isMobile ? "0 12px" : `0 ${CHAT_COLUMN_PADDING}px`,
           pointerEvents: "none",
         }}
       >
@@ -530,7 +551,7 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
                   web <span style={{ color: "var(--text)" }}>v{import.meta.env.VITE_APP_VERSION ?? "0.1.1"}</span>
                 </span>
                 <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                  pi <span style={{ color: "var(--text)" }}>v{import.meta.env.VITE_PI_VERSION ?? "source"}</span>
+                  pi <span style={{ color: "var(--text)" }}>v{import.meta.env.VITE_PI_VERSION ?? t("interface.source.build")}</span>
                 </span>
               </div>
             </div>
@@ -606,7 +627,7 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
                     entryId={entryIds[idx]}
                     onFork={readOnly || sessionBusy || isNew || longAgentId !== null || (idx === 0 && msg.role === "user") ? undefined : handleFork}
                     forking={forkingEntryId === entryIds[idx]}
-                    onNavigate={readOnly || sessionBusy ? undefined : handleNavigate}
+                    onNavigate={readOnly || sessionBusy || !canContinue ? undefined : handleNavigate}
                     prevAssistantEntryId={readOnly || sessionBusy ? undefined : prevAssistantEntryId}
                     onEditContent={readOnly ? undefined : handleEditContent}
                     showTimestamp={showTimestamp}
@@ -625,7 +646,7 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
                         <div className="pb-1 text-[11px] font-medium text-text-muted">
                           {workflowAgentId === "planner"
                             ? t("chat.plannerStage")
-                            : (workflowAgentId === "pi-coding-agent" ? "Pi Coding Agent" : workflowAgentId)}
+                            : (workflowAgentId === "pi-coding-agent" ? t("interface.pi.coding.agent") : workflowAgentId)}
                         </div>
                         {messageView}
                       </div>
@@ -747,7 +768,7 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
                   <div className="pb-1 text-[11px] font-medium text-text-muted">
                     {activeRunStage.agentId === "planner"
                       ? t("chat.plannerStage")
-                      : (activeRunStage.agentId === "pi-coding-agent" ? "Pi Coding Agent" : activeRunStage.agentId)}
+                      : (activeRunStage.agentId === "pi-coding-agent" ? t("interface.pi.coding.agent") : activeRunStage.agentId)}
                   </div>
                 )}
                 <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming cwd={messageCwd} onOpenFile={onOpenFile} />
@@ -800,7 +821,7 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
         )}
       </div>
 
-      <div className="relative">
+      <div className="relative shrink-0" data-chat-footer>
         <RunStatus activity={activity} busy={sessionBusy} />
         {chatInputElement}
         <ExtensionStatusBar statuses={extensionStatuses} widgets={extensionWidgets} />
@@ -816,21 +837,22 @@ function NoticeShelf({ notices, floating = false }: { notices: NoticeItem[]; flo
   if (notices.length === 0) return null;
   return (
     <div
-      className="extension-dialog-backdrop"
+      className="notice-shelf"
       style={{
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         marginBottom: floating ? 0 : 10,
+        width: "100%", minWidth: 0, maxWidth: 620,
       }}
     >
       {notices.map((notice, index) => {
         const color = notice.type === "error"
-          ? "#ef4444"
+          ? "var(--danger)"
           : notice.type === "warning"
-            ? "#d97706"
+            ? "var(--warning)"
             : notice.type === "success"
-              ? "#10b981"
+              ? "var(--success)"
               : "var(--accent)";
         return (
           <div
@@ -840,11 +862,11 @@ function NoticeShelf({ notices, floating = false }: { notices: NoticeItem[]; flo
               display: "flex",
               alignItems: "center",
               gap: 10,
-              minHeight: 60,
-              height: 60,
-              maxHeight: 60,
+              minHeight: 40,
+              maxHeight: "30dvh",
+              pointerEvents: "auto",
               marginBottom: index === notices.length - 1 ? 0 : 6,
-              overflow: "hidden",
+              overflow: "auto",
               borderRadius: 14,
               border: "1px solid color-mix(in srgb, var(--border) 70%, transparent)",
               background: "var(--bg)",
@@ -854,13 +876,13 @@ function NoticeShelf({ notices, floating = false }: { notices: NoticeItem[]; flo
               boxShadow: floating
                 ? "0 1px 2px rgba(15,23,42,0.05), 0 10px 28px -14px rgba(15,23,42,0.24)"
                 : "0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -12px rgba(15,23,42,0.10)",
-              fontSize: 18,
+              fontSize: 13,
               lineHeight: 1.45,
               transformOrigin: "top center",
               animation: notice.exiting
                 ? "notice-shelf-out 0.18s ease-in forwards"
                 : "notice-shelf-in 0.18s ease-out both",
-              padding: "0 12px",
+              padding: "10px 12px",
             }}
           >
             <span
@@ -872,8 +894,8 @@ function NoticeShelf({ notices, floating = false }: { notices: NoticeItem[]; flo
                 flexShrink: 0,
               }}
             />
-            <span style={{ padding: "14px 0", minWidth: 0, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {notice.message}
+            <span style={{ minWidth: 0, maxWidth: "100%", overflowWrap: "anywhere", whiteSpace: "normal" }}>
+              <InterfaceFeedback message={notice.message} />
             </span>
           </div>
         );

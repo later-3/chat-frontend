@@ -1,4 +1,7 @@
 "use client";
+import { useConfirmation } from "./ui/Confirmation";
+
+import { InterfaceFeedback } from "./InterfaceFeedback";
 
 import { ConfigurationToggle as Toggle } from "./ConfigurationToggle";
 
@@ -41,12 +44,6 @@ function versionSummary(pkg: PluginPackageInfo, t: ReturnType<typeof useI18n>["t
   if (pkg.version) parts.push(t("i18n.installedVersion", { version: pkg.version }));
   if (pkg.configuredVersion) parts.push(t("i18n.configuredVersion", { version: pkg.configuredVersion }));
   return parts.length ? parts.join(" · ") : t("i18n.unknown");
-}
-
-function installLocation(scope: PluginScope, cwd: string): string {
-  return scope === "project"
-    ? `${shortenPath(cwd)}/.pi/agent/{npm,git}`
-    : "~/.pi/agent/{npm,git}";
 }
 
 function findInstalledPackage(
@@ -158,6 +155,7 @@ function ResourceList({ pkg }: { pkg: PluginPackageInfo }) {
 }
 
 function ScopeTag({ scope }: { scope: PluginScope }) {
+  const { t } = useI18n();
   return (
     <span
       style={{
@@ -165,11 +163,11 @@ function ScopeTag({ scope }: { scope: PluginScope }) {
         padding: "1px 5px",
         borderRadius: 3,
         flexShrink: 0,
-        background: scope === "project" ? "rgba(99,102,241,0.12)" : "rgba(120,120,120,0.12)",
-        color: scope === "project" ? "rgba(99,102,241,0.85)" : "var(--text-dim)",
+        background: scope === "project" ? "var(--bg-selected)" : "rgba(120,120,120,0.12)",
+        color: scope === "project" ? "var(--accent)" : "var(--text-dim)",
       }}
     >
-      {scope}
+      {t(scope === "project" ? "design.scopeProject" : "design.scopePersonal")}
     </span>
   );
 }
@@ -202,7 +200,7 @@ function SegmentedScope({
         border: "1px solid var(--border)",
         borderRadius: 7,
         overflow: "hidden",
-        height: 30,
+        minHeight: 40,
       }}
     >
       {(["global", "project"] as PluginScope[]).map((scope) => {
@@ -210,6 +208,7 @@ function SegmentedScope({
         return (
           <button
             key={scope}
+            type="button" aria-pressed={active}
             onClick={() => onChange(scope)}
             style={{
               width: 76,
@@ -221,7 +220,7 @@ function SegmentedScope({
               fontSize: 12,
             }}
           >
-            {scope}
+            {t(scope === "project" ? "design.scopeProject" : "design.scopePersonal")}
           </button>
         );
       })}
@@ -289,13 +288,13 @@ function AddPluginPanel({
           </a>
         </div>
         <div style={{ fontSize: 12, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
-          {installLocation(scope, cwd)}
+          {t(scope === "project" ? "design.pluginProjectHint" : "design.pluginPersonalHint")}
         </div>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
         <label htmlFor="plugin-source" style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
-          Source
+          {t("design.resourceSource")}
         </label>
         <input
           id="plugin-source"
@@ -341,7 +340,7 @@ function AddPluginPanel({
           style={{
             ...buttonStyle(busy || !source.trim()),
             background: "var(--accent)",
-            color: "white",
+            color: "var(--on-accent)",
             borderColor: "var(--accent)",
           }}
         >
@@ -351,7 +350,7 @@ function AddPluginPanel({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
-          Examples
+          {t("design.examples")}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {examples.map((example) => (
@@ -389,7 +388,7 @@ function AddPluginPanel({
 
       {actionError && (
         <div style={{ fontSize: 12, color: "var(--danger)", whiteSpace: "pre-wrap" }}>
-          {actionError}
+          <InterfaceFeedback message={actionError} />
         </div>
       )}
     </div>
@@ -546,7 +545,7 @@ function PackageDetail({
       )}
       {actionError && (
         <div style={{ fontSize: 12, color: "var(--danger)", whiteSpace: "pre-wrap" }}>
-          {actionError}
+          <InterfaceFeedback message={actionError} />
         </div>
       )}
     </div>
@@ -565,8 +564,9 @@ export function PluginsConfig({
   onClose: () => void;
   onReloaded?: () => void;
 }) {
-  const requestClose = () => {
-    if (installSource.trim() && !window.confirm(t("longAgentSettings.discardConfirm"))) return;
+  const confirm = useConfirmation();
+  const requestClose = async () => {
+    if (installSource.trim() && !await confirm(t("longAgentSettings.discardConfirm"), t("common.discard"))) return;
     onClose();
   };
   const modalRef = useDialogFocus(requestClose);
@@ -681,13 +681,13 @@ export function PluginsConfig({
 
   const reloadSession = useCallback(async () => {
     if (!sessionId) return;
-    setActionMessage("Chat前端不持有AgentSession；配置会在后续Workflow运行时生效。");
+    setActionMessage(t("interface.configuration.applies.when.the.next.workflow.runs"));
   }, [sessionId]);
 
   const addBusy = busyKey?.startsWith("install:") ?? false;
 
   return (
-    <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label="Plugins" className="configuration-dialog"
+    <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("interface.plugins")} className="configuration-dialog"
       style={{
         position: "fixed",
         inset: 0,
@@ -774,16 +774,14 @@ export function PluginsConfig({
           >
             <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
               {loading ? (
-                <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>
-                  Loading...
-                </div>
+                <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>{t("interface.loading")}</div>
               ) : error ? (
                 <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--danger)" }}>
-                  {error}
+                  <InterfaceFeedback message={error} />
                 </div>
               ) : packages.length === 0 ? (
                 <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-dim)" }}>
-                  No plugins configured
+                  {t("i18n.noPlugins")}
                 </div>
               ) : (
                 groupedPackages.map((group) => (
@@ -797,13 +795,13 @@ export function PluginsConfig({
                         textTransform: "uppercase",
                       }}
                     >
-                      {group.scope}
+                      {t(group.scope === "project" ? "design.scopeProject" : "design.scopePersonal")}
                     </div>
                     {group.packages.map((pkg) => {
                       const key = packageKey(pkg);
                       const isSelected = !addMode && selected === key;
                       return (
-                        <div
+                        <button type="button" className="resource-nav-button" aria-pressed={isSelected}
                           key={key}
                           onClick={() => {
                             setSelected(key);
@@ -877,7 +875,7 @@ export function PluginsConfig({
                               </div>
                             )}
                           </div>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
@@ -988,7 +986,7 @@ export function PluginsConfig({
                 title={data.diagnostics.map((d) => `${d.type}: ${d.source ? `${d.source}: ` : ""}${d.message}`).join("\n")}
                 style={{ color: data.diagnostics.some((d) => d.type === "error") ? "var(--danger)" : "var(--warning)" }}
               >
-                {data.diagnostics.length} diagnostic{data.diagnostics.length === 1 ? "" : "s"}
+                {data.diagnostics.length}{t("interface.diagnostic")}{data.diagnostics.length === 1 ? "" : "s"}
               </span>
             ) : (
               <span>

@@ -1,4 +1,7 @@
 "use client";
+import { Button } from "./ui/Button";
+
+import { InterfaceFeedback } from "./InterfaceFeedback";
 
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
@@ -72,14 +75,14 @@ export function LongAgentAvatarEditor({
       </span>
       <div className={styles.controls}>
         <div className={styles.row}>
-          <button
+          <Button
             type="button"
             className={styles.button}
             disabled={busy}
             onClick={() => fileRef.current?.click()}
           >
             {t("longAgentSettings.avatarUpload")}
-          </button>
+          </Button>
           <input
             ref={fileRef}
             type="file"
@@ -99,16 +102,16 @@ export function LongAgentAvatarEditor({
             aria-label={t("longAgentSettings.avatarEmojiPlaceholder")}
             onChange={(event) => setEmoji(event.target.value)}
           />
-          <button
+          <Button
             type="button"
             className={styles.button}
             disabled={busy || emoji.trim() === ""}
             onClick={() => void applyDisplay({ kind: "emoji", emoji: emoji.trim() })}
           >
             {t("longAgentSettings.avatarApplyEmoji")}
-          </button>
+          </Button>
           {avatar.kind !== "auto" && (
-            <button
+            <Button
               type="button"
               className={styles.button}
               disabled={busy}
@@ -124,11 +127,11 @@ export function LongAgentAvatarEditor({
               }}
             >
               {t("longAgentSettings.avatarReset")}
-            </button>
+            </Button>
           )}
         </div>
         <p className={styles.hint}>{t("longAgentSettings.avatarHelp")}</p>
-        {error && <p className={styles.error} role="alert">{error}</p>}
+        {error && <p className={styles.error} role="alert"><InterfaceFeedback message={error} /></p>}
       </div>
     </div>
   );

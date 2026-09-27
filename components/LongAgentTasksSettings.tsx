@@ -1,4 +1,9 @@
 "use client";
+import { TaskResults, TaskRunDetails } from "./TaskRunDetails";
+import { Button } from "./ui/Button";
+
+import { InterfaceFeedback } from "./InterfaceFeedback";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import {
@@ -26,7 +31,7 @@ export function LongAgentTasksSettings({
 }: {
   longAgentId: string;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [document, setDocument] = useState<FriendTasks | null>(null);
   const [projects, setProjects] = useState<ChatProjectSummary[]>([]),
     [draft, setDraft] = useState<Draft | null>(null);
@@ -170,14 +175,14 @@ export function LongAgentTasksSettings({
     >
       <div className={styles.sourceLine}>
         <span>{t("taskV2.intro")}</span>
-        <button
+        <Button variant="secondary"
           className={styles.secondaryButton}
           disabled={busy || !!pending.current}
           onClick={() => edit(null)}
         >
           {t("longAgentSettings.taskNew")}
-        </button>
-        <button
+        </Button>
+        <Button variant="secondary"
           className={styles.secondaryButton}
           disabled={busy}
           onClick={() => {
@@ -185,20 +190,20 @@ export function LongAgentTasksSettings({
           }}
         >
           {t("taskV2.refresh")}
-        </button>
+        </Button>
       </div>
       {error && (
         <div className={styles.error} role="alert">
-          {error}
+          <InterfaceFeedback message={error} />
         </div>
       )}
       {pending.current && !busy && (
-        <button
+        <Button variant="secondary"
           className={styles.secondaryButton}
           onClick={() => void submit(pending.current!)}
         >
           {t("taskV2.retry")}
-        </button>
+        </Button>
       )}
       {notice && (
         <div className={styles.notice} role="status">
@@ -206,12 +211,12 @@ export function LongAgentTasksSettings({
         </div>
       )}
       {document?.projectionError && (
-        <p className={styles.error}>{document.projectionError}</p>
+        <p className={styles.error} role="alert"><InterfaceFeedback message={document.projectionError} /></p>
       )}
-      {!document && (
+      {!document && !error && (
         <p role="status">{t("longAgentSettings.inspectionLoading")}</p>
       )}
-      {document?.tasks.length === 0 && (
+      {document && !document.projectionError && document.tasks.length === 0 && (
         <p className={styles.help}>{t("longAgentSettings.tasksEmpty")}</p>
       )}
       {draft && (
@@ -427,27 +432,28 @@ export function LongAgentTasksSettings({
             />
           </label>
           <div className={styles.taskActions}>
-            <button
+            <Button variant="primary"
               className={styles.primaryButton}
               disabled={busy || !!pending.current}
               type="submit"
             >
               {t("common.save")}
-            </button>
-            <button
+            </Button>
+            <Button variant="secondary"
               className={styles.secondaryButton}
               disabled={busy || !!pending.current}
               type="button"
               onClick={() => setDraft(null)}
             >
               {t("common.cancel")}
-            </button>
+            </Button>
           </div>
         </form>
       )}
       <ul className={styles.taskList}>
         {document?.tasks.map((task) => (
           <li key={task.id} className={styles.taskRow}>
+            <TaskResults agentId={longAgentId} scope={{ kind: "task", id: task.id }} />
             <div className={styles.taskHead}>
               <strong>{task.name}</strong>
               <span>{t(`taskV2.${task.status}`)}</span>
@@ -465,11 +471,11 @@ export function LongAgentTasksSettings({
             <p className={styles.help}>
               {t(task.projection ? "taskV2.applied" : "taskV2.pendingApply")}
               {task.projection?.nextAt
-                ? ` · ${new Date(task.projection.nextAt).toLocaleString()}`
+                ? ` · ${new Date(task.projection.nextAt).toLocaleString(locale)}`
                 : ""}
             </p>
             {task.migrationNote && (
-              <p className={styles.error}>{task.migrationNote}</p>
+              <p className={styles.error}><InterfaceFeedback message={task.migrationNote} /></p>
             )}
             {task.legacyId && (
               <p className={styles.help}>
@@ -478,14 +484,14 @@ export function LongAgentTasksSettings({
             )}
             {task.status !== "cancelled" && (
               <div className={styles.taskActions}>
-                <button
+                <Button variant="secondary"
                   className={styles.secondaryButton}
                   disabled={busy || !!pending.current}
                   onClick={() => action(task, "run")}
                 >
                   {t("longAgentSettings.taskRun")}
-                </button>
-                <button
+                </Button>
+                <Button variant="secondary"
                   className={styles.secondaryButton}
                   disabled={busy || !!pending.current}
                   onClick={() =>
@@ -497,21 +503,21 @@ export function LongAgentTasksSettings({
                       ? "longAgentSettings.taskResume"
                       : "longAgentSettings.taskPause",
                   )}
-                </button>
-                <button
+                </Button>
+                <Button variant="secondary"
                   className={styles.secondaryButton}
                   disabled={busy || !!pending.current}
                   onClick={() => edit(task)}
                 >
                   {t("longAgentSettings.taskEdit")}
-                </button>
-                <button
+                </Button>
+                <Button variant="secondary"
                   className={styles.secondaryButton}
                   disabled={busy || !!pending.current}
                   onClick={() => action(task, "cancel")}
                 >
                   {t("taskV2.cancelFuture")}
-                </button>
+                </Button>
               </div>
             )}
             <details>
@@ -531,11 +537,12 @@ export function LongAgentTasksSettings({
                   .map((o) => (
                     <li key={o.id} className={styles.taskOccurrence}>
                       <span>
-                        {new Date(o.scheduledAt).toLocaleString()} ·{" "}
+                        {new Date(o.scheduledAt).toLocaleString(locale)} ·{" "}
                         {o.work?.execution
                           ? t(`friendWork.status.${o.work.execution.status}`)
                           : t(`taskV2.${o.state}`)}
                       </span>
+                      {o.work && <TaskRunDetails agentId={longAgentId} workId={o.work.work.id} sessionId={o.work.work.sessionId} />}
                       {o.reason && <p>{o.reason}</p>}
                       {o.work && (
                         <a
@@ -546,7 +553,7 @@ export function LongAgentTasksSettings({
                       )}
                       {(o.state === "accepted" ||
                         o.work?.execution?.capabilities.cancel) && (
-                        <button
+                        <Button variant="secondary"
                           className={styles.secondaryButton}
                           disabled={busy || !!pending.current}
                           onClick={() =>
@@ -558,7 +565,7 @@ export function LongAgentTasksSettings({
                           }
                         >
                           {t("taskV2.stopRun")}
-                        </button>
+                        </Button>
                       )}
                     </li>
                   ))}

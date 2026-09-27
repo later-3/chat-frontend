@@ -1,12 +1,11 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { getLocalePlugin, getSupportedLocales, resolveBrowserLocale } from "@/lib/i18n/registry";
+import { getLocalePlugin, getSupportedLocales } from "@/lib/i18n/registry";
 import { translateMessage } from "@/lib/i18n/format";
 import type { Locale, LocalePlugin, TranslationParams } from "@/lib/i18n/types";
 
-const LOCALE_STORAGE_KEY = "pi-locale";
-const defaultLocale: Locale = "en";
+import { DEFAULT_LOCALE as defaultLocale, LOCALE_STORAGE_KEY, resolveInitialLocale } from "@/lib/i18n/preference";
 
 interface I18nContextValue {
   locale: Locale;
@@ -26,12 +25,10 @@ function getMessages(): Record<string, Record<string, string>> {
 
 function readInitialLocale(): Locale {
   try {
-    const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY);
-    if (stored === "en" || stored === "zh-CN") return stored;
+    return resolveInitialLocale(window.localStorage.getItem(LOCALE_STORAGE_KEY));
   } catch {
-    // 隐私模式或存储不可用时继续使用浏览器语言。
+    return defaultLocale;
   }
-  return resolveBrowserLocale(window.navigator.languages.length ? window.navigator.languages : [window.navigator.language]);
 }
 
 /**
@@ -40,8 +37,7 @@ function readInitialLocale(): Locale {
  * @returns 包含语言上下文的 React 节点
  */
 export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(defaultLocale);
-  const [hydrated, setHydrated] = useState(false);
+  const [locale, setLocaleState] = useState<Locale>(readInitialLocale);
   const supportedLocales = useMemo(
     () => getSupportedLocales().map((id) => getLocalePlugin(id)).filter((plugin): plugin is LocalePlugin => Boolean(plugin)),
     [],
@@ -49,11 +45,8 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   const messages = useMemo(() => getMessages(), []);
 
   useEffect(() => {
-    const next = readInitialLocale();
-    setLocaleState(next);
-    document.documentElement.lang = next;
-    setHydrated(true);
-  }, []);
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   const setLocale = useCallback((next: Locale) => {
     if (!getLocalePlugin(next)) return;
@@ -67,7 +60,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const t = useCallback((key: string, params?: TranslationParams) => translateMessage(locale, key, messages, params), [locale, messages]);
-  const value = useMemo(() => ({ locale: hydrated ? locale : defaultLocale, setLocale, t, supportedLocales }), [hydrated, locale, setLocale, t, supportedLocales]);
+  const value = useMemo(() => ({ locale, setLocale, t, supportedLocales }), [locale, setLocale, t, supportedLocales]);
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }

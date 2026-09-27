@@ -22,16 +22,15 @@ export function useWorkspaceView() {
   const openMoments = useCallback(() => openView("moments"), [openView]);
   const openGroups = useCallback(() => openView("groups"), [openView]);
   const openTopics = useCallback(() => openView("topics"), [openView]);
+  const openSettings = useCallback(() => openView("settings"), [openView]);
 
   const showChat = useCallback(() => {
     window.history.replaceState(null, "", workspaceViewUrl(window.location.href, "chat"));
     setView("chat");
   }, []);
 
-  const goBack = useCallback(() => {
-    if (window.history.state?.workspaceNavigation === true || window.history.state?.momentsNavigation === true) window.history.back();
-    else showChat();
-  }, [showChat]);
+  // A labelled destination is deterministic; browser Back remains the user's history action.
+  const goBack = showChat;
 
-  return { view, openMoments, openGroups, openTopics, showChat, goBack };
+  return { view, openMoments, openGroups, openTopics, openSettings, showChat, goBack };
 }

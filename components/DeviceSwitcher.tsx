@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceFeedback } from "./InterfaceFeedback";
+
 import { useEffect, useRef, useState } from "react";
 import { IconCheck, IconChevronDown, IconChevronRight, IconDevices, IconExternalLink } from "@tabler/icons-react";
 import { useI18n } from "@/hooks/useI18n";
@@ -138,7 +140,7 @@ export function DeviceSwitcher({
               </button>
             );
           })}
-          {switchError && <div className={styles.error} role="alert">{switchError}</div>}
+          {switchError && <div className={styles.error} role="alert"><InterfaceFeedback message={switchError} /></div>}
         </div>
       )}
     </div>

@@ -1,4 +1,7 @@
 "use client";
+import { Button } from "./ui/Button";
+
+import { InterfaceFeedback } from "./InterfaceFeedback";
 
 import { useState, useCallback, useRef, useEffect, useLayoutEffect } from "react";
 import { CoworkerDetails } from "./CoworkerDetails";
@@ -83,7 +86,6 @@ type SessionCopyField = "file" | "id";
 const TOP_BAR_ICON_BUTTON_SIZE = 36;
 const LANGUAGE_MENU_WIDTH = 176;
 
-
 interface AppShellProps {
   deviceDirectory: DeviceDirectoryResponse | null;
   initialNavigation: InitialNavigation;
@@ -112,7 +114,6 @@ export function AppShell({
   const [contentPanel, setContentPanel] = useState<"sessions" | "long-agents">(
     () => initialNavigation.requestedCwd ? "sessions" : "long-agents",
   );
-  const [settingsVisible, setSettingsVisible] = useState(false);
   const [wideContent, setWideContent] = useState(() => {
     try { return localStorage.getItem("chat:wide-content") === "true"; } catch { return false; }
   });
@@ -129,8 +130,32 @@ export function AppShell({
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
   }, []);
-  const { view: workspaceView, openMoments, openGroups, openTopics, showChat: activateChat, goBack: returnFromMoments } = useWorkspaceView();
-  const { preference, toggleTheme } = useTheme();
+  const { view: workspaceView, openMoments, openGroups, openTopics, openSettings, showChat: activateChat, goBack: returnFromMoments } = useWorkspaceView();
+  const settingsVisible = workspaceView === "settings";
+  const setSettingsVisible = (visible: boolean) => visible ? openSettings() : activateChat();
+  const { preference, toggleTheme, setTheme } = useTheme();
+  const [settingsProject, setSettingsProject] = useState<ChatProjectSummary | null | undefined>(undefined);
+  const [settingsProjects, setSettingsProjects] = useState<readonly ChatProjectSummary[]>([]);
+  const [settingsProjectsError, setSettingsProjectsError] = useState<string | null>(null);
+  const [settingsProjectsRefresh, setSettingsProjectsRefresh] = useState(0);
+  useEffect(() => {
+    if (!settingsVisible) { setSettingsProject(undefined); return; }
+    const controller = new AbortController();
+    setSettingsProjectsError(null);
+    void fetchChatProjects(controller.signal).then(projects => {
+      if (controller.signal.aborted) return;
+      const visible = projects.filter(project => project.kind === "project");
+      setSettingsProjects(visible);
+      const selection = new URL(window.location.href).searchParams.get("settingsProject");
+      if (selection !== null) setSettingsProject(visible.find(project => project.projectId === selection) ?? null);
+    }).catch(cause => { if (!controller.signal.aborted) setSettingsProjectsError(cause instanceof Error ? cause.message : String(cause)); });
+    return () => controller.abort();
+  }, [settingsVisible, settingsProjectsRefresh]);
+  useEffect(() => {
+    const restore = () => setSettingsProjectsRefresh(value => value + 1);
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
+  }, []);
   const themeLabelKey =
     preference === "light" ? "theme.light" : preference === "dark" ? "theme.dark" : "theme.auto";
   const { locale, setLocale, t: translate, supportedLocales } = useI18n();
@@ -702,7 +727,6 @@ export function AppShell({
       return;
     }
 
-
     // Keep the project identity in sync during the initial URL restore without
     // remounting the just-created or restored chat.
     if (suppressCwdBumpRef.current) {
@@ -754,8 +778,29 @@ export function AppShell({
 
   const handleSelectSession = useCallback((session: SessionInfo, isRestore = false) => {
     setNavigationError(null);
+    if (session.groupConversation && session.projectId) {
+      invalidateWorkspaceRestore();
+      setInitialSessionRestored(true);
+      const url = new URL(window.location.href);
+      const group = session.groupConversation;
+      // A direct member-record link resolves to the group; it must not remain the private-chat target.
+      if (url.searchParams.get("session") === session.id) {
+        if (selectedSession && !selectedSession.groupConversation) {
+          url.searchParams.set("session", selectedSession.id);
+          if (selectedSession.projectId) url.searchParams.set("projectId", selectedSession.projectId);
+        } else { url.searchParams.delete("session"); url.searchParams.delete("projectId"); }
+      }
+      url.searchParams.set("view", "groups"); url.searchParams.set("groupAgent", group.longAgentId);
+      url.searchParams.set("groupProject", session.projectId); url.searchParams.set("groupId", group.conversationId);
+      if (url.href !== window.location.href) {
+        if (isRestore) window.history.replaceState({ workspaceNavigation:true }, "", `${url.pathname}${url.search}${url.hash}`);
+        else window.history.pushState({ workspaceNavigation:true }, "", `${url.pathname}${url.search}${url.hash}`);
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      }
+      if (isMobile) setSidebarOpen(false);
+      return;
+    }
     if (!isRestore) activateChat();
-    setSettingsVisible(false);
     setContentPanel(session.owner.type === "long-agent" ? "long-agents" : "sessions");
     if (session.owner.type === "long-agent") lastCoworkerRef.current = session;
     invalidateWorkspaceRestore();
@@ -943,7 +988,13 @@ export function AppShell({
     router.replace(`?session=${encodeURIComponent(newSessionId)}`, { scroll: false });
   }, [invalidateWorkspaceRestore, router, hydrateSelectedSession]);
 
-  const handleOpenExistingSession = useCallback(async (sessionId: string, projectId: string) => {
+  const handleOpenExistingSession = useCallback(async (sessionId: string, projectId: string, date?: string) => {
+    const locateDay = () => {
+      const url = new URL(window.location.href);
+      if (date) url.searchParams.set("friendDate", date);
+      else url.searchParams.delete("friendDate");
+      router.replace(`${url.pathname}${url.search}${url.hash}`);
+    };
     const token = ++workspaceRestoreTokenRef.current;
     // Re-opening the session that is ALREADY open is not a navigation: the default-landing path and a
     // Friend-card click both resolve the same primary Session, and the second one must reuse the open
@@ -953,12 +1004,13 @@ export function AppShell({
       // The chat may be mounted behind Topics/Settings. Reuse its data but still perform the visible
       // navigation (including closing a mobile drawer); the shared selector avoids a remount itself.
       handleSelectSession(selectedSession);
+      locateDay();
       return;
     }
     const target = await fetchProjectSessionById(projectId, sessionId);
     openedSessionRef.current = { sessionId, projectId };
-    if (workspaceRestoreTokenRef.current === token) handleSelectSession(target);
-  }, [handleSelectSession, selectedSession?.id]);
+    if (workspaceRestoreTokenRef.current === token) { handleSelectSession(target); locateDay(); }
+  }, [handleSelectSession, selectedSession?.id, router]);
 
   useEffect(() => {
     const restore = () => {
@@ -1098,10 +1150,10 @@ export function AppShell({
     activeNewSessionDraftKeyRef.current = newSessionDraftKey;
   }, [newSessionDraftKey]);
   const showChat = Boolean(currentProjectId && (selectedSession !== null || effectiveNewSessionCwd !== null));
-  const resourceCwd = selectedLongAgentId !== null
+  const resourceCwd = settingsProject !== undefined ? settingsProject?.path ?? null : selectedLongAgentId !== null
     ? friendContextCwd
     : (contextCwd ?? selectedSession?.cwd ?? effectiveNewSessionCwd);
-  const resourceProjectId = selectedLongAgentId !== null
+  const resourceProjectId = settingsProject !== undefined ? settingsProject?.projectId ?? null : selectedLongAgentId !== null
     ? friendContextProjectId
     : (activeProjectId ?? currentProjectId);
   // While restoring initial session from URL, don't show the placeholder
@@ -1417,7 +1469,7 @@ export function AppShell({
     let mobileContextText: string | null = null;
     if (contextUsage?.contextWindow) {
       const percent = contextUsage.percent;
-      if (percent !== null && percent > 90) contextColor = "#ef4444";
+      if (percent !== null && percent > 90) contextColor = "var(--danger)";
       else if (percent !== null && percent > 70) contextColor = "rgba(234,179,8,0.95)";
       desktopContextText = percent !== null
         ? `${percent.toFixed(0)}% / ${formatCompact(contextUsage.contextWindow)}`
@@ -1427,15 +1479,15 @@ export function AppShell({
 
     const tooltipParts: string[] = [];
     if (tokens) {
-      tooltipParts.push(`in: ${tokens.input.toLocaleString(locale)}`);
-      tooltipParts.push(`out: ${tokens.output.toLocaleString(locale)}`);
-      tooltipParts.push(`cache read: ${tokens.cacheRead.toLocaleString(locale)}`);
-      tooltipParts.push(`cache write: ${tokens.cacheWrite.toLocaleString(locale)}`);
-      if (cost > 0) tooltipParts.push(`cost: $${cost.toFixed(4)}`);
+      tooltipParts.push(`${translate("session.input")} : ${tokens.input.toLocaleString(locale)}`);
+      tooltipParts.push(`${translate("session.output")} : ${tokens.output.toLocaleString(locale)}`);
+      tooltipParts.push(`${translate("session.cacheRead")} : ${tokens.cacheRead.toLocaleString(locale)}`);
+      tooltipParts.push(`${translate("session.cacheWrite")} : ${tokens.cacheWrite.toLocaleString(locale)}`);
+      if (cost > 0) tooltipParts.push(`${translate("session.cost")}: $${cost.toFixed(4)}`);
     }
     if (contextUsage?.contextWindow) {
       const percent = contextUsage.percent;
-      tooltipParts.push(`context: ${percent !== null ? percent.toFixed(1) + "%" : "unknown"} of ${contextUsage.contextWindow.toLocaleString()} tokens`);
+      tooltipParts.push(translate("usage.context", { percent: percent !== null ? percent.toFixed(1) + "%" : translate("request.unknown"), count: contextUsage.contextWindow.toLocaleString(locale) }));
     }
     const tooltip = tooltipParts.join("  |  ");
     const covered = mobile && isNarrowMobile && mobileToolbarMoreOpen;
@@ -1449,6 +1501,7 @@ export function AppShell({
       <button
         type="button"
         onClick={() => toggleTopPanel("session")}
+        data-session-stats-open
         disabled={!showChat || covered}
         tabIndex={covered ? -1 : undefined}
         title={tooltip || translate("session.title")}
@@ -1571,17 +1624,16 @@ export function AppShell({
   const settingsItems = [
     { id: "models", scope: "personal" as const, label: translate("common.models"), description: translate("workspaceNav.modelsHint"), onOpen: () => setModelsConfigOpen(true) },
     { id: "memory", scope: "personal" as const, label: translate("common.memory"), description: translate("workspaceNav.memoryHint"), onOpen: () => setMemoryManagerOpen(true) },
-    { id: "tools", scope: "project" as const, label: "Tools", description: translate("workspaceNav.toolsHint"), onOpen: () => setToolsConfigOpen(true), disabled: !resourceProjectId },
+    { id: "tools", scope: "project" as const, label: translate("interface.tools"), description: translate("workspaceNav.toolsHint"), onOpen: () => setToolsConfigOpen(true), disabled: !resourceProjectId },
     { id: "skills", scope: "project" as const, label: translate("common.skills"), description: translate("workspaceNav.skillsHint"), onOpen: () => setSkillsConfigOpen(true), disabled: !resourceCwd || !resourceProjectId },
     { id: "prompts", scope: "project" as const, label: translate("workspaceNav.prompts"), description: translate("workspaceNav.promptsHint"), onOpen: () => setPromptResourcesConfigOpen(true), disabled: !resourceProjectId },
     { id: "plugins", scope: "project" as const, label: translate("common.plugins"), description: translate("workspaceNav.pluginsHint"), onOpen: () => setPluginsConfigOpen(true), disabled: !resourceCwd || !resourceProjectId },
-    { id: "extensions", scope: "project" as const, label: "Extensions", description: translate("workspaceNav.extensionsHint"), onOpen: () => setExtensionsConfigOpen(true), disabled: !resourceCwd || !resourceProjectId },
+    { id: "extensions", scope: "project" as const, label: translate("interface.extensions"), description: translate("workspaceNav.extensionsHint"), onOpen: () => setExtensionsConfigOpen(true), disabled: !resourceCwd || !resourceProjectId },
   ];
   function handleNavigateSection(section: WorkspaceSection) {
     invalidateWorkspaceRestore();
     setActiveTopPanel(null);
-    setSettingsVisible(section === "settings");
-    if (section === "settings") return;
+    if (section === "settings") { openSettings(); setSidebarOpen(false); return; }
     if (section === "moments") { openMoments(); setSidebarOpen(false); return; }
     if (section === "groups") { openGroups(); setSidebarOpen(false); return; }
     if (section === "topics") { openTopics(); setSidebarOpen(false); return; }
@@ -1636,7 +1688,7 @@ export function AppShell({
       <WorkspaceNavigation section={settingsVisible ? "settings" : workspaceView === "moments" ? "moments" : workspaceView === "groups" ? "groups" : workspaceView === "topics" ? "topics" : contentPanel === "long-agents" ? "coworkers" : "projects"} onSelect={handleNavigateSection} />
       <div className="workspace-stage">
         <header className="workspace-context-bar" hidden={workspaceView !== "chat" || settingsVisible} style={workspaceView !== "chat" || settingsVisible ? { display: "none" } : undefined}>
-          <button type="button" className="workspace-icon" onClick={handleSidebarToggle} aria-label={translate("layout.toggleList")} aria-expanded={sidebarOpen} aria-controls="session-sidebar"><IconLayoutSidebar size={20} /></button>
+          <Button iconOnly variant="ghost" type="button" className="workspace-icon" onClick={handleSidebarToggle} aria-label={translate("layout.toggleList")} aria-expanded={sidebarOpen} aria-controls="session-sidebar"><IconLayoutSidebar size={20} /></Button>
           <span className="workspace-context-label">{translate("workspaceNav.context")}</span>
           <div ref={setProjectSlot} className="workspace-project-slot" />
         {/* Top bar with sidebar toggle */}
@@ -1843,7 +1895,7 @@ export function AppShell({
                     const totalActiveMs = sessionStats.totalActiveMs ?? 0;
                     const sessionRows = [
                        ...(sessionStats.sessionName ? [{ label: translate("session.name"), value: sessionStats.sessionName, copyField: null }] : []),
-                       { label: translate("session.file"), value: sessionStats.sessionFile ?? translate("session.inMemory"), copyField: "file" as const },
+                       ...(sessionStats.sessionFile ? [{ label: translate("session.file"), value: sessionStats.sessionFile, copyField: "file" as const }] : []),
                        { label: translate("session.id"), value: sessionStats.sessionId, copyField: "id" as const },
                        ...(totalActiveMs > 0 ? [{ label: translate("session.totalActive"), value: formatDuration(totalActiveMs), copyField: null }] : []),
                     ];
@@ -1998,14 +2050,14 @@ export function AppShell({
         </div>
         </div>
 
-          {selectedSession?.owner.type === "long-agent" && <button type="button" className="workspace-icon" aria-label={translate("workspaceNav.profile")} aria-expanded={rightPanelOpen && detailsMode === "coworker"} onClick={() => { setDetailsMode("coworker"); setRightPanelOpen(true); if (isMobile || viewportWidth < 960) setSidebarOpen(false); }}><IconUser size={20} /></button>}
+          {selectedSession?.owner.type === "long-agent" && <Button iconOnly variant="ghost" type="button" className="workspace-icon" aria-label={translate("workspaceNav.profile")} aria-expanded={rightPanelOpen && detailsMode === "coworker"} onClick={() => { setDetailsMode("coworker"); setRightPanelOpen(true); if (isMobile || viewportWidth < 960) setSidebarOpen(false); }}><IconUser size={20} /></Button>}
           <DeviceSwitcher variant="desktop" directory={deviceDirectory} onNavigate={onDeviceNavigate} />
-          <button type="button" className="workspace-icon" onClick={() => { setSettingsVisible(false); activateChat(); setDetailsMode("files"); setRightPanelOpen(open => detailsMode !== "files" || !open); if (isMobile || viewportWidth < 960) setSidebarOpen(false); }} aria-label={translate("workspaceNav.files")} aria-expanded={rightPanelOpen}><IconFolder size={20} /></button>
+          <Button iconOnly variant="ghost" type="button" className="workspace-icon" onClick={() => { setSettingsVisible(false); activateChat(); setDetailsMode("files"); setRightPanelOpen(open => detailsMode !== "files" || !open); if (isMobile || viewportWidth < 960) setSidebarOpen(false); }} aria-label={translate("workspaceNav.files")} aria-expanded={rightPanelOpen}><IconFolder size={20} /></Button>
         </header>
     <div className={`app-shell-root workspace-body${viewportWidth < 960 && !isMobile ? " workspace-medium" : ""}${rightPanelOverlay ? " workspace-right-overlay" : ""}${settingsVisible || workspaceView !== "chat" ? " workspace-global-view" : ""}`}>
 
-      {/* Mobile overlay backdrop */}
-      <div
+      {/* The conversation list's backdrop must not cover global task pages. */}
+      {workspaceView === "chat" && !settingsVisible && <div
         className={`sidebar-overlay-backdrop${mobileSidebarReady ? "" : " sidebar-mobile-pending"}`}
         onClick={() => setSidebarOpen(false)}
         style={{
@@ -2017,7 +2069,7 @@ export function AppShell({
           pointerEvents: sidebarOpen ? "auto" : "none",
           transition: "opacity 0.25s ease",
         }}
-      />
+      />}
 
       {/* Left sidebar */}
       <div
@@ -2062,8 +2114,8 @@ export function AppShell({
       {/* Keep ChatWindow mounted while browsing Moments: draft, scroll and live Run remain owned by the same Session. */}
       <div ref={chatSurfaceRef} tabIndex={-1} data-workspace-chat hidden={settingsVisible || workspaceView !== "chat"} style={{ flex: 1, display: !settingsVisible && workspaceView === "chat" ? "flex" : "none", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         {/* Chat content */}
-        <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
-          {navigationError ? <div className="workspace-navigation-error" role="alert">{navigationError}</div> : showChat && currentProjectId && (contentPanel === "sessions" || selectedSession?.owner.type === "long-agent") ? (
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
+          {navigationError ? <div className="workspace-navigation-error" role="alert"><InterfaceFeedback message={navigationError} /></div> : showChat && currentProjectId && (contentPanel === "sessions" || selectedSession?.owner.type === "long-agent") ? (
             <>
             {selectedLongAgentId !== null && <FriendProjectContext
               agentId={selectedLongAgentId}
@@ -2124,7 +2176,7 @@ export function AppShell({
               <div style={{ maxWidth: "min(720px, 100%)", overflowWrap: "anywhere", fontFamily: "var(--font-mono)", fontSize: 12 }}>
                 {initialNavigation.requestedCwd}
               </div>
-              <div style={{ maxWidth: 720, fontSize: 12 }}>{initialCwdError}</div>
+              <div style={{ maxWidth: 720, fontSize: 12 }}><InterfaceFeedback message={initialCwdError} /></div>
             </div>
           ) : showPlaceholder ? (
             activeCwd ? (
@@ -2185,12 +2237,12 @@ export function AppShell({
         } as React.CSSProperties}
       >
         <div className="workspace-details-heading">
-          <button type="button" className="workspace-button" onClick={() => { setDetailsMode("files"); setActiveFileTabId(null); }}><IconArrowLeft size={16} />{translate("workspaceNav.files")}</button>
-          <button type="button" className="workspace-icon" onClick={() => setRightPanelOpen(false)} aria-label={translate("files.hidePanel")}><IconX size={20} /></button>
+          <Button variant="secondary" type="button" className="workspace-button" onClick={() => { setDetailsMode("files"); setActiveFileTabId(null); }}><IconArrowLeft size={16} />{translate("workspaceNav.files")}</Button>
+          <Button iconOnly variant="ghost" type="button" className="workspace-icon" onClick={() => setRightPanelOpen(false)} aria-label={translate("files.hidePanel")}><IconX size={20} /></Button>
         </div>
         {detailsMode === "coworker" && selectedSession?.owner.type === "long-agent" && <CoworkerDetails key={selectedSession.owner.longAgentId} agentId={selectedSession.owner.longAgentId} />}
         <div className="workspace-file-details" hidden={detailsMode === "coworker" && selectedSession?.owner.type === "long-agent"}>
-        {!activeFileTab && fileTabs.length > 0 && <button type="button" className="workspace-button" onClick={() => setActiveFileTabId(fileTabs.at(-1)?.id ?? null)}>{translate("workspaceNav.lastFile")}</button>}
+        {!activeFileTab && fileTabs.length > 0 && <Button variant="secondary" type="button" className="workspace-button" onClick={() => setActiveFileTabId(fileTabs.at(-1)?.id ?? null)}>{translate("workspaceNav.lastFile")}</Button>}
         <div ref={setFilesSlot} className="workspace-files-slot" hidden={activeFileTab !== null} />
         {activeFileTab && <div className="workspace-file-source" title={activeFileTab.sourceCwd ?? activeFileTab.filePath}>
           {activeFileTab.sourceSessionId ? translate("workspaceNav.historySource") : translate("workspaceNav.context")}: {activeFileTab.sourceCwd ?? activeFileTab.filePath}
@@ -2268,7 +2320,18 @@ export function AppShell({
         </div>
         </div>
       </div>
-      {settingsVisible && <WorkspaceSettings projectLabel={resourceCwd?.split(/[\\/]/).filter(Boolean).at(-1) ?? resourceProjectId ?? undefined} wideContent={wideContent} onContentWidth={toggleContentWidth} items={settingsItems} theme={translate(themeLabelKey)} onTheme={() => toggleTheme()} language={locale === "zh-CN" ? "简体中文" : "English"} onLanguage={() => setLocale(locale === "zh-CN" ? "en" : "zh-CN")} onBack={() => setSettingsVisible(false)} onRefresh={() => { setRefreshKey(key => key + 1); setExplorerRefreshKey(key => key + 1); }} onSelfCheck={isMobile ? () => { setSettingsVisible(false); activateChat(); setSidebarOpen(false); setRightPanelOpen(false); setMobileDebugOpen(true); } : undefined} />}
+      {settingsVisible && <WorkspaceSettings
+        projectId={resourceProjectId ?? ""} projects={settingsProjects.map(project => ({ value:project.projectId, label:project.cachedName, detail:project.cachedDescription, disabled:!project.available }))}
+        projectError={settingsProjectsError} onRetryProjects={() => setSettingsProjectsRefresh(value => value + 1)}
+        onProject={id => {
+          setSettingsProject(settingsProjects.find(project => project.projectId === id) ?? null);
+          const url = new URL(window.location.href); url.searchParams.set("settingsProject", id);
+          window.history.pushState({workspaceNavigation:true}, "", `${url.pathname}${url.search}${url.hash}`);
+        }}
+        wideContent={wideContent} onContentWidth={toggleContentWidth} items={settingsItems}
+        theme={preference} onTheme={setTheme} language={locale} onLanguage={setLocale} onBack={returnFromMoments}
+        onRefresh={() => { setRefreshKey(key => key + 1); setExplorerRefreshKey(key => key + 1); }}
+        onSelfCheck={isMobile ? () => { activateChat(); setSidebarOpen(false); setRightPanelOpen(false); setMobileDebugOpen(true); } : undefined} />}
     </div>
       </div>
     </div>
@@ -2304,10 +2367,10 @@ export function AppShell({
         onReloaded={() => setSessionKey((k) => k + 1)}
       />
     )}
-    {extensionsConfigOpen && resourceProjectId && (activeCwd ?? selectedSession?.cwd ?? newSessionCwd) && (
+    {extensionsConfigOpen && resourceProjectId && resourceCwd && (
       <ExtensionsConfig
         projectId={resourceProjectId}
-        cwd={(activeCwd ?? selectedSession?.cwd ?? newSessionCwd)!}
+        cwd={resourceCwd}
         sessionId={selectedSession?.projectId === resourceProjectId ? selectedSession.id : null}
         onClose={() => setExtensionsConfigOpen(false)}
         onReloaded={() => setSessionKey((k) => k + 1)}

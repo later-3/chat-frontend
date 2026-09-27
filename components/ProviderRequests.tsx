@@ -1,5 +1,9 @@
 "use client";
 
+import { InterfaceFeedback } from "./InterfaceFeedback";
+
+import { useI18n } from "@/hooks/useI18n";
+
 import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
@@ -149,6 +153,7 @@ function Collapsible({
 }
 
 function TextPart({ text }: { text: string }) {
+  const { t: tr, locale } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const long = text.length > 600;
   const shown = expanded || !long ? text : text.slice(0, 600);
@@ -183,7 +188,7 @@ function TextPart({ text }: { text: string }) {
             padding: 0,
           }}
         >
-          {expanded ? "collapse" : `expand (${text.length.toLocaleString()} chars)`}
+          {expanded ? tr("interface.collapse") : tr("request.expand", { count: text.length.toLocaleString(locale) })}
         </button>
       )}
     </div>
@@ -191,6 +196,7 @@ function TextPart({ text }: { text: string }) {
 }
 
 function MessagePart({ part }: { part: unknown }) {
+  const { t: tr } = useI18n();
   const p = (part ?? {}) as Record<string, unknown>;
   const type = typeof p.type === "string" ? p.type : "unknown";
   const norm = type === "input_text" || type === "output_text" ? "text" : type;
@@ -200,17 +206,16 @@ function MessagePart({ part }: { part: unknown }) {
   if (norm === "image_url" || norm === "image" || norm === "input_image") {
     const url = (p.image_url as { url?: string } | undefined)?.url ?? (p as { url?: string }).url;
     return (
-      <div style={{ fontSize: 12, color: "var(--text-dim)", fontStyle: "italic" }}>
-        [image{url ? `: ${truncate(url, 60)}` : ""}]
+      <div style={{ fontSize: 12, color: "var(--text-dim)", fontStyle: "italic" }}>{tr("interface..image")}{url ? `: ${truncate(url, 60)}` : ""}]
       </div>
     );
   }
   if (norm === "tool_use" || norm === "function_call") {
-    const name = (p as { name?: string }).name ?? "(unknown)";
+    const name = (p as { name?: string }).name ?? tr("request.unknown");
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <div style={{ fontSize: 12, color: "var(--warning)", fontFamily: "var(--font-mono)" }}>
-          tool_use: {name}
+          {tr("request.toolCall")}: {name}
         </div>
         <JsonBlock value={parseMaybeJson(p.input ?? p.arguments)} maxHeight={240} />
       </div>
@@ -220,7 +225,7 @@ function MessagePart({ part }: { part: unknown }) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <div style={{ fontSize: 12, color: "var(--warning)", fontFamily: "var(--font-mono)" }}>
-          tool_result
+          {tr("request.toolResult")}
         </div>
         <JsonBlock value={parseMaybeJson(p.content ?? p.output)} maxHeight={240} />
       </div>
@@ -230,6 +235,7 @@ function MessagePart({ part }: { part: unknown }) {
 }
 
 function MessageView({ message }: { message: unknown }) {
+  const { t: tr } = useI18n();
   const m = (message ?? {}) as Record<string, unknown>;
   const role = typeof m.role === "string" ? m.role : "unknown";
   const content = m.content;
@@ -252,11 +258,11 @@ function MessageView({ message }: { message: unknown }) {
               flexShrink: 0,
             }}
           >
-            {role}
+            {ROLE_COLORS[role] ? tr(`request.${role}`) : role}
           </span>
           {toolCalls && toolCalls.length > 0 && (
             <span style={{ fontSize: 12, color: "var(--warning)", fontFamily: "var(--font-mono)", flexShrink: 0 }}>
-              {toolCalls.length} tool_call{toolCalls.length === 1 ? "" : "s"}
+              {tr("request.toolCalls", { count: toolCalls.length })}
             </span>
           )}
           <span style={{ color: "var(--text-dim)", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
@@ -276,11 +282,11 @@ function MessageView({ message }: { message: unknown }) {
         {toolCalls?.map((tc, i) => {
           const t = (tc ?? {}) as Record<string, unknown>;
           const fn = (t.function ?? {}) as Record<string, unknown>;
-          const name = typeof fn.name === "string" ? fn.name : "(unknown)";
+          const name = typeof fn.name === "string" ? fn.name : tr("request.unknown");
           return (
             <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <div style={{ fontSize: 12, color: "var(--warning)", fontFamily: "var(--font-mono)" }}>
-                tool_call: {name}
+                {tr("request.toolCall")}: {name}
               </div>
               <JsonBlock value={parseMaybeJson(fn.arguments)} maxHeight={240} />
             </div>
@@ -292,9 +298,10 @@ function MessageView({ message }: { message: unknown }) {
 }
 
 function ToolView({ tool }: { tool: unknown }) {
+  const { t: tr } = useI18n();
   const t = (tool ?? {}) as Record<string, unknown>;
   const fn = (t.function ?? t) as Record<string, unknown>;
-  const name = typeof fn.name === "string" ? fn.name : "(unknown)";
+  const name = typeof fn.name === "string" ? fn.name : tr("request.unknown");
   const desc = typeof fn.description === "string" ? fn.description : undefined;
   const params = fn.parameters ?? fn.input_schema;
   return (
@@ -307,7 +314,7 @@ function ToolView({ tool }: { tool: unknown }) {
       </div>
       {desc && <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>{desc}</div>}
       {params != null && (
-        <Collapsible summary="parameters">
+        <Collapsible summary={tr("request.parameters")}>
           <JsonBlock value={params} maxHeight={300} />
         </Collapsible>
       )}
@@ -316,6 +323,7 @@ function ToolView({ tool }: { tool: unknown }) {
 }
 
 function Detail({ detail }: { detail: ProviderRequestDetail }) {
+  const { t: tr } = useI18n();
   const payload = (detail.payload ?? {}) as Record<string, unknown>;
   const messages = Array.isArray(payload.messages) ? payload.messages : [];
   const tools = Array.isArray(payload.tools) ? payload.tools : [];
@@ -323,21 +331,21 @@ function Detail({ detail }: { detail: ProviderRequestDetail }) {
   const roles = Object.entries(s.roles).sort((a, b) => b[1] - a[1]);
 
   const summaryRows: Array<[string, React.ReactNode]> = [
-    ["model", s.model ?? "—"],
-    ["messages", `${s.messageCount}`],
-    ["tools", `${s.toolCount}`],
-    ["stream", s.stream === undefined ? "—" : String(s.stream)],
-    ["max tokens", s.maxTokens === undefined ? "—" : String(s.maxTokens)],
-    ["reasoning effort", s.reasoningEffort ?? "—"],
+    [tr("request.model"), s.model ?? "—"],
+    [tr("request.messages"), `${s.messageCount}`],
+    [tr("request.tools"), `${s.toolCount}`],
+    [tr("request.stream"), s.stream === undefined ? "—" : tr(s.stream ? "request.yes" : "request.no")],
+    [tr("request.maxTokens"), s.maxTokens === undefined ? "—" : String(s.maxTokens)],
+    [tr("request.reasoning"), s.reasoningEffort ?? "—"],
   ];
   if (s.thinking != null) {
-    summaryRows.push(["thinking", <JsonBlock key="t" value={s.thinking} maxHeight={120} />]);
+    summaryRows.push([tr("request.thinking"), <JsonBlock key="t" value={s.thinking} maxHeight={120} />]);
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
       <div>
-        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 8 }}>Summary</div>
+        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 8 }}>{tr("interface.summary")}</div>
         <div
           style={{
             display: "grid",
@@ -355,11 +363,11 @@ function Detail({ detail }: { detail: ProviderRequestDetail }) {
           ))}
           {roles.length > 0 && (
             <>
-              <div style={{ color: "var(--text-dim)" }}>role breakdown</div>
+              <div style={{ color: "var(--text-dim)" }}>{tr("interface.by.role")}</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {roles.map(([role, count]) => (
                   <span
-                    key={role}
+                    key={ROLE_COLORS[role] ? tr(`request.${role}`) : role}
                     style={{
                       fontSize: 12,
                       padding: "1px 6px",
@@ -369,7 +377,7 @@ function Detail({ detail }: { detail: ProviderRequestDetail }) {
                       fontFamily: "var(--font-mono)",
                     }}
                   >
-                    {role}: {count}
+                    {ROLE_COLORS[role] ? tr(`request.${role}`) : role}: {count}
                   </span>
                 ))}
               </div>
@@ -379,23 +387,21 @@ function Detail({ detail }: { detail: ProviderRequestDetail }) {
       </div>
 
       <div>
-        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 8 }}>
-          Messages ({messages.length})
+        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 8 }}>{tr("request.messageCount", { count: messages.length })}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {messages.map((m, i) => (
             <MessageView key={i} message={m} />
           ))}
           {messages.length === 0 && (
-            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>No messages in payload.</div>
+            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{tr("interface.no.messages.in.this.request")}</div>
           )}
         </div>
       </div>
 
       {tools.length > 0 && (
         <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 8 }}>
-            Tools ({tools.length})
+          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 8 }}>{tr("request.toolCount", { count: tools.length })}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {tools.map((t, i) => (
@@ -405,7 +411,7 @@ function Detail({ detail }: { detail: ProviderRequestDetail }) {
         </div>
       )}
 
-      <Collapsible summary="Raw JSON">
+      <Collapsible summary={tr("request.raw")}>
         <JsonBlock value={detail.payload} maxHeight={600} />
       </Collapsible>
     </div>
@@ -469,6 +475,7 @@ const headerBtnStyle: React.CSSProperties = {
 };
 
 export function ProviderRequests({ cwd, onClose }: { cwd: string; onClose: () => void }) {
+  const { t: tr } = useI18n();
   const modalRef = useDialogFocus(onClose);
   const [list, setList] = useState<ProviderRequestSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -559,7 +566,7 @@ export function ProviderRequests({ cwd, onClose }: { cwd: string; onClose: () =>
         />
       )}
 
-      <div ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Provider Requests" className="configuration-dialog provider-requests-dialog" style={overlayStyle}>
+      <div ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={tr("interface.provider.requests")} className="configuration-dialog provider-requests-dialog" style={overlayStyle}>
         {/* Header */}
         <div
           style={{
@@ -571,9 +578,7 @@ export function ProviderRequests({ cwd, onClose }: { cwd: string; onClose: () =>
             flexShrink: 0,
           }}
         >
-          <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", flexShrink: 0 }}>
-            Provider Requests
-          </span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", flexShrink: 0 }}>{tr("interface.provider.requests")}</span>
           <code
             style={{
               fontSize: 12,
@@ -592,8 +597,8 @@ export function ProviderRequests({ cwd, onClose }: { cwd: string; onClose: () =>
 
           <button
             onClick={() => setListCollapsed((c) => !c)}
-            title={listCollapsed ? "Show request list" : "Hide request list"}
-            aria-label={listCollapsed ? "Show list" : "Hide list"}
+            title={listCollapsed ? tr("interface.show.request.list") : tr("interface.hide.request.list")}
+            aria-label={listCollapsed ? tr("interface.show.list") : tr("interface.hide.list")}
             style={headerBtnStyle}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = "var(--bg-hover)";
@@ -609,8 +614,8 @@ export function ProviderRequests({ cwd, onClose }: { cwd: string; onClose: () =>
 
           <button
             onClick={() => setFullscreen((f) => !f)}
-            title={fullscreen ? "Window mode" : "Fullscreen"}
-            aria-label={fullscreen ? "Window mode" : "Fullscreen"}
+            title={fullscreen ? tr("interface.window.mode") : tr("interface.fullscreen")}
+            aria-label={fullscreen ? tr("interface.window.mode") : tr("interface.fullscreen")}
             style={headerBtnStyle}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = "var(--bg-hover)";
@@ -626,8 +631,8 @@ export function ProviderRequests({ cwd, onClose }: { cwd: string; onClose: () =>
 
           <button
             onClick={onClose}
-            title="Close"
-            aria-label="Close"
+            title={tr("interface.close")}
+            aria-label={tr("interface.close")}
             style={{
               ...headerBtnStyle,
               fontSize: 18,
@@ -660,17 +665,12 @@ export function ProviderRequests({ cwd, onClose }: { cwd: string; onClose: () =>
               }}
             >
               {loading ? (
-                <div style={{ padding: 12, fontSize: 12, color: "var(--text-muted)" }}>Loading…</div>
+                <div style={{ padding: 12, fontSize: 12, color: "var(--text-muted)" }}>{tr("interface.loading")}</div>
               ) : error ? (
-                <div style={{ padding: 12, fontSize: 12, color: "var(--danger)" }}>{error}</div>
+                <div style={{ padding: 12, fontSize: 12, color: "var(--danger)" }}><InterfaceFeedback message={error} /></div>
               ) : list.length === 0 ? (
-                <div style={{ padding: 12, fontSize: 12, color: "var(--text-dim)", lineHeight: 1.7 }}>
-                  No recorded provider requests yet.
-                  <div style={{ marginTop: 6 }}>
-                    Enable the{" "}
-                    <code style={{ fontFamily: "var(--font-mono)" }}>provider-request-review</code>{" "}
-                    extension and send a message.
-                  </div>
+                <div style={{ padding: 12, fontSize: 12, color: "var(--text-dim)", lineHeight: 1.7 }}>{tr("interface.no.provider.requests.have.been.recorded")}<div style={{ marginTop: 6 }}>{tr("interface.enable.the")}{" "}
+                    <code style={{ fontFamily: "var(--font-mono)" }}>provider-request-review</code>{" "}{tr("interface.extension.then.send.a.message")}</div>
                 </div>
               ) : (
                 list.map((r) => {
@@ -714,8 +714,8 @@ export function ProviderRequests({ cwd, onClose }: { cwd: string; onClose: () =>
                             {r.model}
                           </span>
                         )}
-                        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{r.messageCount} msg</span>
-                        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{r.toolCount} tools</span>
+                        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{r.messageCount}{tr("interface.messages.2")}</span>
+                        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{r.toolCount}{tr("interface.tools.3")}</span>
                         <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{fmtSize(r.size)}</span>
                       </div>
                       <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 3 }}>
@@ -731,9 +731,9 @@ export function ProviderRequests({ cwd, onClose }: { cwd: string; onClose: () =>
           {/* Right: detail */}
           <div style={{ flex: 1, overflowY: "auto", minWidth: 0, padding: 16 }}>
             {detailLoading ? (
-              <div style={{ padding: 12, fontSize: 12, color: "var(--text-muted)" }}>Loading payload…</div>
+              <div style={{ padding: 12, fontSize: 12, color: "var(--text-muted)" }}>{tr("interface.loading.request.data")}</div>
             ) : detailError ? (
-              <div style={{ padding: 12, fontSize: 12, color: "var(--danger)" }}>{detailError}</div>
+              <div style={{ padding: 12, fontSize: 12, color: "var(--danger)" }}><InterfaceFeedback message={detailError} /></div>
             ) : detail ? (
               <Detail detail={detail} />
             ) : (
@@ -747,7 +747,7 @@ export function ProviderRequests({ cwd, onClose }: { cwd: string; onClose: () =>
                   fontSize: 13,
                 }}
               >
-                {list.length > 0 ? "Select a request." : ""}
+                {list.length > 0 ? tr("interface.select.a.request") : ""}
               </div>
             )}
           </div>

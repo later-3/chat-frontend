@@ -1,5 +1,7 @@
 "use client";
 
+import { InterfaceFeedback } from "./InterfaceFeedback";
+
 import { forwardRef, useState, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from "react";
 import { getFileIcon, FolderIcon } from "./FileIcons";
 import {
@@ -123,12 +125,12 @@ const GIT_STATUS_KEYS: Record<GitFileStatusKind, string> = {
 };
 
 const GIT_STATUS_COLORS: Record<GitFileStatusKind, string> = {
-  modified: "#d6a84b",
-  added: "#4ade80",
-  deleted: "#f87171",
+  modified: "var(--warning)",
+  added: "var(--success)",
+  deleted: "var(--danger)",
   renamed: "#60a5fa",
-  untracked: "#4ade80",
-  conflict: "#f87171",
+  untracked: "var(--success)",
+  conflict: "var(--danger)",
 };
 
 function GitStatusBadge({ status, t }: { status: GitFileStatus; t: Translate }) {
@@ -245,6 +247,7 @@ function TreeNode({
   changedDirectoryPaths: Set<string>;
   t: Translate;
 }) {
+  const { t: tr } = useI18n();
   const isMobile = useIsMobile();
   const open = expandedPaths.has(node.fullPath);
   const highlighted = highlightedPaths.has(node.fullPath);
@@ -343,7 +346,7 @@ function TreeNode({
             aria-label={t("files.newlyUploaded")}
             style={{ width: 14, height: 14, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
           >
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#3b82f6" }} />
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)" }} />
           </span>
         )}
         {!hovered && !node.isDir && gitStatus && (
@@ -362,7 +365,7 @@ function TreeNode({
               justifyContent: "center",
             }}
           >
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#d6a84b" }} />
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--warning)" }} />
           </span>
         )}
         {loading && (
@@ -545,9 +548,7 @@ function TreeNode({
             />
           ))}
           {children.length === 0 && loaded && (
-            <div style={{ paddingLeft: 8 + (depth + 1) * 14, fontSize: 11, color: "var(--text-dim)", height: 22, display: "flex", alignItems: "center" }}>
-              empty
-            </div>
+            <div style={{ paddingLeft: 8 + (depth + 1) * 14, fontSize: 11, color: "var(--text-dim)", height: 22, display: "flex", alignItems: "center" }}>{tr("interface.empty")}</div>
           )}
         </div>
       )}
@@ -1056,17 +1057,17 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
         )}
 
         {pendingConflict && (
-          <div role="alert" style={{ padding: 7, border: "1px solid color-mix(in srgb, #f59e0b 55%, var(--border))", borderRadius: 4, background: "color-mix(in srgb, #f59e0b 9%, var(--bg-panel))" }}>
+          <div role="alert" style={{ padding: 7, border: "1px solid color-mix(in srgb, var(--warning) 55%, var(--border))", borderRadius: 4, background: "color-mix(in srgb, var(--warning) 9%, var(--bg-panel))" }}>
             <div style={{ fontSize: 11, color: "var(--text)", lineHeight: 1.35, overflowWrap: "anywhere" }}>
               {t("files.conflictSummary", { count: pendingConflict.conflicts.length, countSuffix: pendingConflict.conflicts.length === 1 ? "" : "s", files: pendingConflict.conflicts.join(", ") })}
             </div>
             {pendingConflict.nonReplaceable.length > 0 && (
-              <div style={{ marginTop: 3, fontSize: 10, color: "#f59e0b", lineHeight: 1.35, overflowWrap: "anywhere" }}>
+              <div style={{ marginTop: 3, fontSize: 10, color: "var(--warning)", lineHeight: 1.35, overflowWrap: "anywhere" }}>
                 {t("files.cannotReplace", { files: pendingConflict.nonReplaceable.join(", ") })}
               </div>
             )}
             <div style={{ display: "flex", gap: isDrilldown ? 8 : 5, marginTop: 7, flexWrap: "wrap" }}>
-              <button type="button" onClick={() => void performUpload(pendingConflict.files, "overwrite")} style={{ height: isDrilldown ? 40 : 22, padding: isDrilldown ? "0 12px" : "0 7px", border: "1px solid #ef4444", borderRadius: isDrilldown ? 8 : 4, background: "transparent", color: "#ef4444", cursor: "pointer", fontSize: isDrilldown ? 13 : 10 }}>
+              <button type="button" onClick={() => void performUpload(pendingConflict.files, "overwrite")} style={{ height: isDrilldown ? 40 : 22, padding: isDrilldown ? "0 12px" : "0 7px", border: "1px solid var(--danger)", borderRadius: isDrilldown ? 8 : 4, background: "transparent", color: "var(--danger)", cursor: "pointer", fontSize: isDrilldown ? 13 : 10 }}>
                 {t("files.replace")}
               </button>
               <button type="button" onClick={() => void performUpload(pendingConflict.files, "skip")} style={{ height: isDrilldown ? 40 : 22, padding: isDrilldown ? "0 12px" : "0 7px", border: "1px solid var(--border)", borderRadius: isDrilldown ? 8 : 4, background: "var(--bg-panel)", color: "var(--text)", cursor: "pointer", fontSize: isDrilldown ? 13 : 10 }}>
@@ -1080,8 +1081,8 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
         )}
 
         {uploadError && (
-          <div role="alert" style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 11, lineHeight: 1.35, color: "#f87171" }}>
-            <span style={{ minWidth: 0, flex: 1, overflowWrap: "anywhere" }}>{uploadError}</span>
+          <div role="alert" style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 11, lineHeight: 1.35, color: "var(--danger)" }}>
+            <span style={{ minWidth: 0, flex: 1, overflowWrap: "anywhere" }}><InterfaceFeedback message={uploadError} /></span>
             <DismissButton onClick={() => setUploadError(null)} title={t("files.dismissError")} />
           </div>
         )}
@@ -1091,7 +1092,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
             <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 22, fontSize: 11 }}>
               <div style={{ minWidth: 0, flex: 1, display: "flex", alignItems: "center", gap: 8 }}>
                 {uploadSummary.uploaded.length > 0 && (
-                  <span title={`${uploadSummary.uploaded.length} uploaded`} aria-label={`${uploadSummary.uploaded.length} uploaded`} style={{ display: "flex", alignItems: "center", gap: 3, color: "#22c55e" }}>
+                  <span title={`${uploadSummary.uploaded.length} uploaded`} aria-label={`${uploadSummary.uploaded.length} uploaded`} style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--success)" }}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="m5 12 4 4L19 6" />
                     </svg>
@@ -1108,7 +1109,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
                   </span>
                 )}
                 {uploadSummary.errors.length > 0 && (
-                  <span title={`${uploadSummary.errors.length} failed`} aria-label={`${uploadSummary.errors.length} failed`} style={{ display: "flex", alignItems: "center", gap: 3, color: "#f87171" }}>
+                  <span title={`${uploadSummary.errors.length} failed`} aria-label={`${uploadSummary.errors.length} failed`} style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--danger)" }}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M12 3 2.5 20h19L12 3Z" />
                       <path d="M12 9v4" />
@@ -1133,7 +1134,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
               <DismissButton onClick={() => setUploadSummary(null)} title={t("files.dismissUploadResults")} />
             </div>
             {uploadSummary.errors.map((item) => (
-              <div key={item.name} title={item.error} style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3, minWidth: 0, fontSize: 10, color: "#f87171" }}>
+              <div key={item.name} title={item.error} style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 3, minWidth: 0, fontSize: 10, color: "var(--danger)" }}>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }} aria-hidden="true">
                   <circle cx="12" cy="12" r="9" />
                   <path d="M12 8v5" />
@@ -1225,7 +1226,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
                 </div>
               )}
               {!searchLoading && searchError && (
-                <div role="alert" style={{ padding: "6px 2px", fontSize: isDrilldown ? 13 : 10, color: "#f87171" }}>
+                <div role="alert" style={{ padding: "6px 2px", fontSize: isDrilldown ? 13 : 10, color: "var(--danger)" }}>
                   {t("sidebar.fileSearchFailed")}
                 </div>
               )}
@@ -1313,7 +1314,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
           {loading ? (
             <div style={{ padding: isDrilldown ? "18px 16px" : "8px 12px", fontSize: isDrilldown ? 14 : 11, color: "var(--text-dim)" }}>{t("files.loading")}</div>
           ) : error ? (
-            <div style={{ padding: "8px 12px", fontSize: 11, color: "#f87171" }}>{error}</div>
+            <div style={{ padding: "8px 12px", fontSize: 11, color: "var(--danger)" }}><InterfaceFeedback message={error} /></div>
           ) : (
             roots.map((node) => isDrilldown ? (
               <MobileFileRow
