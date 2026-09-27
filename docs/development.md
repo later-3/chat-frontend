@@ -6,6 +6,8 @@
 
 ## 1. 职责边界
 
+本仓库既作为 Chat workspace 子模块构建，也由独立 CI 安装。依赖变更必须同步自身 `pnpm-lock.yaml` 和父仓库 workspace 锁文件；父仓库安装成功不能代替独立 `pnpm install --frozen-lockfile`。在 Chat workspace 内刷新独立锁文件时使用独立临时目录复制 package/lock，避免修改正在运行的 workspace node_modules。
+
 Frontend 是 Vite + React 构建的纯浏览器客户端，只通过 Chat Backend 的公开 HTTP API 使用服务端能力。
 
 Frontend 负责：
