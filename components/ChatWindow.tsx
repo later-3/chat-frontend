@@ -527,30 +527,19 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, topicNode: r
       </div>
 
       {isEmptyNew ? (
-        <div className={`flex flex-1 flex-col items-center overflow-y-auto ${isMobile ? "justify-between px-0 pt-4 pb-0" : "justify-center px-4 py-8"}`}>
-          <div className="w-full workspace-message-column" style={{ paddingLeft: isMobile ? 16 : 0, paddingRight: isMobile ? 16 : 0 }}>
-            <div
-              className="mb-3"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-                marginLeft: isMobile ? 0 : 16,
-                marginRight: isMobile ? 0 : 52,
-                fontFamily: "var(--font-mono)",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "baseline", gap: isMobile ? 7 : 10, minWidth: 0, flex: 1, lineHeight: 1.4, overflow: "hidden" }}>
-                <span style={{ fontSize: 28, fontWeight: 700, letterSpacing: 0, color: "var(--text)", flexShrink: 0, whiteSpace: "nowrap" }}>π</span>
-                <span style={{ fontSize: 22, color: "var(--text)", fontWeight: 700, letterSpacing: 0, flexShrink: 0, whiteSpace: "nowrap" }}>Chat</span>
+        <div className={`chat-empty${isMobile ? " is-mobile" : ""}`}>
+          <div className="w-full workspace-message-column chat-empty-column">
+            <div className="chat-empty-brand">
+              <div className="chat-empty-mark">
+                <span className="chat-empty-pi">π</span>
+                <span className="chat-empty-word">Chat</span>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, flexShrink: 0 }}>
-                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                  web <span style={{ color: "var(--text)" }}>v{import.meta.env.VITE_APP_VERSION ?? "0.1.1"}</span>
+              <div className="chat-empty-versions">
+                <span>
+                  web <span>v{import.meta.env.VITE_APP_VERSION ?? "0.1.1"}</span>
                 </span>
-                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                  pi <span style={{ color: "var(--text)" }}>v{import.meta.env.VITE_PI_VERSION ?? t("interface.source.build")}</span>
+                <span>
+                  pi <span>v{import.meta.env.VITE_PI_VERSION ?? t("interface.source.build")}</span>
                 </span>
               </div>
             </div>
@@ -832,21 +821,14 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, topicNode: r
   );
 }
 
+/* v2.3: shelf chrome lives in components.css (.notice-shelf*); only the
+   per-notice semantic dot + exit state stay inline. No geometry here. */
 function NoticeShelf({ notices, floating = false }: { notices: NoticeItem[]; floating?: boolean }) {
   if (notices.length === 0) return null;
   return (
-    <div
-      className="notice-shelf"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        marginBottom: floating ? 0 : 10,
-        width: "100%", minWidth: 0, maxWidth: 620,
-      }}
-    >
+    <div className={`notice-shelf${floating ? " is-floating" : ""}`}>
       {notices.map((notice, index) => {
-        const color = notice.type === "error"
+        const dot = notice.type === "error"
           ? "var(--danger)"
           : notice.type === "warning"
             ? "var(--warning)"
@@ -856,44 +838,10 @@ function NoticeShelf({ notices, floating = false }: { notices: NoticeItem[]; flo
         return (
           <div
             key={notice.id}
-            className="notice-shelf-item"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              minHeight: 40,
-              maxHeight: "30dvh",
-              pointerEvents: "auto",
-              marginBottom: index === notices.length - 1 ? 0 : 6,
-              overflow: "auto",
-              borderRadius: 14,
-              border: "1px solid color-mix(in srgb, var(--border) 70%, transparent)",
-              background: "var(--bg)",
-              color: "var(--text-muted)",
-              width: "fit-content",
-              maxWidth: "min(100%, 620px)",
-              boxShadow: floating
-                ? "0 1px 2px rgba(15,23,42,0.05), 0 10px 28px -14px rgba(15,23,42,0.24)"
-                : "0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -12px rgba(15,23,42,0.10)",
-              fontSize: 13,
-              lineHeight: 1.45,
-              transformOrigin: "top center",
-              animation: notice.exiting
-                ? "notice-shelf-out 0.18s ease-in forwards"
-                : "notice-shelf-in 0.18s ease-out both",
-              padding: "10px 12px",
-            }}
+            className={`notice-shelf-item${floating ? " is-floating" : ""}${notice.exiting ? " is-exiting" : ""}${index === notices.length - 1 ? " is-last" : ""}`}
           >
-            <span
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: "50%",
-                background: color,
-                flexShrink: 0,
-              }}
-            />
-            <span style={{ minWidth: 0, maxWidth: "100%", overflowWrap: "anywhere", whiteSpace: "normal" }}>
+            <span className="notice-shelf-dot" style={{ background: dot }} />
+            <span className="notice-shelf-text">
               <InterfaceFeedback message={notice.message} />
             </span>
           </div>

@@ -490,7 +490,7 @@ function ProviderDetail({ name, provider, apiOptions, onChange, onRename, onDele
               style={{ ...inputStyle, width: "100%", minWidth: 0 }}
             />
 
-            <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 6, background: "var(--bg-panel)" }}>
+            <div className={styles.discoveryList}>
               <label
                 style={{
                   minHeight: 32, padding: "5px 9px", display: "flex", alignItems: "center", gap: 8,
