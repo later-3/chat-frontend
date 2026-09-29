@@ -5,14 +5,14 @@
 .edges { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
 .edge { fill: none; stroke: var(--border-control); stroke-width: 1.4; }
 .edgeAnchored { fill: none; stroke: color-mix(in srgb, var(--accent) 60%, var(--border)); stroke-width: 1.7; }
-.controls { position: absolute; z-index: 3; top: 10px; right: 10px; display: flex; align-items: center; gap: 6px; padding: 4px; border: 1px solid var(--border); border-radius: 10px; background: color-mix(in srgb, var(--bg-panel) 90%, transparent); backdrop-filter: blur(4px); }
-.control { width: 36px; height: 36px; border: none; border-radius: 7px; background: transparent; color: var(--text); cursor: pointer; font-size: 14px; line-height: 1; }
+.controls { position: absolute; z-index: 3; top: 10px; right: 10px; display: flex; align-items: center; gap: 6px; padding: 4px; border: 1px solid var(--border); border-radius: var(--radius-control); background: color-mix(in srgb, var(--bg-panel) 90%, transparent); backdrop-filter: blur(4px); }
+.control { width: 36px; height: 36px; border: none; border-radius: var(--radius-control); background: transparent; color: var(--text); cursor: pointer; font-size: 14px; line-height: 1; }
 .control:hover { background: var(--bg-hover); }
 .zoomLabel { min-width: 38px; text-align: center; font-size: 11px; color: var(--text-dim); }
-.topicLabel { position: absolute; display: inline-flex; align-items: center; gap: 7px; padding: 3px 8px; border: none; border-radius: 8px; background: transparent; color: var(--text-muted); font-size: 12.5px; font-weight: 650; cursor: pointer; white-space: nowrap; }
+.topicLabel { position: absolute; display: inline-flex; align-items: center; gap: 7px; padding: 3px 8px; border: none; border-radius: var(--radius-control); background: transparent; color: var(--text-muted); font-size: 12.5px; font-weight: 650; cursor: pointer; white-space: nowrap; }
 .topicLabel:hover { background: var(--bg-hover); }
 .topicLabel small { color: var(--text-dim); font-weight: 400; font-size: 11px; }
-.node { position: absolute; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 11px; background: var(--bg); color: var(--text); cursor: pointer; text-align: left; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06); transition: border-color 0.12s, box-shadow 0.12s, transform 0.12s; }
+.node { position: absolute; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--bg); color: var(--text); cursor: pointer; text-align: left; transition: border-color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard); }
 .node:hover { border-color: var(--accent); }
 .nodeActive { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--bg)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent); }
 .nodeArchived { opacity: 0.62; }

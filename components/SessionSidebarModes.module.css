@@ -5,7 +5,7 @@
   margin-top: 8px;
   padding: 3px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--bg);
 }
 
@@ -15,7 +15,7 @@
   padding: 0 8px;
   overflow: hidden;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   color: var(--text-dim);
   background: transparent;
   cursor: pointer;
@@ -72,7 +72,7 @@
   min-height: 44px;
   padding: 10px 12px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--text-muted);
   text-align: left;

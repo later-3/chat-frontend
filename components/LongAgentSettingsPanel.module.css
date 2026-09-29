@@ -74,7 +74,7 @@
   gap: 7px;
   padding: 0 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   color: var(--text-muted);
   background: var(--bg-panel);
   cursor: pointer;
@@ -161,7 +161,7 @@
   gap: 3px;
   padding: 8px 10px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   color: var(--text-muted);
   background: transparent;
   cursor: pointer;
@@ -258,7 +258,7 @@
   gap: 7px;
   padding: 0 14px;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   color: var(--text-muted);
   background: transparent;
   cursor: pointer;
@@ -317,7 +317,7 @@
   gap: 8px !important;
   padding: 0 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--bg-panel);
 }
 
@@ -336,7 +336,7 @@
   margin: 0;
   padding: 16px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: var(--bg-panel);
 }
 
@@ -371,7 +371,7 @@
   box-sizing: border-box;
   padding: 9px 10px;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   outline: none;
   color: var(--text);
   background: var(--bg);
@@ -393,7 +393,7 @@
 .section select:focus,
 .section textarea:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: 0 0 0 2px var(--accent-outline, color-mix(in srgb, var(--accent) 12%, transparent));
 }
 
 .twoColumns {
@@ -435,7 +435,7 @@
   padding: 9px 10px;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   color: var(--text-muted);
   background: var(--bg-subtle);
   font-family: var(--font-mono);
@@ -459,7 +459,7 @@
   gap: 9px !important;
   padding: 9px 10px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--bg);
   cursor: pointer;
 }
@@ -537,7 +537,7 @@
   min-width: 0;
   padding: 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--bg);
 }
 
@@ -582,7 +582,7 @@
 .warning {
   padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--bg-subtle);
 }
 
@@ -618,7 +618,7 @@
   gap: 6px;
   padding: 0 10px;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   color: var(--text-muted);
   background: var(--bg-panel);
   cursor: pointer;
@@ -669,14 +669,14 @@
   gap: 8px;
   padding: 3px 3px 3px 11px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   color: var(--text-dim);
   background: var(--bg-panel);
 }
 
 .memorySearch:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: 0 0 0 2px var(--accent-outline, color-mix(in srgb, var(--accent) 12%, transparent));
 }
 
 .memorySearch input {
@@ -702,7 +702,7 @@
   grid-template-columns: minmax(220px, 30%) minmax(0, 1fr);
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: var(--bg-panel);
 }
 
@@ -763,7 +763,7 @@
   padding: 7px 9px;
   overflow: hidden;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   color: var(--text-muted);
   background: transparent;
   cursor: pointer;
@@ -889,7 +889,7 @@
   box-sizing: border-box;
   padding: 9px 10px;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   outline: none;
   color: var(--text);
   background: var(--bg);
@@ -916,7 +916,7 @@
 .editorField input:focus,
 .editorFieldGrow textarea:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: 0 0 0 2px var(--accent-outline, color-mix(in srgb, var(--accent) 12%, transparent));
 }
 
 .editorField > span,
@@ -1208,7 +1208,7 @@
 
 .taskRow {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   padding: 10px;
   display: flex;
   flex-direction: column;

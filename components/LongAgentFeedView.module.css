@@ -58,7 +58,7 @@
 }
 
 .page button {
-  transition: background-color 150ms ease, color 150ms ease;
+  transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
 }
 
 .page button:hover:not(:disabled) {
@@ -106,7 +106,7 @@
   min-width: 0;
   padding: 4px 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   color: var(--text-muted);
   background: transparent;
   cursor: pointer;
@@ -197,7 +197,7 @@
   padding: 2px;
   margin: -2px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   color: var(--text);
   background: transparent;
   text-align: left;
@@ -258,7 +258,7 @@
 .commentsButton {
   padding: 0 8px;
   margin-left: -8px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   color: var(--text);
   cursor: pointer;
 }
@@ -285,7 +285,7 @@
   margin: 12px 0 0;
   padding: 16px;
   list-style: none;
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: var(--bg-panel);
 }
 
@@ -358,7 +358,7 @@
   min-height: 44px;
   padding: 8px 16px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   color: var(--accent);
   background: transparent;
   font-size: 14px;
@@ -370,7 +370,7 @@
   margin-top: 20px;
   padding: 16px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   font-size: 14px;
 }
 
@@ -395,7 +395,7 @@
   display: block;
   height: 16px;
   margin-bottom: 16px;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: var(--bg-panel);
 }
 

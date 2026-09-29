@@ -2,7 +2,7 @@
 .toolbar, .year { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .toolbar { margin-bottom: 20px; }
 .year button { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; min-height: 36px; }
-.body button { border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel); color: var(--text); cursor: pointer; }
+.body button { border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--bg-panel); color: var(--text); cursor: pointer; }
 .body button:hover:not(:disabled) { background: var(--bg-hover); border-color: var(--accent); }
 .body button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .body button:disabled { cursor: default; }

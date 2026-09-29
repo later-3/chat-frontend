@@ -3,7 +3,7 @@
 .panel > header { justify-content: space-between; }
 .panel h3 { font-size: 13px; font-weight: 600; margin: 0; }
 .panel p { font-size: 12px; color: var(--text-muted); line-height: 1.5; overflow-wrap: anywhere; }
-.panel button { border: 1px solid var(--border-control); border-radius: 8px; background: var(--bg-panel); color: var(--text); min-height: 32px; padding: 6px 8px; cursor: pointer; }
+.panel button { border: 1px solid var(--border-control); border-radius: var(--radius-control); background: var(--bg-panel); color: var(--text); min-height: 32px; padding: 6px 8px; cursor: pointer; }
 .panel button:hover { background: var(--bg-hover); }
 .panel button:active { background: var(--bg-selected); }
 .panel button:disabled { opacity: .5; cursor: default; }

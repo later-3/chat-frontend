@@ -2,7 +2,7 @@
 .group { display:flex; flex-direction:column; gap:10px; }
 .group h5 { margin:0; font-size:13px; font-weight:600; color:var(--text-muted); }
 .entry { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:14px; border:1px solid var(--border); border-radius:var(--radius-panel); background:var(--bg-panel); }
-.author { font-size:12px; padding:3px 8px; border-radius:6px; color:var(--text-muted); background:var(--bg-hover); }
+.author { font-size:12px; padding:3px 8px; border-radius: var(--radius-control); color:var(--text-muted); background:var(--bg-hover); }
 .content { flex-basis:100%; white-space:pre-wrap; line-height:1.65; overflow-wrap:anywhere; }
 .action,.primary { min-height:36px; padding:6px 12px; font:inherit; font-size:13px; border:1px solid var(--border); border-radius:var(--radius-control); background:transparent; color:var(--text); cursor:pointer; }
 .entry .action { margin-left:auto; }
