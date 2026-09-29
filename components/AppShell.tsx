@@ -1187,7 +1187,7 @@ export function AppShell({
         display: "flex", alignItems: "center", justifyContent: "center",
         width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
         background: "none", border: "none", borderRight: "1px solid var(--border)",
-        color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color var(--duration-fast)",
+        color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color var(--duration-fast) var(--ease-standard)",
       }}
       onMouseEnter={(event) => { event.currentTarget.style.color = "var(--text)"; }}
       onMouseLeave={(event) => { event.currentTarget.style.color = "var(--text-muted)"; }}
@@ -1231,7 +1231,7 @@ export function AppShell({
         background: activeTopPanel === "language" ? "var(--bg-selected)" : "none",
         border: "none", borderRight: "1px solid var(--border)",
         color: activeTopPanel === "language" ? "var(--text)" : "var(--text-muted)",
-        cursor: "pointer", flexShrink: 0, transition: "color var(--duration-fast)",
+        cursor: "pointer", flexShrink: 0, transition: "color var(--duration-fast) var(--ease-standard)",
       }}
       onMouseEnter={(event) => { event.currentTarget.style.color = "var(--text)"; }}
       onMouseLeave={(event) => {
@@ -1291,7 +1291,7 @@ export function AppShell({
             flexShrink: 0,
             fontSize: 12,
             whiteSpace: "nowrap",
-            transition: "color 0.1s, background 0.1s, opacity 0.1s",
+            transition: "color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard), opacity var(--duration-fast) var(--ease-standard)",
           }}
           onMouseEnter={(event) => {
             if (!selectedSession) return;
@@ -1382,7 +1382,7 @@ export function AppShell({
             cursor: mobile && !showChat ? "not-allowed" : "pointer",
             color: activeTopPanel === "system" ? "var(--text)" : "var(--text-muted)",
             opacity: mobile && !showChat ? 0.45 : 1,
-            fontSize: 12, whiteSpace: "nowrap", transition: "color 0.1s, background 0.1s",
+            fontSize: 12, whiteSpace: "nowrap", transition: "color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard)",
           }}
           onMouseEnter={(event) => {
             if (mobile && !showChat) return;
@@ -1483,7 +1483,7 @@ export function AppShell({
           fontSize: 12, color: "var(--text-muted)",
           whiteSpace: "nowrap", cursor: showChat ? "pointer" : "default",
           fontVariantNumeric: "tabular-nums",
-          transition: "color 0.1s, background 0.1s",
+          transition: "color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard)",
         }}
         onMouseEnter={(event) => {
           if (showChat && !covered) event.currentTarget.style.color = "var(--text)";
@@ -1716,7 +1716,7 @@ export function AppShell({
                     background: mobileToolbarMoreOpen ? "var(--bg-selected)" : "none",
                     border: "none", borderRight: "1px solid var(--border)",
                     color: mobileToolbarMoreOpen ? "var(--text)" : "var(--text-muted)",
-                    cursor: "pointer", flexShrink: 0, transition: "color var(--duration-fast), background var(--duration-fast)",
+                    cursor: "pointer", flexShrink: 0, transition: "color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard)",
                   }}
                 >
                   {mobileToolbarMoreOpen ? (
@@ -1817,7 +1817,7 @@ export function AppShell({
                         border: "none", borderRadius: 4,
                         background: locale === plugin.id ? "var(--bg-selected)" : "transparent",
                         color: "var(--text)", cursor: "pointer", textAlign: "left", fontSize: 12,
-                        transition: "background 0.1s",
+                        transition: "background var(--duration-fast) var(--ease-standard)",
                       }}
                       onMouseEnter={(e) => {
                         if (locale !== plugin.id) e.currentTarget.style.background = "var(--bg-hover)";
@@ -1960,7 +1960,7 @@ export function AppShell({
                             borderRadius: 4,
                             cursor: "pointer",
                             flex: "0 0 auto",
-                            transition: "color var(--duration-fast), border-color var(--duration-fast), background var(--duration-fast)",
+                            transition: "color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard)",
                           }}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.color = "var(--accent)";
@@ -2052,7 +2052,7 @@ export function AppShell({
           background: "rgba(0,0,0,0.4)",
           opacity: sidebarOpen ? 1 : 0,
           pointerEvents: sidebarOpen ? "auto" : "none",
-          transition: "opacity 0.25s ease",
+          transition: "opacity var(--duration-overlay) var(--ease-standard)",
         }}
       />}
 
@@ -2260,7 +2260,7 @@ export function AppShell({
               display: "flex", alignItems: "center", justifyContent: "center",
               width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
               background: "var(--bg-selected)", border: "none", borderLeft: "1px solid var(--border)",
-              color: "var(--text)", cursor: "pointer", flexShrink: 0, transition: "color var(--duration-fast)",
+              color: "var(--text)", cursor: "pointer", flexShrink: 0, transition: "color var(--duration-fast) var(--ease-standard)",
             }}
             onMouseEnter={(event) => { event.currentTarget.style.color = "var(--accent)"; }}
             onMouseLeave={(event) => { event.currentTarget.style.color = "var(--text)"; }}

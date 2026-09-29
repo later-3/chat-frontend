@@ -299,7 +299,9 @@ Pi 完整历史通过 `history-locale.ts` 对固定上游版本的阅读器控�
 
 内置工作流名称、说明和步骤标签经 `translateWorkflowCopy()` 按工作流 ID 与原始默认文案匹配翻译；用户改写的名称、说明与第三方工作流原样显示。不把本地化显示值送回配置或执行 API。
 
-### 共用动作与模态基础（2026-09-27；v2.3 修订 2026-09-29）
+### 共用动作与模态基础（2026-09-27；v2.4 修订 2026-09-29）
+
+动效与复用门禁：`lib/motion-contract.test.mjs` 断言所有 `transition` 使用 `--duration-*` 与 `--ease-*` Token、pressed 不使用 `filter:brightness()`、每个遮罩淡入（Radix 浮层还淡出）、`data-ui-button` 只由共享 `Button` 声明、`role="dialog"` 手写浮层不超出记录在案的迁移清单。新增动画只允许循环指示或一次性揭示，并在该测试的允许清单中登记。规范语义见 [UI/UX §8.2 与 §20](./ui-ux-guidelines.md#82-浮层与遮罩动效)。
 
 `components/ui/Button.tsx`、`PageHeader.tsx` 负责动作外观与一致的左侧返回；`SurfaceDialog` 基于固定版本 Radix Dialog，`ConfirmationProvider` 基于 AlertDialog，业务组件通过 `useConfirmation` 等待用户决定。列表选择不是动作按钮。不要新增 `window.confirm` 或复制页面级按钮样式。焦点、Escape、窄屏布局的真实浏览器回归随 `test:dev` 执行。
 

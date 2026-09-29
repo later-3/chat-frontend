@@ -1421,7 +1421,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     border: "1px solid var(--border)",
                     borderRadius: 7,
                     cursor: "pointer",
-                    transition: "background var(--duration-fast), border-color var(--duration-fast)",
+                    transition: "background var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard)",
                     whiteSpace: "nowrap",
                   }}
                   onMouseEnter={(e) => {
@@ -1896,7 +1896,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               borderRadius: 14,
               padding: "10px 10px 10px 14px",
               boxShadow: "0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -12px rgba(15,23,42,0.10)",
-              transition: "border-color 0.15s, background 0.15s, box-shadow 0.15s",
+              transition: "border-color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard)",
             } as React.CSSProperties}
           >
           <textarea
@@ -1967,7 +1967,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     color: canQueueStreamingMessage ? "rgba(180,130,0,1)" : "var(--text-dim)",
                     cursor: canQueueStreamingMessage ? "pointer" : "not-allowed",
                     fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
-                    transition: "background var(--duration-fast)",
+                    transition: "background var(--duration-fast) var(--ease-standard)",
                   }}
                 >
                   <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -1991,7 +1991,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     color: canQueueStreamingMessage ? "rgba(99,102,241,1)" : "var(--text-dim)",
                     cursor: canQueueStreamingMessage ? "pointer" : "not-allowed",
                     fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
-                    transition: "background var(--duration-fast)",
+                    transition: "background var(--duration-fast) var(--ease-standard)",
                   }}
                 >
                   <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -2021,7 +2021,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 fontWeight: 600,
                 letterSpacing: "-0.01em",
                 boxShadow: (value.trim() || attachedImages.length) ? "0 1px 3px var(--accent-shadow)" : "none",
-                transition: "background 0.15s, box-shadow 0.15s",
+                transition: "background var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard)",
               }}
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2065,7 +2065,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 color: attachedImages.length ? "var(--accent)" : "var(--text-muted)",
                 cursor: imagesAllowed ? "pointer" : "not-allowed",
                 opacity: imagesAllowed ? 1 : 0.5,
-                transition: "background var(--duration-fast), color var(--duration-fast)",
+                transition: "background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard)",
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = "var(--bg-hover)";
@@ -2159,7 +2159,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   cursor: "pointer",
                   fontSize: 12, fontWeight: 600,
                   whiteSpace: "nowrap", letterSpacing: "-0.01em",
-                  transition: "background var(--duration-fast)",
+                  transition: "background var(--duration-fast) var(--ease-standard)",
                 }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(239,68,68,0.16)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
@@ -2201,7 +2201,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   borderRadius: 11,
                   color: controlsMenuOpen ? "var(--text)" : "var(--text-muted)",
                   cursor: "pointer",
-                  transition: "background var(--duration-fast), color var(--duration-fast)",
+                  transition: "background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard)",
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = "var(--bg-hover)";
@@ -2315,7 +2315,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     color: isCompacting ? "var(--danger)" : "var(--text-muted)",
                     cursor: (isStreaming && !isCompacting) ? "not-allowed" : "pointer",
                     fontSize: 12, opacity: (isStreaming && !isCompacting) ? 0.5 : 1,
-                    transition: "background var(--duration-fast), color var(--duration-fast)",
+                    transition: "background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard)",
                   }}
                   onMouseEnter={(e) => {
                     if (isStreaming && !isCompacting) return;
@@ -2358,7 +2358,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   color: soundEnabled ? "var(--text-muted)" : "var(--text-dim)",
                   cursor: "pointer",
                   opacity: soundEnabled ? 1 : 0.55,
-                  transition: "background var(--duration-fast), color var(--duration-fast), opacity var(--duration-fast)",
+                  transition: "background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard), opacity var(--duration-fast) var(--ease-standard)",
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = "var(--bg-hover)";
@@ -2419,7 +2419,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                       : "var(--text-dim)",
                   cursor: ["checking", "unsupported", "enabling", "disabling", "denied"].includes(pushStatus) ? "not-allowed" : "pointer",
                   opacity: pushStatus === "on" ? 1 : 0.6,
-                  transition: "background var(--duration-fast), color var(--duration-fast), opacity var(--duration-fast)",
+                  transition: "background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard), opacity var(--duration-fast) var(--ease-standard)",
                 }}
                 onMouseEnter={(e) => {
                   if (e.currentTarget.disabled) return;

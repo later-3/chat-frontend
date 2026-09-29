@@ -450,7 +450,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    style={{ flexShrink: 0, opacity: 0.75, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}
+                    style={{ flexShrink: 0, opacity: 0.75, transform: expanded ? "rotate(180deg)" : "none", transition: "transform var(--duration-fast) var(--ease-standard)" }}
                     aria-hidden="true"
                   >
                     <polyline points="6 9 12 15 18 9" />
@@ -494,7 +494,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
             display: "flex", gap: 3,
             opacity: (hovered || isMobile) ? 1 : 0,
             pointerEvents: (hovered || isMobile) ? "auto" : "none",
-            transition: "opacity var(--duration-fast)",
+            transition: "opacity var(--duration-fast) var(--ease-standard)",
           }}>
             <button
               className={isMobile ? "mobile-message-action" : undefined}
@@ -509,7 +509,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                 cursor: "pointer",
                 fontSize: 11, fontWeight: 400,
                 whiteSpace: "nowrap",
-                transition: "color var(--duration-fast)",
+                transition: "color var(--duration-fast) var(--ease-standard)",
               }}
               onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = "var(--accent)"; }}
               onMouseLeave={(e) => { if (!copied) e.currentTarget.style.color = "var(--text-dim)"; }}
@@ -532,7 +532,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
               display: "flex", gap: 3,
               opacity: (hovered || forking || isMobile) ? 1 : 0,
               pointerEvents: (hovered || forking || isMobile) ? "auto" : "none",
-              transition: "opacity var(--duration-fast)",
+              transition: "opacity var(--duration-fast) var(--ease-standard)",
             }}>
               {canNavigate && (
                 <button
@@ -549,7 +549,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                     cursor: "pointer",
                     fontSize: 11, fontWeight: 400,
                     whiteSpace: "nowrap",
-                    transition: "color var(--duration-fast)",
+                    transition: "color var(--duration-fast) var(--ease-standard)",
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; }}
@@ -576,7 +576,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                     cursor: forking ? "not-allowed" : "pointer",
                     fontSize: 11, fontWeight: 400,
                     whiteSpace: "nowrap",
-                    transition: "color var(--duration-fast)",
+                    transition: "color var(--duration-fast) var(--ease-standard)",
                   }}
                   onMouseEnter={(e) => { if (!forking) e.currentTarget.style.color = "var(--accent)"; }}
                   onMouseLeave={(e) => { if (!forking) e.currentTarget.style.color = "var(--text-dim)"; }}
@@ -848,7 +848,7 @@ function AssistantMessageView({
               whiteSpace: "nowrap",
               opacity: (hovered || isMobile) ? 1 : 0,
               pointerEvents: (hovered || isMobile) ? "auto" : "none",
-              transition: "opacity var(--duration-fast), color var(--duration-fast)",
+              transition: "opacity var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard)",
             }}
             onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = "var(--accent)"; }}
             onMouseLeave={(e) => { if (!copied) e.currentTarget.style.color = "var(--text-dim)"; }}
@@ -1036,7 +1036,7 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
         {duration !== undefined && (
           <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{duration}s</span>
         )}
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--text-dim)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--text-dim)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform var(--duration-fast) var(--ease-standard)" }}>
           <polyline points="2 3.5 5 6.5 8 3.5" />
         </svg>
       </button>

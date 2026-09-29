@@ -1,7 +1,7 @@
 # Chat Frontend UI/UX 规范
 
 - 状态：规范基线
-- 版本：2.3
+- 版本：2.4
 - 适用项目：Chat Pi Web Frontend
 - 最后校正：2026-09-29
 -  art 方向：安静画廊级工具表面（littleplains / aside / resurf / daybridge 取精度不取装饰）；暖灰 + 墨字 + 克制紫品牌不变，深浅双主题同时成立
@@ -252,6 +252,15 @@ Chat 的核心不是一次性表单，而是可持续数秒到数小时的 Agent
 | `--ease-standard` | `cubic-bezier(0.2, 0, 0, 1)` | 常规状态过渡（对称进出） |
 
 - 循环指示（spinner、脉冲）不属于以上三档，独立按场景设定。
+
+### 8.2 浮层与遮罩动效
+
+- **遮罩（scrim）**：所有压暗层共用一次淡入 `scrim-in`（`--duration-overlay` + `--ease-out`）；Radix 浮层再按 `data-state="closed"` 淡出 `scrim-out`（`--duration-panel` + `--ease-standard`）。禁止遮罩直接出现或消失（打开设置/对话框时"灰一下"就是这个缺陷）。
+- **浮层本体**：`layer-in`（上浮 6px + 0.99 缩放）进入、`layer-out` 退出；Tooltip/Popover/DropdownMenu 使用小位移版 `ui-float-in`。
+- **pressed 反馈**：使用 Token 背景（普通 `--bg-selected`，primary `--accent-pressed`），不使用 `filter: brightness()`；filter 会同时压暗图标与文字，观感是浑浊的灰色闪烁。
+- 原生 `<dialog>` 的 `::backdrop` 在 `[open]` 时同样使用 `scrim-in`。
+- **不引入动画库**（framer-motion、GSAP 等）：CSS Token + Radix Presence 已能表达现有动效；引入第二套动效系统会增加包体与维护面，违反 §2.2「克制一致」。
+- 门禁：`lib/motion-contract.test.mjs`。
 - 全局 `prefers-reduced-motion: reduce` 兜底把所有 `transition`/`animation` 压缩为瞬时状态变化；组件不得依赖动画时长维持逻辑正确（不要监听 `transitionend` 驱动卸载）。
 
 ## 9. 内容与术语
@@ -640,3 +649,41 @@ skill 内容与本文冲突时以本文为准；skill 中的项目映射（token
 参考模式：**Linear** 的单一列表 + 分组标题（一个对象一个列表入口，分组只是视图）；**GitHub** 的类型徽标 + 状态色（徽标标类别、状态色标运行态，二者不混用）。任务面板（`LongAgentTasksPanel`）按此实现：badge 标 task/duty/exec/work 类别，状态列标 accepted/running/failed 等运行态。
 
 选择控件唯一入口原则：任何"选择 X"的操作在整个产品中只有一个持久控件；临时上下文变化通过该控件的联动表达，不新增平行控件。Vercel 门禁 skill（§18.5）已在 `frontend/.agents/skills/`，生成与评审 UI 时按其清单自查本节。
+
+## 20. 组件复用与抽象门槛（2026-09-29）
+
+目的：新页面组合既有原语，而不是复制一套按钮、浮层、表单或日期导航。本节是 §11.2「不重复模式应收敛」的可执行版本。
+
+### 20.1 唯一原语
+
+| 需求 | 唯一原语 | 位置 |
+|---|---|---|
+| 动作按钮 | `Button`（primary/secondary/ghost/danger，`data-ui-button`） | `components/ui/Button.tsx` |
+| 页面标题与返回 | `PageHeader` | `components/ui/PageHeader.tsx` |
+| 模态浮层 | `SurfaceDialog`（Radix Dialog，宽/窄两档） | `components/SurfaceDialog.tsx` |
+| 破坏性确认 | `ConfirmationProvider` + `useConfirmation`（Radix AlertDialog） | `components/ui/Confirmation.tsx` |
+| 锚定提示 | `Hint`（Radix Tooltip） | `components/ui/Tooltip.tsx` |
+| 锚定浮层 / 菜单 | `Popover` / `DropdownMenu` | `components/ui/` |
+| 非阻断反馈 | sonner（`FeedbackToaster`） | `components/ui/FeedbackToaster.tsx` |
+| 导航快捷入口 | `CommandPalette`（⌘K） | `components/ui/CommandPalette.tsx` |
+| 代码高亮 | `SourceCode`（Shiki，唯一入口） | `components/ui/SourceCode.tsx` |
+| 开关 / 选择 | `ConfigurationToggle` / `SearchSelect` | `components/` |
+
+- `data-ui-button` 只能由 `components/ui/Button.tsx` 与其 `ui.module.css` 声明；页面不得自造按钮本体样式，也不得复制 `SurfaceDialog` 的焦点/Escape/关闭实现。
+- 新配置或编辑界面一律使用 `SurfaceDialog`。`role="dialog"` 的手写浮层只允许出现在 `lib/motion-contract.test.mjs` 记录的迁移清单里；向该清单新增一项，等于显式承认新增了一处分歧，必须在评审中说明理由和收敛计划。
+
+### 20.2 何时才抽象
+
+- 至少两个真实消费者，且合同稳定；「看起来相似」不算消费者。
+- 抽象产物放到职责最窄的位置：纯逻辑进 `lib/`、状态编排进 `hooks/`、视觉原语进 `components/ui/`。
+- 一次性或单页面需求先局部实现，不先造通用组件。不为抽象而抽象。
+
+### 20.3 何时必须收敛
+
+- 同一交互出现第三种实现方式（§18.4 判定方法）。
+- 同一硬编码值第三次出现，或同一布局数值在多个文件各写一遍。
+- 同一动作在两个入口产生不同的结果、反馈或恢复路径。
+
+### 20.4 门禁
+
+`lib/motion-contract.test.mjs` 守住：动效时长与缓动必须来自 Token、pressed 不使用 `filter: brightness()`、每个遮罩必须淡入（Radix 还需淡出）、按钮与模态保持唯一原语、手写模态清单不得无声扩张。

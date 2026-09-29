@@ -34,3 +34,6 @@
  .thinkingRow button { padding:8px 10px; }
  .navItem { min-height:48px; }
 }
+
+/* Nested picker scrim: same fade and token as every other dimming layer (UI/UX 8.2). */
+.pickerScrim { position: fixed; inset: 0; z-index: 1110; display: flex; align-items: center; justify-content: center; background: var(--overlay); animation: scrim-in var(--duration-overlay) var(--ease-out) both; }

@@ -211,7 +211,7 @@ body {
   inset: 0;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 180ms ease-out;
+  transition: opacity var(--duration-panel) var(--ease-standard);
 }
 
 .extension-widget-update-pulse::before {
@@ -237,7 +237,7 @@ body {
 
 button.extension-widget-trigger {
   cursor: pointer;
-  transition: background var(--duration-fast), color var(--duration-fast);
+  transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
 }
 
 button.extension-widget-trigger:hover,
@@ -735,7 +735,7 @@ pre, code {
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
   cursor: pointer;
   touch-action: manipulation;
-  transition: background-color var(--duration-fast), color var(--duration-fast);
+  transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
 }
 
 .image-preview-close:hover {
@@ -1042,7 +1042,7 @@ pre, code {
   border-radius: 7px;
   background: var(--bg-panel);
   margin: 0 auto;
-  transition: width var(--duration-panel) ease;
+  transition: width var(--duration-panel) var(--ease-standard);
 }
 .mermaid-zoom-canvas svg {
   display: block;

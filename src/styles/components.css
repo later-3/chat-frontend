@@ -69,7 +69,7 @@
 }
 
 .file-viewer-mode-button:hover {
-  filter: brightness(1.08);
+  background: var(--bg-hover);
 }
 
 .file-viewer-icon-button {
@@ -426,7 +426,7 @@ span.token.table {
   .sidebar-container {
     position: relative;
     overflow: hidden;
-    transition: width var(--duration-panel) ease, min-width var(--duration-panel) ease;
+    transition: width var(--duration-panel) var(--ease-standard), min-width var(--duration-panel) var(--ease-standard);
   }
   .sidebar-container.sidebar-open {
     width: var(--sidebar-width, 260px);
@@ -452,7 +452,7 @@ span.token.table {
 @media (min-width: 960px) {
   .right-panel-container {
     overflow: hidden;
-    transition: width var(--duration-panel) ease, min-width var(--duration-panel) ease;
+    transition: width var(--duration-panel) var(--ease-standard), min-width var(--duration-panel) var(--ease-standard);
     flex-shrink: 0;
   }
   .right-panel-container.right-panel-open {
@@ -488,7 +488,7 @@ span.token.table {
     background: rgba(0, 0, 0, 0.24);
     opacity: 0;
     pointer-events: none;
-    transition: opacity var(--duration-panel) ease;
+    transition: opacity var(--duration-panel) var(--ease-standard);
   }
   .right-panel-overlay-backdrop.is-open {
     opacity: 1;
@@ -504,7 +504,7 @@ span.token.table {
     min-width: 300px;
     overflow: hidden;
     box-shadow: -12px 0 32px rgba(0, 0, 0, 0.18);
-    transition: transform var(--duration-panel) ease;
+    transition: transform var(--duration-panel) var(--ease-standard);
   }
   .right-panel-container.right-panel-open {
     transform: translateX(0);
@@ -533,7 +533,7 @@ span.token.table {
     right: var(--safe-area-right);
     width: auto;
     max-width: none;
-    transition: transform var(--duration-panel) ease, box-shadow var(--duration-panel) ease;
+    transition: transform var(--duration-panel) var(--ease-standard), box-shadow var(--duration-panel) var(--ease-standard);
     padding-top: 0;
     padding-bottom: var(--safe-area-bottom);
     z-index: 200;
@@ -555,7 +555,7 @@ span.token.table {
     bottom: auto;
     height: var(--visual-viewport-height, 100dvh);
     overflow: hidden;
-    transition: transform var(--duration-panel) ease, box-shadow var(--duration-panel) ease;
+    transition: transform var(--duration-panel) var(--ease-standard), box-shadow var(--duration-panel) var(--ease-standard);
     flex-shrink: 0;
     z-index: 250;
     width: auto !important;
@@ -999,6 +999,7 @@ span.token.table {
     position: fixed;
     inset: 0;
     z-index: 790;
+    animation: scrim-in var(--duration-overlay) var(--ease-out) both;
     padding: 0;
     background: rgba(15, 23, 42, 0.34);
     border: 0;

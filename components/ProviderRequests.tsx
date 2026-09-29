@@ -471,7 +471,7 @@ const headerBtnStyle: React.CSSProperties = {
   borderRadius: 5,
   color: "var(--text-muted)",
   cursor: "pointer",
-  transition: "background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast)",
+  transition: "background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard)",
 };
 
 export function ProviderRequests({ cwd, onClose }: { cwd: string; onClose: () => void }) {

@@ -684,7 +684,7 @@ export function ChatMinimap({
                 background: isActive ? "rgba(128,128,128,0.42)" : "rgba(128,128,128,0.16)",
                 border: `1.5px solid ${isActive ? "rgba(128,128,128,0.95)" : "rgba(128,128,128,0.58)"}`,
                 boxShadow: isActive ? "0 0 0 2px var(--bg-panel)" : "none",
-                transition: "transform 0.1s, background 0.1s",
+                transition: "transform var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard)",
                 transform: isNearest ? "scale(1.25)" : "scale(1)",
               }}
             />

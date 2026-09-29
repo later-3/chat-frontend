@@ -25,7 +25,7 @@
   padding: 0;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 68%, transparent);
   background: transparent;
-  transition: background var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
+  transition: background var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard);
 }
 
 .turn[data-located="true"] {
@@ -79,7 +79,7 @@
   text-align: left;
   cursor: pointer;
   overflow: hidden;
-  transition: background var(--duration-fast) ease;
+  transition: background var(--duration-fast) var(--ease-standard);
 }
 
 .userText {
@@ -125,7 +125,7 @@
   line-height: 26px;
   text-align: center;
   cursor: pointer;
-  transition: color var(--duration-fast) ease, background var(--duration-fast) ease;
+  transition: color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard);
 }
 
 .assistantJump:hover {
@@ -167,7 +167,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
-  transition: background var(--duration-fast) ease, color var(--duration-fast) ease;
+  transition: background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard);
 }
 
 .heading:hover,

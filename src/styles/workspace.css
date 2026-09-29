@@ -3,7 +3,7 @@
 .workspace-stage { display:flex; flex:1; flex-direction:column; min-width:0; min-height:0; }
 .workspace-rail { width:64px; flex:none; display:flex; flex-direction:column; align-items:center; gap:8px; padding:16px 6px; background:var(--bg-panel); border-right:1px solid var(--border); z-index:260; }
 .workspace-brand { color:var(--accent); height:40px; display:grid; place-items:center; margin-bottom:20px; }
-.workspace-nav-item { display:flex; width:52px; min-height:56px; gap:4px; flex-direction:column; align-items:center; justify-content:center; color:var(--text-muted); border:0; border-radius:10px; cursor:pointer; background:transparent; transition:background var(--duration-fast),color var(--duration-fast); }
+.workspace-nav-item { display:flex; width:52px; min-height:56px; gap:4px; flex-direction:column; align-items:center; justify-content:center; color:var(--text-muted); border:0; border-radius:10px; cursor:pointer; background:transparent; transition:background var(--duration-fast) var(--ease-standard),color var(--duration-fast) var(--ease-standard); }
 .workspace-nav-item span { font-size:11px; line-height:16px; }
 .workspace-nav-item:hover { background:var(--bg-hover); color:var(--text); }
 .workspace-nav-item.is-active { color:var(--accent); background:var(--bg-selected); }
@@ -55,7 +55,10 @@
 .workspace-settings-group small { display:block; color:var(--text-muted); font-size:12px; line-height:18px; margin-top:4px; }
 .workspace-app button:focus-visible, .workspace-app input:focus-visible, .workspace-app textarea:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 .workspace-app button { -webkit-tap-highlight-color:transparent; }
-.workspace-app button:active:not(:disabled) { filter:brightness(.96); }
+/* Pressed state is a token background, not a brightness filter: filtering also
+   darkens the icon and label, which reads as a muddy grey flash on the rail. */
+.workspace-app button:active:not(:disabled) { background-color:var(--bg-selected); }
+.workspace-app button[data-ui-button=primary]:active:not(:disabled) { background-color:var(--accent-pressed); }
 .workspace-app .session-info-popover { animation:none; }
 .workspace-app .session-info-popover::after { display:none; }
 .workspace-medium .sidebar-container { position:absolute !important; inset:0 auto 0 0; width:280px; height:auto; box-shadow:8px 0 24px #0002; }
@@ -125,9 +128,10 @@
 .workspace-navigation-error { padding:24px; color:var(--text-muted); line-height:1.6; }
 
 .configuration-dialog { font-family:var(--font-sans); line-height:1.5; color:var(--text); }
-.configuration-dialog button { transition:background-color var(--duration-fast) ease, color var(--duration-fast) ease; }
+.configuration-dialog button { transition:background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard); }
 .configuration-dialog :is(button,input,select,textarea):focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-.configuration-dialog button:active:not(:disabled) { filter:brightness(.96); }
+.configuration-dialog button:active:not(:disabled) { background-color:var(--bg-selected); }
+.configuration-dialog button[data-ui-button=primary]:active:not(:disabled) { background-color:var(--accent-pressed); }
 @media (max-width:768px), (pointer:coarse) {
   .configuration-dialog :is(input,select,textarea) { font-size:16px !important; }
   .configuration-dialog button { min-height:44px; min-width:44px; }
@@ -194,7 +198,7 @@
 .configuration-dialog button.configuration-toggle:hover:not(:disabled) { background:var(--bg-hover); }
 .configuration-toggle-track { position:relative; display:block; width:40px; height:22px; border-radius:11px; background:var(--border-control); }
 .configuration-toggle[aria-checked="true"] .configuration-toggle-track { background:var(--accent); }
-.configuration-toggle-track > span { position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:var(--bg); transition:transform var(--duration-fast) ease; }
+.configuration-toggle-track > span { position:absolute; top:3px; left:3px; width:16px; height:16px; border-radius:50%; background:var(--bg); transition:transform var(--duration-fast) var(--ease-standard); }
 .configuration-toggle[aria-checked="true"] .configuration-toggle-track > span { transform:translateX(18px); }
 @media (prefers-reduced-motion:reduce) { .configuration-toggle-track > span { transition:none; } }
 

@@ -318,7 +318,7 @@ function TreeNode({
           <svg
             width="10" height="10" viewBox="0 0 10 10" fill="none"
             stroke="var(--text-dim)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-            style={{ flexShrink: 0, transform: open ? "rotate(90deg)" : "none", transition: "transform 0.1s" }}
+            style={{ flexShrink: 0, transform: open ? "rotate(90deg)" : "none", transition: "transform var(--duration-fast) var(--ease-standard)" }}
           >
             <polyline points="3 2 7 5 3 8" />
           </svg>

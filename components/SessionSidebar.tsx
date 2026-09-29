@@ -85,7 +85,7 @@ function ToolbarIconButton({
         borderRadius: 5,
         flexShrink: 0,
         opacity: disabled ? 0.6 : 1,
-        transition: "color 0.3s, background 0.3s",
+        transition: "color var(--duration-panel) var(--ease-standard), background var(--duration-panel) var(--ease-standard)",
       }}
       onMouseEnter={enter}
       onMouseLeave={leave}
@@ -972,7 +972,7 @@ export function SessionSidebar({ contentPanel, onContentPanelChange: setContentP
               fontSize: isMobile ? 14 : 12,
               color: "var(--text)",
               textAlign: "left",
-              transition: "border-color 0.15s, background 0.15s",
+              transition: "border-color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard)",
             }}
           >
             {selectedCwd ? (
@@ -1315,7 +1315,7 @@ export function SessionSidebar({ contentPanel, onContentPanelChange: setContentP
                                 background: "none", border: "none",
                                 color: "var(--text-dim)", cursor: "pointer",
                                 borderRadius: 5, flexShrink: 0,
-                                transition: "color var(--duration-fast), background var(--duration-fast)",
+                                transition: "color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard)",
                               }}
                               onMouseEnter={(e) => { e.currentTarget.style.color = "var(--danger)"; e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
                               onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
@@ -1673,7 +1673,7 @@ export function SessionSidebar({ contentPanel, onContentPanelChange: setContentP
               <svg
                 width="9" height="9" viewBox="0 0 10 10" fill="none"
                 stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-                style={{ transform: explorerOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }}
+                style={{ transform: explorerOpen ? "rotate(90deg)" : "none", transition: "transform var(--duration-fast) var(--ease-standard)", flexShrink: 0 }}
               >
                 <polyline points="3 2 7 5 3 8" />
               </svg>
@@ -2153,7 +2153,7 @@ function SessionItem({
         borderLeft: confirmRemove
           ? "2px solid var(--accent)"
           : isSelected ? "2px solid var(--accent)" : "2px solid transparent",
-        transition: "background 0.1s",
+        transition: "background var(--duration-fast) var(--ease-standard)",
         opacity: removing ? 0.5 : 1,
         gap: 6,
         overflow: "hidden",
@@ -2308,7 +2308,7 @@ function SessionItem({
                 background: "none", border: "none",
                 color: "var(--text-dim)", cursor: "pointer",
                 transform: collapsed ? "rotate(-90deg)" : "none",
-                transition: "transform 0.15s",
+                transition: "transform var(--duration-fast) var(--ease-standard)",
               }}
             >
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -2411,7 +2411,7 @@ function SessionItem({
                   background: "var(--bg-hover)", border: "1px solid var(--border)",
                   borderRadius: 7, color: "var(--text-muted)",
                   cursor: "pointer", flexShrink: 0,
-                  transition: "background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast)",
+                  transition: "background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard)",
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = "var(--bg-selected)";
@@ -2437,7 +2437,7 @@ function SessionItem({
                   background: "var(--bg-hover)", border: "1px solid var(--border)",
                   borderRadius: 7, color: "var(--text-muted)",
                   cursor: "pointer", flexShrink: 0,
-                  transition: "background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast)",
+                  transition: "background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard)",
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = "color-mix(in srgb, var(--accent) 10%, transparent)";

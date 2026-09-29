@@ -1150,7 +1150,7 @@ function ModelDetail({
             strokeLinecap="round"
             strokeLinejoin="round"
             aria-hidden="true"
-            style={{ color: "var(--text-dim)", transform: advancedOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s ease" }}
+            style={{ color: "var(--text-dim)", transform: advancedOpen ? "rotate(180deg)" : "none", transition: "transform var(--duration-fast) var(--ease-standard)" }}
           >
             <polyline points="6 9 12 15 18 9" />
           </svg>
@@ -1680,7 +1680,7 @@ function AddProviderPicker({
     cursor: "pointer",
     minWidth: 0,
     textAlign: "left",
-    transition: "border-color var(--duration-fast), background var(--duration-fast)",
+    transition: "border-color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard)",
     width: "100%",
   };
 
@@ -1689,7 +1689,7 @@ function AddProviderPicker({
   // shared SurfaceDialog overlay (z 1100) + content (z 1101).
   return (
     <div ref={pickerRef} role="dialog" aria-modal="true" aria-label={t("interface.provider")} tabIndex={-1}
-      style={{ position: "fixed", inset: 0, zIndex: 1110, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
+      className={styles.pickerScrim}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div style={{ width: 820, maxWidth: "calc(100vw - 32px)", maxHeight: "min(72vh, calc(100vh - 32px))", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "var(--radius-dialog)", display: "flex", flexDirection: "column", boxShadow: "var(--shadow-dialog)", overflow: "hidden" }}>
@@ -2165,12 +2165,12 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
             color: savedOk ? "var(--success)" : saving ? "var(--text-muted)" : "var(--on-accent)",
             cursor: (saving || savedOk) ? "default" : "pointer", fontSize: 13, fontWeight: 600,
             display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-            transition: "background-color 0.2s ease, color 0.2s ease",
+            transition: "background-color var(--duration-panel) var(--ease-standard), color var(--duration-panel) var(--ease-standard)",
             animation: savedOk ? "saved-pop 0.45s ease" : undefined,
           }}>
             {savedOk && (
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-                style={{ strokeDasharray: 18, animation: "saved-check-draw 0.35s ease forwards", flexShrink: 0 }}>
+                style={{ strokeDasharray: 18, animation: "saved-check-draw 0.35s var(--ease-standard) forwards", flexShrink: 0 }}>
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             )}

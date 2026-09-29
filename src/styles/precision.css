@@ -261,19 +261,39 @@ pre.shiki code { display: block; counter-reset: source-line; }
 }
 
 /* ---------------------------------------------------------------------------
-   Visual-refresh preview (P5 prototype, 2026-09-29): gated by
-   `html[data-visual-refresh="aggressive"]`. Conservative (default) keeps
-   the shipped density + rhythm; aggressive borrows the reference-site
-   reading treatment (measure, line-height, surface layering) inside the
-   existing warm-gray + accent tokens. No new palette, no new radius scale.
-   --------------------------------------------------------------------------- */
-/* ---------------------------------------------------------------------------
    Art direction (2026-09-29, v2.3): quiet gallery-grade tool surfaces.
    Inside the existing warm-gray + accent tokens: enforce measure + rhythm,
    one hairline layering language, token radii + two shadow depths, motion
    tokens only. No new palette, no new radius scale, no decorative gradients.
    Reference: littleplains/aside/resurf/daybridge — precision, not effects.
    --------------------------------------------------------------------------- */
+/* --- Scrims and layers (UI/UX §8.2) --------------------------------------
+   Every dimming layer fades with one timing so opening the rail gear, a
+   dialog, a sheet or the command palette reads the same instead of a hard
+   grey flash. Radix exposes data-state on its overlays, so both directions
+   animate; scrims without Radix animate on entry. */
+@keyframes scrim-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes scrim-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes layer-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.99); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes layer-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(4px) scale(0.995); }
+}
+.surface-overlay,
+.command-palette-overlay {
+  animation: scrim-in var(--duration-overlay) var(--ease-out) both;
+}
+.surface-overlay[data-state="closed"] {
+  animation: scrim-out var(--duration-panel) var(--ease-standard) forwards;
+}
+.surface-dialog[data-ui-dialog][data-state="closed"],
+.command-palette[data-state="closed"] {
+  animation: layer-out var(--duration-panel) var(--ease-standard) forwards;
+}
+
 :root {
   --measure-prose: 42rem;
   --rhythm-body: 1.7;
@@ -292,11 +312,7 @@ pre.shiki code { display: block; counter-reset: source-line; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .surface-dialog[data-ui-dialog] {
-    animation: surface-dialog-in var(--duration-overlay) var(--ease-out);
-  }
-  @keyframes surface-dialog-in {
-    from { opacity: 0; transform: translateY(6px) scale(0.99); }
-    to { opacity: 1; transform: none; }
+    animation: layer-in var(--duration-overlay) var(--ease-out) both;
   }
 }
 

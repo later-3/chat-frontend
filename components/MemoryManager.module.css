@@ -332,6 +332,7 @@
   position: fixed;
   inset: 0;
   z-index: 1110;
+  animation: scrim-in var(--duration-overlay) var(--ease-out) both;
   display: flex;
   align-items: center;
   justify-content: center;
