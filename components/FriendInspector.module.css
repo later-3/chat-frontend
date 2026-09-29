@@ -1,29 +1,32 @@
-/* Vertical day/task/archive area for one Friend. Identity stays in the rail,
-   so this column starts with the section that answers a question. */
-.panel { display: flex; flex-direction: column; gap: 16px; padding: 14px 16px 18px; color: var(--text); font-size: 13px; min-width: 0; }
+/* "Tasks & archive" column: day blocks, each with sessions then tasks.
+   Identity lives in the rail, so nothing here repeats avatar/name/简介. */
+.panel { display: flex; flex-direction: column; gap: 14px; padding: 14px 16px 18px; color: var(--text); font-size: 13px; min-width: 0; }
 .panelHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .panelHeader h2 { margin: 0; font-size: 14px; font-weight: 600; }
 .panelHeader p { margin: 2px 0 0; font-size: 12px; color: var(--text-muted); }
-.section { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.section h3 { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--text-dim); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
-.section > button { align-self: flex-start; }
+.dayBlock { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.dayHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 24px; }
+.dayHeader h3 { display: flex; align-items: baseline; gap: 8px; margin: 0; font-size: 13px; font-weight: 600; }
+.dayHeader h3 em { font-style: normal; font-size: 12px; font-weight: 400; color: var(--text-muted); }
+.group { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.groupLabel { display: flex; align-items: center; gap: 8px; color: var(--text-dim); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 .count { font-size: 11px; font-weight: 600; color: var(--accent); background: var(--bg-selected); border-radius: 999px; padding: 1px 8px; letter-spacing: 0; text-transform: none; }
 .rows { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius-panel); overflow: hidden; }
-.row, .taskRow { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 8px 12px; text-align: left; border: 0; border-bottom: 1px solid var(--border); background: var(--bg); color: var(--text); }
-.row:last-child, .taskRow:last-child { border-bottom: 0; }
-.row { cursor: pointer; }
+.row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 46px; padding: 8px 12px; text-align: left; border: 0; border-bottom: 1px solid var(--border); background: var(--bg); color: var(--text); cursor: pointer; }
+.row:last-child { border-bottom: 0; }
 .row:hover:not(:disabled) { background: var(--bg-hover); }
 .row[aria-current="page"] { background: var(--bg-selected); }
 .row:disabled { opacity: 0.55; cursor: default; }
-.rowPrimary { background: var(--bg-panel); }
+.taskRow { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.taskRow:last-child { border-bottom: 0; }
 .rowText { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-.rowText strong { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.rowText strong { font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
 .rowText small { color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
-.today { font-style: normal; font-size: 11px; font-weight: 600; color: var(--accent); background: var(--bg-selected); border-radius: 999px; padding: 1px 7px; }
 .badge { flex: 0 0 auto; min-width: 44px; text-align: center; font-size: 11px; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-muted); background: var(--bg-panel); }
 .badge[data-kind="duty"] { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
 .badge[data-kind="exec"], .badge[data-kind="work"] { color: var(--text-dim); }
-.empty { margin: 0; font-size: 12px; color: var(--text-muted); }
+.empty { margin: 0; padding: 10px 12px; font-size: 12px; color: var(--text-muted); }
+.panelActions { display: flex; flex-wrap: wrap; gap: 8px; }
 .pending { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--warning); border-radius: var(--radius-control); background: var(--warning-bg); }
 .pending p { margin: 0; font-size: 12px; color: var(--warning); }
 .pending button { align-self: flex-start; }
@@ -33,5 +36,5 @@
 .panel :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
   .row, .taskRow { min-height: 52px; }
-  .section > button { align-self: stretch; }
+  .panelActions > button { flex: 1 1 100%; }
 }

@@ -256,7 +256,7 @@ Friend 发送只等耐久 202 后清理待确认输入，随后按引用观察�
 
 后台工作与任务展示分两处：`LongAgentTasksPanel`（从 `FriendInspector` 的任务聚合行打开）是任务/职责/后台执行的统一面板，`lib/friend-tasks.ts` 的 `buildFriendTaskRows` 为纯视图模型（plan/duty/executions 三组，occurrence 自带 work 不再重复为独立行，最新在前）；当天面板只投影会话导航，不列 works，也不显示日期标题行（日期由会话标题承载）。栏下已删除，未确认提交恢复搬进面板。
 
-v2.5 任务与归档区域（`FriendInspector`）：顶栏一个按用途命名的图标按钮（`data-friend-panel-toggle`，“任务与归档”）展开一个**竖向下拉列**（`data-friend-panel`），三节自上而下：当天（`data-friend-day` + `data-day-session`）、任务（复用 `buildFriendTaskRows`，最多 5 行，`data-friend-tasks-open` 进 `LongAgentTasksPanel`）、日期归档（`data-friend-archive-day`，只列真实产生过消息的日期，点击按现有 `/start` 幂等打开该日；`data-friend-calendar-open` 进完整日历）。面板不重复左侧已有的头像/名称/简介，也不再自带日期条；未确认提交恢复保留（`data-friend-work-pending` / `data-friend-work-confirm`）。侧栏 Agent 行不提供当天区或行内图标。
+v2.6 任务与归档区域（`FriendInspector`）：顶栏按用途命名的图标按钮（`data-friend-panel-toggle`）展开竖向下拉列（`data-friend-panel`）。列为**按日分块**（`data-friend-day`）：今天是第一块且不可移除，块内先“会话”（`data-day-session`，另有 `data-friend-enter-day` 打开该日日常会话）再“任务”（复用 `buildFriendTaskRows`，按 任务/职责/执行 徽标显示，`data-friend-day-remove` 移除已加入的日期）。过往日期用区域内 `data-friend-add-day` 打开悬浮日历的**浏览模式**（`FriendCalendar` 的 `onPickDate`：选中日期只上报、不导航），选中才加入区域，最多 7 天，持久于 `lib/friend-archive-memory.ts`（只存日期，损坏即丢弃）。任务全量仍进 `LongAgentTasksPanel`（`data-friend-tasks-open`）。未确认提交恢复保留（`data-friend-work-pending` / `data-friend-work-confirm`）。
 
 资源对话框的重复排版使用 `src/styles/components.css` 的 `ui-*` 共享布局类（见 UI/UX §20.4）；这些类只承担布局，颜色与表面仍走 Token 与原语。
 

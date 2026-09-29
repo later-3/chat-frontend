@@ -10,13 +10,15 @@ import { startProjectLongAgent } from "@/lib/long-agents-browser";
 import { SurfaceDialog } from "./SurfaceDialog";
 import styles from "./FriendCalendar.module.css";
 
-export function FriendCalendar({ agentId, name, selectedSessionId, selectedDate, onOpenSession, onClose }: {
+export function FriendCalendar({ agentId, name, selectedSessionId, selectedDate, onOpenSession, onClose, onPickDate }: {
   agentId: string;
   name: string;
   selectedSessionId: string | null;
   selectedDate: string | null;
   onOpenSession: (sessionId: string, projectId: string, date?: string) => void | Promise<void>;
   onClose: () => void;
+  /** Browse-only mode: choosing a date reports it instead of switching the chat. */
+  onPickDate?: (date: string) => void;
 }) {
   const { t, locale } = useI18n();
   const [state, setState] = useState<FriendDailyState | null>(null);
@@ -50,6 +52,7 @@ export function FriendCalendar({ agentId, name, selectedSessionId, selectedDate,
   const busy = loading || opening;
   const openDate = (date: string) => {
     if (busy) return;
+    if (onPickDate) { onPickDate(date); return; }
     setOpening(true); setError(null);
     // Date opens the existing workspace at that day's daily Session; its sidebar shows the day's
     // work and other Sessions. /start is idempotent and does not run a model or schedule anything.
@@ -63,7 +66,8 @@ export function FriendCalendar({ agentId, name, selectedSessionId, selectedDate,
   const label = (date: string) => `${date} · ${t(sessions.has(date) ? "friendCalendar.hasSession" : "friendCalendar.noSession")}`;
   const count = loading ? "—" : String(dates.filter(date => sessions.has(date)).length);
   // Keep the reader visible when a narrow layout hides the sidebar that opened it.
-  return createPortal(<SurfaceDialog title={t("friendCalendar.title", { name })} description={t("friendCalendar.hint")} onClose={onClose}>
+  return createPortal(<SurfaceDialog title={t("friendCalendar.title", { name })}
+    description={onPickDate ? t("friendCalendar.pickHint") : t("friendCalendar.hint")} onClose={onClose}>
     <div className={styles.body} data-friend-calendar={agentId} aria-busy={busy}>
       <div className={styles.toolbar}>
         <strong>{t("friendCalendar.count", { count })}</strong>
