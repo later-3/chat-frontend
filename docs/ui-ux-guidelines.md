@@ -1,7 +1,7 @@
 # Chat Frontend UI/UX 规范
 
 - 状态：规范基线
-- 版本：3.0
+- 版本：3.1
 - 适用项目：Chat Pi Web Frontend
 - 最后校正：2026-09-29
 -  art 方向：安静画廊级工具表面（littleplains / aside / resurf / daybridge 取精度不取装饰）；暖灰 + 墨字 + 克制紫品牌不变，深浅双主题同时成立
@@ -707,6 +707,7 @@ skill 内容与本文冲突时以本文为准；skill 中的项目映射（token
 
 - 展开/收起用 **class**（`.is-open` / `.is-closed`）而不是条件渲染，否则没有进出过渡；关闭态宽度 0、无边框，保持挂载但 `inert` + `aria-hidden`。
 - 宽度用 `--dock-width`，过渡固定 `--duration-panel` + `--ease-standard`；内层内容固定同宽，避免开合时重排。
+- **`--dock-width` 必须是绝对长度**（px/clamp），不能写百分比：原语会把它同时用在面板和内层上，百分比会相对面板二次解析，把内容压成一栏（本轮任务与归档布局错乱就是这个原因）。窄屏用媒体查询换一个绝对值，不要用 `%`。
 - 拖动调整宽度时加 `.is-resizing` 关掉过渡。
 - Compact 下侧栏/资料/任务区域改为覆盖 + `transform` 过渡，语义与“项目资料”一致。
 

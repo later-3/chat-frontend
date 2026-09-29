@@ -208,9 +208,12 @@
    project files panel: same width transition, same fixed-width inner content. */
 .workspace-chat-row { position: relative; flex: 1; min-height: 0; display: flex; min-width: 0; }
 .workspace-chat-column { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; overflow: hidden; position: relative; }
-.workspace-friend-panel { --dock-width: min(360px, 42%); border-right: 1px solid var(--border); background: var(--bg-panel); }
+/* --dock-width must be an absolute length: the dock applies it to the panel AND to
+   its inner content, so a percentage would resolve again against the panel and
+   squeeze the content (151px in the original bug). */
+.workspace-friend-panel { --dock-width: 360px; border-right: 1px solid var(--border); background: var(--bg-panel); }
 .workspace-friend-inner { height: 100%; overflow-y: auto; overscroll-behavior: contain; }
-@media (max-width: 960px) { .workspace-friend-panel { --dock-width: min(320px, 100%); } }
+@media (max-width: 1100px) { .workspace-friend-panel { --dock-width: 320px; } }
 @media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
   /* Compact keeps one task surface: the region covers the conversation and
      slides in like the sidebar instead of squeezing the column. */

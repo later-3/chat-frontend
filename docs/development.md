@@ -336,6 +336,6 @@ v2.3 art 方向实现合同（规范语义见 [UI/UX 规范 §18.5](./ui-ux-guid
 - **动效 Token**：`--duration-fast`(120ms)/`--duration-panel`(200ms)/`--duration-overlay`(240ms)/`--ease-out`/`--ease-standard` 定义在 `src/styles/tokens.css` 的 `:root`；新增 `transition`/`animation` 必须引用 Token。全局 `prefers-reduced-motion: reduce` 兜底位于 `precision.css`，组件不得依赖动画时长维持逻辑正确。
 - **样式拆分**：`src/styles.css` 只是按声明顺序 `@import` 的聚合入口，实际规则分布在 `src/styles/` 的 `tokens.css`（`@theme`+Token）、`base.css`、`components.css`、`workspace.css`、`precision.css` 五层；拆分为纯机械移动，类名与级联顺序不变。测试源码断言统一使用 `lib/style-sources.ts` 的 `readStyleSheetSources()` 读取聚合源，新增样式源文件时必须同步该列表。
 
-侧面板统一使用 `.workspace-dock`（`src/styles/components.css`）：`.is-open`/`.is-closed` class 开合、`--dock-width` 决定宽度、`--duration-panel` + `--ease-standard` 过渡、内层固定宽避免重排、`.is-resizing` 关闭过渡；列表侧栏、项目资料、任务与归档三处共用，Compact 走覆盖 + `transform`。门禁在 `lib/motion-contract.test.mjs`。
+侧面板统一使用 `.workspace-dock`（`src/styles/components.css`）：`.is-open`/`.is-closed` class 开合、`--dock-width` 决定宽度、`--duration-panel` + `--ease-standard` 过渡、内层固定宽避免重排、`.is-resizing` 关闭过渡；列表侧栏、项目资料、任务与归档三处共用，Compact 走覆盖 + `transform`。`--dock-width` 必须是绝对长度：原语同时用它设定面板与内层宽度，百分比会二次解析并使内容被压窄。门禁在 `lib/motion-contract.test.mjs`。
 
 工具类中的 `ToolbarAction`（`components/ui/ToolbarAction.tsx`）是工具栏动作的唯一形态：默认仅图标，设置 → 外观 → “工具栏操作”可开启“图标与文字”（`chat:toolbar-labels`，`hooks/useToolbarLabels.ts`）。新增任何带文字的工具栏按钮必须走它，不得各自渲染文本标签。全局主导航（`WorkspaceNavigation`）与顶栏分支动作（`BranchNavigator` 的内联按钮）同样读取该偏好：默认仅图标 + `Hint`；Compact 保留可见名称，因为触控没有 hover。
