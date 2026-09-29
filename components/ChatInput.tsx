@@ -1832,11 +1832,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               belong inside the box, not in a strip below it (UI/UX §20.5). */}
           <div className={`composer-frame${bashMode ? " is-bash" : isStreaming && (onSteer || onFollowUp) ? " is-queued" : ""}`}>
           <div
+            data-chat-toolbar
             style={{
               minWidth: 0,
               display: "flex",
-              gap: 8,
+              gap: 6,
               alignItems: "center",
+              flexWrap: isMobile ? "wrap" : "nowrap",
             }}
           >
           <textarea
@@ -1890,6 +1892,23 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             }}
           />
 
+            <ToolbarAction
+              shape="frame"
+              label={attachImageTitle}
+              active={attachedImages.length > 0}
+              disabled={!imagesAllowed}
+              iconOnly
+              onClick={() => fileInputRef.current?.click()}
+              icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>}
+            />
+            {longAgentId === null && <ToolbarAction
+              shape="frame"
+              label={t("interface.configure.workflow.agents")}
+              iconOnly
+              onClick={() => setWorkflowAgentDialogOpen(true)}
+              disabled={isStreaming || !cwd || selectedWorkflow?.agents.length === 0}
+              icon={<IconAdjustmentsHorizontal size={16} stroke={1.8} />}
+            />}
           {isStreaming ? (
             <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, alignSelf: "flex-end" }}>
               {onSteer && (
@@ -1971,58 +1990,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               {t("chat.send")}
             </button>
           )}
-          </div>
-        </div>
-
-        {/* Bash mode status label */}
-        {bashMode && (
-          <div className="text-xs px-2 py-1" style={{ color: bashExcluded ? "var(--text-muted)" : "var(--accent)", marginTop: 4 }}>
-             {t("chat.shell")} · {bashExcluded ? t("chat.outputLocal") : t("chat.outputModel")}
-          </div>
-        )}
-
-        {/* Bottom bar: left | center (context) | right */}
-        <div data-chat-toolbar className={isMobile ? "mobile-composer-controls" : undefined} style={{
-          display: isMobile ? "grid" : "flex",
-          gridTemplateColumns: isMobile ? "minmax(0, 1fr) auto" : undefined,
-          alignItems: "center",
-          gap: 6,
-        }}>
-
-          {/* LEFT: input-level actions only (UI/UX §20.5): attach, workflow, its agents. */}
-          <div style={{ flex: isMobile ? "1 1 auto" : "0 0 auto", minWidth: 0, display: "flex", alignItems: "center", gap: 2 }}>
-            <ToolbarAction
-              shape="frame"
-              label={attachImageTitle}
-              active={attachedImages.length > 0}
-              disabled={!imagesAllowed}
-              iconOnly
-              onClick={() => fileInputRef.current?.click()}
-              icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>}
-            />
-            {/* Long Agent identity lives in the sidebar coworker panel; the composer never repeats it. */}
-            <WorkflowPicker
-              disabled={isStreaming}
-              onChange={(next) => onWorkflowChange(next as ChatWorkflowId)}
-              selected={selectedWorkflow}
-              summaries={visibleWorkflows}
-              value={workflowId}
-            />
-            {longAgentId === null && <ToolbarAction
-              shape="frame"
-              label={t("interface.configure.workflow.agents")}
-              iconOnly
-              onClick={() => setWorkflowAgentDialogOpen(true)}
-              disabled={isStreaming || !cwd || selectedWorkflow?.agents.length === 0}
-              icon={<IconAdjustmentsHorizontal size={16} stroke={1.8} />}
-            />}
-          </div>
-
-          {/* spacer */}
-          {!isMobile && <div style={{ flex: 1 }} />}
-
-          {/* RIGHT: thinking + tools preset + compact + sound (idle) | Stop + sound (streaming) */}
-            {isStreaming && (
+                      {isStreaming && (
               <button
                 data-chat-stop
                 className="composer-stop"
@@ -2049,8 +2017,25 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                  {stopLabel ?? t("chat.stop")}
               </button>
             )}
-
+            {/* Long Agent identity lives in the sidebar coworker panel; the composer never repeats it. */}
+            <WorkflowPicker
+              disabled={isStreaming}
+              onChange={(next) => onWorkflowChange(next as ChatWorkflowId)}
+              selected={selectedWorkflow}
+              summaries={visibleWorkflows}
+              value={workflowId}
+            />
+          </div>
         </div>
+
+        {/* Bash mode status label */}
+        {bashMode && (
+          <div className="text-xs px-2 py-1" style={{ color: bashExcluded ? "var(--text-muted)" : "var(--accent)", marginTop: 4 }}>
+             {t("chat.shell")} · {bashExcluded ? t("chat.outputLocal") : t("chat.outputModel")}
+          </div>
+        )}
+
+
         </div>
       </div>
       {workflowAgentDialogOpen && cwd && selectedWorkflow && selectedWorkflow.agents.length > 0 && (
