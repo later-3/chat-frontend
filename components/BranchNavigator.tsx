@@ -3,6 +3,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import type { BranchPreview, SessionEntry, SessionTreeNode } from "@/lib/types";
 import { useI18n } from "@/hooks/useI18n";
+import { ToolbarAction } from "./ui/ToolbarAction";
 
 interface Props {
   tree: SessionTreeNode[];
@@ -302,36 +303,19 @@ export function BranchNavigator({ tree, activeLeafId, onLeafChange, inline, cont
   );
 
   if (inline) {
+    // The mobile toolbar renders only the dropdown; the desktop toolbar uses the
+    // shared action so 分支 follows the same icon/label rule as every other action.
+    if (hideInlineButton) return null;
     return (
       <div style={{ height: "100%", display: "flex", alignItems: "stretch" }}>
-        <button
+        <ToolbarAction
           ref={btnRef}
-          onClick={() => onToggle ? onToggle() : setOpenInternal((v) => !v)}
-          style={{
-            display: hideInlineButton ? "none" : "flex",
-            alignItems: "center",
-            gap: 6,
-            height: "100%",
-            padding: "0 12px",
-            background: open ? "var(--bg-selected)" : "none",
-            border: "none",
-            borderTop: open ? "2px solid var(--accent)" : "2px solid transparent",
-            borderRight: "1px solid var(--border)",
-            cursor: "pointer",
-            color: open ? "var(--text)" : "var(--text-muted)",
-            fontSize: 12,
-            whiteSpace: "nowrap",
-            transition: "color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard)",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = open ? "var(--text)" : "var(--text-muted)"; }}
-           title={t("i18n.branches")}
-           aria-label={t("i18n.branches")}
-          aria-pressed={open}
-        >
-          {branchIcon}
-           {!compact && <span>{t("i18n.branches")}</span>}
-        </button>
+          label={t("i18n.branches")}
+          icon={branchIcon}
+          active={open}
+          data-branch-inline="true"
+          onClick={() => (onToggle ? onToggle() : setOpenInternal((v) => !v))}
+        />
         {open && dropdownPos && (
           <div style={{
             position: "fixed",
