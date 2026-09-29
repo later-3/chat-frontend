@@ -94,6 +94,14 @@
 @media (prefers-reduced-motion:reduce) { .workspace-app *, .workspace-app *::after { animation:none !important; transition:none !important; } }
 .workspace-app .markdown-body { font-size:16px; line-height:27px; }
 .workspace-app .markdown-body > p { max-width:800px; }
+/* Inside a conversation the prose follows the conversation width (UI/UX §20.7):
+   an assistant reply must widen with the column instead of stopping at the
+   static 42rem/800px default. Wide content mode lets it use the whole column,
+   and an explicit slider width still wins over that. */
+[data-workspace-chat] .markdown-body { max-width: var(--conversation-measure, var(--measure-prose, 42rem)); }
+[data-workspace-chat] .markdown-body > p { max-width: 100%; }
+.workspace-wide-content [data-workspace-chat] .markdown-body { max-width: 100%; }
+[data-workspace-chat][data-conversation-measure="manual"] .markdown-body { max-width: var(--conversation-measure); }
 .workspace-app textarea { font-size:16px !important; line-height:24px !important; }
 .workspace-app [data-workspace-tools] > div:first-child { background:var(--bg); }
 .workspace-app [data-workspace-tools] button { border:0 !important; font-size:12px !important; min-height:32px; border-radius:6px; }
