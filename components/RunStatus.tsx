@@ -33,7 +33,7 @@ export function RunStatus({ activity, busy }: { activity: RunActivity | null; bu
     : label;
   const Icon = warning ? IconAlertCircle : waitingHuman || phase === "cancelled" || phase === "detached" ? IconPlayerPause : busy ? IconLoader2 : IconCheck;
   return (
-    <div data-run-status data-round-phase={busy ? activity.roundPhase : undefined} style={{ maxWidth: 820, margin: "0 auto", padding: "8px 16px", fontSize: 13, color: "var(--text-muted)" }}>
+    <div data-run-status data-round-phase={busy ? activity.roundPhase : undefined} className="workspace-composer-column" style={{ paddingTop: 8, fontSize: 13, color: "var(--text-muted)" }}>
       {(busy || phase !== "completed") && <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <Icon size={16} aria-hidden className={busy && !waitingHuman && !warning ? "animate-spin motion-reduce:animate-none" : undefined} style={{ flexShrink: 0 }} />
         <span aria-hidden>{busy && activity.roundPhase === "remember" ? `${t("topics.rememberRunning")} · ${label}` : label}</span>

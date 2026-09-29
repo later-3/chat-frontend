@@ -1359,12 +1359,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
   return (
     <div
-      className={`${isMobile ? "mobile-textarea mobile-composer" : ""}`}
+      // Desktop: the shared measure column (--measure-prose + the 36px ChatMinimap
+      // gutter) so the input lines up with the messages and run status above it.
+      className={isMobile ? "mobile-textarea mobile-composer" : "workspace-composer-column"}
       style={{
         flexShrink: 0,
         background: "transparent",
-        padding: isMobile ? "0 12px 8px" : "0 16px 8px",
-        paddingRight: isMobile ? 12 : 52, // desktop: 16px base + 36px for ChatMinimap alignment
+        ...(isMobile ? { padding: "0 12px 8px" } : null),
       }}
     >
       {/* Hidden file input */}
@@ -1380,7 +1381,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           e.target.value = "";
         }}
       />
-      <div style={{ maxWidth: 880, margin: "0 auto" }}>
+      <div>
         {/* Queued steering / follow-up messages (delivered by pi on upcoming turns) */}
         {((queuedMessages?.steering.length ?? 0) + (queuedMessages?.followUp.length ?? 0)) > 0 && (
           <div style={{

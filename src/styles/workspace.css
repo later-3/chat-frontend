@@ -112,9 +112,22 @@
 .workspace-project-option > span { font-size:12px; color:var(--text-muted); }
 
 /* Standard prose and expanded technical content share the same composer alignment.
-   Art direction: gallery measure (42rem) with prose rhythm; wide mode stays opt-in. */
+   Art direction: gallery measure (42rem) with prose rhythm; wide mode stays opt-in.
+   Messages, run status and the composer are one column: same --measure-prose, same
+   centre. The 36px right gutter keeps room for the ChatMinimap, which takes layout
+   space out of the message area; without it the composer would centre 18px to the
+   right of the messages above it (a hardcoded width there was the reported bug). */
 .workspace-message-column { max-width: var(--measure-prose, 42rem); }
+.workspace-composer-column {
+  width: 100%;
+  max-width: calc(var(--measure-prose, 42rem) + 52px + 16px);
+  margin: 0 auto;
+  padding: 0 16px 8px;
+  padding-right: calc(16px + var(--composer-gutter, 36px));
+  box-sizing: border-box;
+}
 .workspace-wide-content .workspace-message-column { max-width: 100%; }
+.workspace-wide-content .workspace-composer-column { max-width: 100%; }
 .workspace-draft-warning { display:flex; align-items:center; gap:8px; padding:8px 12px; margin-bottom:8px; color:var(--warning); background:var(--warning-bg); border-radius:8px; font-size:13px; }
 .workspace-draft-warning > span { flex:1; min-width:0; }
 
@@ -132,6 +145,10 @@
 .configuration-dialog :is(button,input,select,textarea):focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 .configuration-dialog button:active:not(:disabled) { background-color:var(--bg-selected); }
 .configuration-dialog button[data-ui-button=primary]:active:not(:disabled) { background-color:var(--accent-pressed); }
+/* Compact has no ChatMinimap, so the 36px gutter and the desktop inset go away. */
+@media (max-width:768px), (hover:none) and (pointer:coarse) and (max-height:500px) {
+  .workspace-composer-column { --composer-gutter: 0px; padding-left: 12px; padding-right: 12px; }
+}
 @media (max-width:768px), (pointer:coarse) {
   .configuration-dialog :is(input,select,textarea) { font-size:16px !important; }
   .configuration-dialog button { min-height:44px; min-width:44px; }

@@ -1,7 +1,7 @@
 # Chat Frontend UI/UX 规范
 
 - 状态：规范基线
-- 版本：3.1
+- 版本：3.2
 - 适用项目：Chat Pi Web Frontend
 - 最后校正：2026-09-29
 -  art 方向：安静画廊级工具表面（littleplains / aside / resurf / daybridge 取精度不取装饰）；暖灰 + 墨字 + 克制紫品牌不变，深浅双主题同时成立
@@ -113,7 +113,7 @@ Chat 的默认风格是温暖、安静、有辨识度的个人工作台：暖灰
 |---|---:|---:|---:|---|
 | 元数据/辅助标签 | 11–12px | 12px | 1.35–1.45 | `--text-dim`，不承载关键信息 |
 | 控件/正文 | 13–14px | 14–16px | 1.4–1.55 | 表单控件 14px/1.5 |
-| 长文本/消息正文 | 14–16px | 16px | 1.6–1.7 | `.markdown-body`、`workspace-settings-content`、`catalog-detail` 共享 `--measure-prose:42rem`、`--rhythm-body:1.7`、`--tracking-body:0.002em`（`precision.css`） |
+| 长文本/消息正文 | 14–16px | 16px | 1.6–1.7 | `.markdown-body`、`workspace-settings-content`、`catalog-detail` 共享 `--measure-prose:42rem`、`--rhythm-body:1.7`、`--tracking-body:0.002em`（`precision.css`）；消息列、运行状态与输入框共用同一列 `workspace-message-column` / `workspace-composer-column` |
 | 区块标题 | 16–18px | 17–20px | 1.3–1.4 | `letter-spacing:-.02em` 仅限标题 |
 | 页面标题 | 20–24px | 20–24px | 1.2–1.35 | 同上 |
 
@@ -503,7 +503,7 @@ Agent 或开发者必须：
 | 选中背景 | `#EEEAF9` | `#363047` |
 | 控件边界 | `#898290` | `#817889` |
 
-全局 `--radius-control:10px`、`--radius-panel:14px`、`--radius-dialog:20px`（v2.3 起为唯一圆角体系；工具栏图标、按钮、输入、浮层全部对齐，禁止 5/6/8/9px 自创值）。列表可保留紧凑圆角；浮层使用共享阴影，普通内容不逐卡加投影。消息列 `workspace-message-column` 取 `var(--measure-prose,42rem)`，宽屏模式仍为显式 opt-in。普通表单输入 40px、按钮至少 36px；Compact 主要触控 44px，输入字 16px。隐藏 radio 不继承可见输入的最小高度。
+全局 `--radius-control:10px`、`--radius-panel:14px`、`--radius-dialog:20px`（v2.3 起为唯一圆角体系；工具栏图标、按钮、输入、浮层全部对齐，禁止 5/6/8/9px 自创值）。列表可保留紧凑圆角；浮层使用共享阴影，普通内容不逐卡加投影。消息列 `workspace-message-column`、运行状态与输入框 `workspace-composer-column` 共用同一个 `var(--measure-prose,42rem)` 和同一条居中轴（右侧 `--composer-gutter:36px` 为 ChatMinimap 预留，Compact 置 0）。只改一侧、或给输入框硬编码像素宽度，会让消息区与下方输入框出现两条宽度和中心都不同的边（本轮缺陷）。宽屏模式仍是显式 opt-in，打开时消息列与输入框一起放宽。普通表单输入 40px、按钮至少 36px；Compact 主要触控 44px，输入字 16px。隐藏 radio 不继承可见输入的最小高度。
 
 离线页、Manifest 启动画面与应用采用同一基础色。状态颜色使用已有 success/warning/danger 角色；diff、工具错误与成功反馈同样遵守明暗主题。品牌标记、用户头像、图片、代码高亮保留其内容语义，不能机械替换。
 
@@ -623,7 +623,7 @@ Friend 会话的顶栏用“任务与归档”动作取代会话名标题（后�
 
 | 需求 | 使用机制 | 禁止 |
 |---|---|---|
-| 阅读行长与节奏 | `--measure-prose:42rem`、`--rhythm-body:1.7`、`--tracking-body:0.002em`（`precision.css`）；`.markdown-body`、设置正文、目录详情共享；消息列 `workspace-message-column` 对齐同一量级 | 逐页自定行长、连续 1px 字号微调 |
+| 阅读行长与节奏 | `--measure-prose:42rem`、`--rhythm-body:1.7`、`--tracking-body:0.002em`（`precision.css`）；`.markdown-body`、设置正文、目录详情共享；消息列、运行状态与输入框（`workspace-composer-column`）严格共用同一 token、同一居中轴与同一 `--composer-gutter` | 逐页自定行长、连续 1px 字号微调、只给消息列或输入框单独设宽度、给输入框再写一个像素上限 |
 | 表面分层 | 常驻面板背景 + `--surface-fine` 细边；浮层才用 `--shadow-popover` / `--shadow-dialog` 两档 | 常驻内容逐卡加投影、自造单层阴影 |
 | 圆角 | `--radius-control:10px` / `--radius-panel:14px` / `--radius-dialog:20px` 唯一体系 | 5/6/8/9px 自创值 |
 | 语义色 | `--on-accent`、`--danger`、`--success`、`--warning`、`--accent`；t/s 徽标用 `--bg-selected` + `--text-muted` | `v2.3 §4.1` 所列硬编码色直写 |
