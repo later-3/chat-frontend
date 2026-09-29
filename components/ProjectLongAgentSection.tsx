@@ -1,13 +1,14 @@
 "use client";
 
 import { InterfaceFeedback } from "./InterfaceFeedback";
+import { Button } from "./ui/Button";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { IconPlus, IconRefresh, IconSettings } from "@tabler/icons-react";
+import { IconRefresh, IconSettings } from "@tabler/icons-react";
+import { Hint } from "./ui/Tooltip";
 import { useLongAgentPresence } from "@/hooks/useLongAgentPresence";
 import { useI18n } from "@/hooks/useI18n";
 import {
-  createChatLongAgent,
   enableChatLongAgents,
   fetchLongAgents,
   startProjectLongAgent,
@@ -53,10 +54,10 @@ export function ProjectLongAgentSection({
     return () => window.clearTimeout(timer);
   }, [openingAgentId]);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createDraft, setCreateDraft] = useState({ id: "", name: "", description: "" });
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
+  // Creation happens by talking to a Friend (`long_agent_manage`), so the rail only
+  // bootstraps the first one; there is no local name/description form.
+  const [enabling, setEnabling] = useState(false);
+  const [enableError, setEnableError] = useState<string | null>(null);
 
   const presence = useLongAgentPresence(visible && agents.length > 0, refreshKey ?? 0);
   const loadVersion = useRef(0);
@@ -77,34 +78,15 @@ export function ProjectLongAgentSection({
     }
   }, [projectId]);
 
-  const submitCreate = useCallback(async () => {
-    setCreating(true);
-    setCreateError(null);
-    try {
-      await createChatLongAgent({
-        id: createDraft.id.trim(),
-        name: createDraft.name.trim(),
-        description: createDraft.description.trim(),
-      });
-      setCreateOpen(false);
-      setCreateDraft({ id: "", name: "", description: "" });
-      await load();
-    } catch (cause) {
-      setCreateError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setCreating(false);
-    }
-  }, [createDraft, load]);
-
   const enable = async () => {
-    setCreating(true);
-    setCreateError(null);
+    setEnabling(true);
+    setEnableError(null);
     try {
       await enableChatLongAgents();
       await load();
     } catch (cause) {
-      setCreateError(cause instanceof Error ? cause.message : String(cause));
-    } finally { setCreating(false); }
+      setEnableError(cause instanceof Error ? cause.message : String(cause));
+    } finally { setEnabling(false); }
   };
 
   useEffect(() => {
@@ -169,67 +151,29 @@ export function ProjectLongAgentSection({
         <h2 id="project-long-agent-heading">{t("sidebar.longAgentCoworkers")}</h2>
         <div className={styles.headerActions}>
         {!loading && agents.length > 0 && (
-          <span
-            className={channelHostAvailable ? styles.hostOnline : styles.hostOffline}
-            title={channelHostAvailable
-              ? t("sidebar.longAgentImOnlineTitle")
-              : t("sidebar.longAgentImOfflineTitle")}
-          >
-            <span aria-hidden="true" />
-            {channelHostAvailable ? t("sidebar.longAgentImOnline") : t("sidebar.longAgentImOffline")}
-          </span>
+          // Status is a dot plus an accessible name: the full sentence never fits in a
+          // 224px rail, and truncating it ("Gateway c…") is not a readable state.
+          <Hint label={channelHostAvailable
+            ? t("sidebar.longAgentImOnlineTitle")
+            : t("sidebar.longAgentImOfflineTitle")} side="top">
+            <span
+              className={channelHostAvailable ? styles.hostOnline : styles.hostOffline}
+              tabIndex={0}
+              role="img"
+              aria-label={channelHostAvailable ? t("sidebar.longAgentImOnline") : t("sidebar.longAgentImOffline")}
+            >
+              <span aria-hidden="true" />
+            </span>
+          </Hint>
         )}
-        <button
-          type="button"
-          className={styles.settingsButton}
-          disabled={creating}
-          onClick={() => {
-            setCreateError(null);
-            if (!createDraft.id) setCreateDraft((draft) => ({ ...draft, id: `agent-${crypto.randomUUID()}` }));
-            setCreateOpen((open) => !open);
-          }}
-          title={t("longAgent.create")}
-          aria-label={t("longAgent.create")}
-        >
-          <IconPlus size={16} stroke={1.8} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className={styles.settingsButton}
+        <Button iconOnly variant="ghost" type="button" className={styles.headerAction}
           onClick={() => setSettingsOpen(true)}
           disabled={agents.length === 0}
-          title={t("longAgentSettings.open")}
-          aria-label={t("longAgentSettings.open")}
-        >
-          <IconSettings size={14} stroke={1.8} aria-hidden="true" />
-        </button>
+          aria-label={t("longAgentSettings.open")}>
+          <IconSettings size={18} stroke={1.8} aria-hidden="true" />
+        </Button>
         </div>
       </div>
-
-      {createOpen && (
-        <form className={styles.createForm} onSubmit={(event) => { event.preventDefault(); void submitCreate(); }}>
-          <p className={styles.createHelp}>{t("longAgent.createHint")}</p>
-          <label>{t("longAgent.createName")}<input
-            value={createDraft.name}
-            required maxLength={200} disabled={creating}
-            onChange={(event) => setCreateDraft((draft) => ({ ...draft, name: event.target.value }))}
-          /></label>
-          <label>{t("longAgent.createDescription")}<input
-            value={createDraft.description}
-            disabled={creating} maxLength={500}
-            onChange={(event) => setCreateDraft((draft) => ({ ...draft, description: event.target.value }))}
-          /></label>
-          {createError && <p className={styles.inlineError} role="alert"><InterfaceFeedback message={createError} /></p>}
-          <div>
-            <button type="submit" disabled={creating || !createDraft.name.trim()}>
-              {creating ? t("common.saving") : t("longAgent.createSubmit")}
-            </button>
-            <button type="button" disabled={creating} onClick={() => setCreateOpen(false)}>
-              {t("common.close")}
-            </button>
-          </div>
-        </form>
-      )}
 
       {loading && agents.length === 0 ? (
         <div className={styles.loading} role="status">{t("sidebar.longAgentLoading")}</div>
@@ -243,12 +187,11 @@ export function ProjectLongAgentSection({
       ) : agents.length === 0 ? (
         <div className={styles.empty}>
           <p>{t("sidebar.longAgentEmpty")}</p>
-          {!createOpen && <>
-            <button type="button" disabled={creating} onClick={() => void enable()}>
-              {creating ? t("common.saving") : t("longAgent.enable")}
-            </button>
-            {createError && <p className={styles.inlineError} role="alert"><InterfaceFeedback message={createError} /></p>}
-          </>}
+          <button type="button" disabled={enabling} onClick={() => void enable()}>
+            {enabling ? t("common.saving") : t("longAgent.enable")}
+          </button>
+          <p>{t("sidebar.longAgentCreateViaChat")}</p>
+          {enableError && <p className={styles.inlineError} role="alert"><InterfaceFeedback message={enableError} /></p>}
         </div>
       ) : (
         <nav aria-label={t("sidebar.longAgentCoworkers")}>

@@ -37,7 +37,7 @@ Fork 通过 `lib/session-fork-browser.ts` 调用 `POST /api/sessions/:id/fork`�
 
 ### 1.1 当前Long Agent页面基线
 
-首次使用的“Friend”面板不要求已选 Project。空状态通过 `POST /api/long-agents/enable`（空对象）显式创建默认 Nexus；有 Friend 后仍提供“＋”创建。产品中 Long Agent 英语称为 Friend，中文称为“长期助手”，翻译键和服务实体标识不因此迁移。网关健康只标为“网关已连接/未连接”，不推断 IM 收发可用。新建表单只要求名称和可选简介；内部 ID 由系统自动生成，同一草稿失败重试沿用该 ID，成功后才清空。表单不接收 NanoClaw Group ID、不硬编码实例 ID，`POST /api/long-agents` 由 Backend 完成 Group 与独立空间初始化。两个响应共用运行时 Parser；失败保留草稿、允许原请求重试，成功重读列表，点击 Friend 进入其 home 会话。前端不启动服务、不保存另一份启用状态。
+首次使用的“Friend”面板不要求已选 Project。空状态通过 `POST /api/long-agents/enable`（空对象）显式创建默认 Nexus。v2.3 起面板不再提供“＋”创建表单：新增长期助手只通过对话让某位长期助手创建（同源 `long_agent_manage` Tool 与 `POST /api/long-agents`），前端不再收集名称/简介，避免出现第二条创建入口。产品中 Long Agent 英语称为 Friend，中文称为“长期助手”，翻译键和服务实体标识不因此迁移。网关健康只标为“网关已连接/未连接”，不推断 IM 收发可用。创建由 Backend 的 `POST /api/long-agents` 完成 Group 与独立空间初始化；前端不接收 NanoClaw Group ID、不硬编码实例 ID、不保存另一份启用状态。启用响应共用运行时 Parser；失败保留错误并允许重试，成功重读列表，点击 Friend 进入其 home 会话。面板头部健康状态是语义圆点 + `Hint`（完整句子放不进 224px 侧栏，不能用省略号冒充状态）。
 
 当前工作区提供 Friend、项目、动态、群聊、主题、设置六个全局入口。顶部 Project 是选中的交流上下文；切换 Project 更新项目资料，在 Friend 模式保留 Friend 与原 Session。普通 Session 仍归属于 Project；进入项目模式可新建、恢复多个普通 Session，Friend 专属 Session 不重复列入普通列表。布局和数据归属分别负责：页面选择不会改变后端 Session owner 或实际执行目录。
 

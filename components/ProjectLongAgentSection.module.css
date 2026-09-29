@@ -13,6 +13,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-height: 36px;
   margin-bottom: 8px;
   padding: 0 2px;
 }
@@ -34,9 +35,9 @@
   gap: 6px;
 }
 
-.settingsButton {
-  width: 28px;
-  height: 28px;
+.headerAction {
+  width: 36px;
+  height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -49,36 +50,38 @@
   cursor: pointer;
 }
 
-.settingsButton:hover:not(:disabled) {
+.headerAction:hover:not(:disabled) {
   color: var(--text);
   background: var(--bg-hover);
 }
 
-.settingsButton:focus-visible {
+.headerAction:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-.settingsButton:disabled {
+.headerAction:disabled {
   cursor: default;
   opacity: 0.45;
 }
 
+/* Health is a dot with an accessible name + tooltip: the sentence never fits the rail,
+   and an ellipsised "Gateway c…" would read as a broken state. */
 .hostOnline,
 .hostOffline {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  min-width: 0;
-  color: var(--text-dim);
-  font-size: 12px;
-  white-space: nowrap;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
 }
 
 .hostOnline > span,
 .hostOffline > span {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   flex: 0 0 auto;
   border-radius: 999px;
   background: var(--text-dim);
@@ -253,32 +256,8 @@
 }
 
 
-.createForm {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  margin: 4px 0 8px;
-}
 
-.createForm input {
-  font-size: 12px;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  background: var(--bg);
-  color: var(--text);
-}
 
-.createForm label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  color: var(--text);
-  font-size: 12px;
-}
 
 .empty {
   padding: 12px 8px;
@@ -297,43 +276,21 @@
   cursor: pointer;
 }
 
-.empty button:focus-visible,
-.createForm :is(input, button):focus-visible {
+.empty button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-.empty button:disabled,
-.createForm button:disabled {
+.empty button:disabled {
   opacity: 0.6;
   cursor: default;
 }
 
 @media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
-  .createForm input { font-size: 16px; min-height: 44px; }
-  .createForm button, .empty button, .settingsButton { min-width: 44px; min-height: 44px; }
+  .empty button, .headerAction { min-width: 44px; min-height: 44px; }
 }
 
-.createHelp {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin: 0;
-}
 
-.createForm > div {
-  display: flex;
-  gap: 6px;
-}
-
-.createForm button {
-  font-size: 12px;
-  padding: 5px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  background: var(--bg-panel);
-  color: var(--text);
-  cursor: pointer;
-}
 
 .archivedBadge {
   font-style: normal;
@@ -361,10 +318,7 @@
 .agentText > span { font-size:12px; line-height:18px; }
 .avatarWrap { width:40px; height:40px; flex:0 0 40px; }
 .status { display:none; }
-.settingsButton { width:32px; height:32px; border-radius: var(--radius-control); }
-.hostOnline, .hostOffline { font-size:10px; }
-@media (pointer:coarse) { .settingsButton { width:44px; height:44px; } }
+@media (pointer:coarse) { .headerAction { width:44px; height:44px; } }
 
 .header h2 { letter-spacing:normal; text-transform:none; flex:1; color:var(--text); }
-.headerActions { gap:4px; flex:none; }
-.hostOnline, .hostOffline { max-width:62px; overflow:hidden; }
+.headerActions { gap:8px; flex:none; }
