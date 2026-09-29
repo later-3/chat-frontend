@@ -5,8 +5,20 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  position: relative;
+  overflow: hidden;
   color: var(--text);
   background: var(--bg);
+}
+/* Footer was `position:fixed` against the viewport with a full-page sidebar
+   offset (`left:min(240px,…)`). Inside a centered SurfaceDialog that offset
+   is wrong, so the dialog variant anchors to the dialog box instead. */
+.dialog .actions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
 }
 .page {
   position: fixed;
