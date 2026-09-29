@@ -1176,7 +1176,7 @@ export function AppShell({
         display: "flex", alignItems: "center", justifyContent: "center",
         width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
         background: "none", border: "none", borderRight: "1px solid var(--border)",
-        color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
+        color: "var(--text-muted)", cursor: "pointer", flexShrink: 0, transition: "color var(--duration-fast)",
       }}
       onMouseEnter={(event) => { event.currentTarget.style.color = "var(--text)"; }}
       onMouseLeave={(event) => { event.currentTarget.style.color = "var(--text-muted)"; }}
@@ -1220,7 +1220,7 @@ export function AppShell({
         background: activeTopPanel === "language" ? "var(--bg-selected)" : "none",
         border: "none", borderRight: "1px solid var(--border)",
         color: activeTopPanel === "language" ? "var(--text)" : "var(--text-muted)",
-        cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
+        cursor: "pointer", flexShrink: 0, transition: "color var(--duration-fast)",
       }}
       onMouseEnter={(event) => { event.currentTarget.style.color = "var(--text)"; }}
       onMouseLeave={(event) => {
@@ -1687,7 +1687,7 @@ export function AppShell({
                     background: mobileToolbarMoreOpen ? "var(--bg-selected)" : "none",
                     border: "none", borderRight: "1px solid var(--border)",
                     color: mobileToolbarMoreOpen ? "var(--text)" : "var(--text-muted)",
-                    cursor: "pointer", flexShrink: 0, transition: "color 0.12s, background 0.12s",
+                    cursor: "pointer", flexShrink: 0, transition: "color var(--duration-fast), background var(--duration-fast)",
                   }}
                 >
                   {mobileToolbarMoreOpen ? (
@@ -1931,7 +1931,7 @@ export function AppShell({
                             borderRadius: 4,
                             cursor: "pointer",
                             flex: "0 0 auto",
-                            transition: "color 0.12s, border-color 0.12s, background 0.12s",
+                            transition: "color var(--duration-fast), border-color var(--duration-fast), background var(--duration-fast)",
                           }}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.color = "var(--accent)";
@@ -2118,7 +2118,7 @@ export function AppShell({
               role="alert"
               style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: 24, color: "var(--text-muted)", textAlign: "center" }}
             >
-               <div style={{ fontSize: 14, color: "#dc2626" }}>{translate("workspace.unable")}</div>
+               <div style={{ fontSize: 14, color: "var(--danger)" }}>{translate("workspace.unable")}</div>
               <div style={{ maxWidth: "min(720px, 100%)", overflowWrap: "anywhere", fontFamily: "var(--font-mono)", fontSize: 12 }}>
                 {initialNavigation.requestedCwd}
               </div>
@@ -2222,7 +2222,7 @@ export function AppShell({
               display: "flex", alignItems: "center", justifyContent: "center",
               width: TOP_BAR_ICON_BUTTON_SIZE, height: TOP_BAR_ICON_BUTTON_SIZE, padding: 0,
               background: "var(--bg-selected)", border: "none", borderLeft: "1px solid var(--border)",
-              color: "var(--text)", cursor: "pointer", flexShrink: 0, transition: "color 0.12s",
+              color: "var(--text)", cursor: "pointer", flexShrink: 0, transition: "color var(--duration-fast)",
             }}
             onMouseEnter={(event) => { event.currentTarget.style.color = "var(--accent)"; }}
             onMouseLeave={(event) => { event.currentTarget.style.color = "var(--text)"; }}

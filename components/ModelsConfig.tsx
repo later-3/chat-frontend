@@ -1680,7 +1680,7 @@ function AddProviderPicker({
     cursor: "pointer",
     minWidth: 0,
     textAlign: "left",
-    transition: "border-color 0.12s, background 0.12s",
+    transition: "border-color var(--duration-fast), background var(--duration-fast)",
     width: "100%",
   };
 

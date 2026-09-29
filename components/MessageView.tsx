@@ -494,7 +494,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
             display: "flex", gap: 3,
             opacity: (hovered || isMobile) ? 1 : 0,
             pointerEvents: (hovered || isMobile) ? "auto" : "none",
-            transition: "opacity 0.12s",
+            transition: "opacity var(--duration-fast)",
           }}>
             <button
               className={isMobile ? "mobile-message-action" : undefined}
@@ -509,7 +509,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                 cursor: "pointer",
                 fontSize: 11, fontWeight: 400,
                 whiteSpace: "nowrap",
-                transition: "color 0.12s",
+                transition: "color var(--duration-fast)",
               }}
               onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = "var(--accent)"; }}
               onMouseLeave={(e) => { if (!copied) e.currentTarget.style.color = "var(--text-dim)"; }}
@@ -532,7 +532,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
               display: "flex", gap: 3,
               opacity: (hovered || forking || isMobile) ? 1 : 0,
               pointerEvents: (hovered || forking || isMobile) ? "auto" : "none",
-              transition: "opacity 0.12s",
+              transition: "opacity var(--duration-fast)",
             }}>
               {canNavigate && (
                 <button
@@ -549,7 +549,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                     cursor: "pointer",
                     fontSize: 11, fontWeight: 400,
                     whiteSpace: "nowrap",
-                    transition: "color 0.12s",
+                    transition: "color var(--duration-fast)",
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.color = "var(--accent)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; }}
@@ -576,7 +576,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
                     cursor: forking ? "not-allowed" : "pointer",
                     fontSize: 11, fontWeight: 400,
                     whiteSpace: "nowrap",
-                    transition: "color 0.12s",
+                    transition: "color var(--duration-fast)",
                   }}
                   onMouseEnter={(e) => { if (!forking) e.currentTarget.style.color = "var(--accent)"; }}
                   onMouseLeave={(e) => { if (!forking) e.currentTarget.style.color = "var(--text-dim)"; }}
@@ -782,14 +782,11 @@ function AssistantMessageView({
                     </svg>
                     {est}
                   </span>
-                  {tps !== null && (() => {
-                    const bg = tps >= 50 ? "#53b3cb" : tps >= 30 ? "#9bc53d" : tps >= 15 ? "#f9c22e" : "#e01a4f";
-                    return (
-                      <span style={{ marginLeft: 6, padding: "1px 6px", borderRadius: 4, background: bg, color: "#fff", fontSize: 11, fontWeight: 400 }}>
-                        {tps.toFixed(1)} t/s
-                      </span>
-                    );
-                  })()}
+                  {tps !== null && (
+                    <span style={{ marginLeft: 6, padding: "1px 6px", borderRadius: 4, background: "var(--bg-selected)", color: "var(--text-muted)", fontSize: 11, fontWeight: 400 }}>
+                      {tps.toFixed(1)} t/s
+                    </span>
+                  )}
                 </span>
               )}
             </>
@@ -851,7 +848,7 @@ function AssistantMessageView({
               whiteSpace: "nowrap",
               opacity: (hovered || isMobile) ? 1 : 0,
               pointerEvents: (hovered || isMobile) ? "auto" : "none",
-              transition: "opacity 0.12s, color 0.12s",
+              transition: "opacity var(--duration-fast), color var(--duration-fast)",
             }}
             onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = "var(--accent)"; }}
             onMouseLeave={(e) => { if (!copied) e.currentTarget.style.color = "var(--text-dim)"; }}

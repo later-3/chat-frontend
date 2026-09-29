@@ -267,33 +267,34 @@ pre.shiki code { display: block; counter-reset: source-line; }
    reading treatment (measure, line-height, surface layering) inside the
    existing warm-gray + accent tokens. No new palette, no new radius scale.
    --------------------------------------------------------------------------- */
-html[data-visual-refresh="aggressive"] {
-  --refresh-measure: 42rem;
-  --refresh-body: 1.7;
+/* ---------------------------------------------------------------------------
+   Art direction (2026-09-29, v2.3): quiet gallery-grade tool surfaces.
+   Inside the existing warm-gray + accent tokens: enforce measure + rhythm,
+   one hairline layering language, token radii + two shadow depths, motion
+   tokens only. No new palette, no new radius scale, no decorative gradients.
+   Reference: littleplains/aside/resurf/daybridge — precision, not effects.
+   --------------------------------------------------------------------------- */
+:root {
+  --measure-prose: 42rem;
+  --rhythm-body: 1.7;
+  --tracking-body: 0.002em;
+  --surface-fine: color-mix(in srgb, var(--border) 82%, transparent);
 }
-html[data-visual-refresh="aggressive"] .markdown-body,
-html[data-visual-refresh="aggressive"] .message-body {
-  max-width: var(--refresh-measure);
-  line-height: var(--refresh-body);
-  letter-spacing: 0.002em;
+.markdown-body,
+.workspace-settings-content,
+.catalog-detail {
+  max-width: var(--measure-prose);
+  line-height: var(--rhythm-body);
+  letter-spacing: var(--tracking-body);
 }
-html[data-visual-refresh="aggressive"] .workspace-settings-content,
-html[data-visual-refresh="aggressive"] .catalog-detail {
-  max-width: var(--refresh-measure);
-  line-height: var(--refresh-body);
-}
-html[data-visual-refresh="aggressive"] .surface-dialog {
-  box-shadow: var(--shadow-dialog);
-  border-color: color-mix(in srgb, var(--border) 82%, transparent);
-}
-html[data-visual-refresh="aggressive"] .panel .work {
-  border-radius: var(--radius-control);
+.surface-dialog {
+  border-color: var(--surface-fine);
 }
 @media (prefers-reduced-motion: no-preference) {
-  html[data-visual-refresh="aggressive"] .surface-dialog[data-ui-dialog] {
-    animation: refresh-dialog-in var(--duration-overlay) var(--ease-out);
+  .surface-dialog[data-ui-dialog] {
+    animation: surface-dialog-in var(--duration-overlay) var(--ease-out);
   }
-  @keyframes refresh-dialog-in {
+  @keyframes surface-dialog-in {
     from { opacity: 0; transform: translateY(6px) scale(0.99); }
     to { opacity: 1; transform: none; }
   }

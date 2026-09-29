@@ -128,7 +128,7 @@ const GIT_STATUS_COLORS: Record<GitFileStatusKind, string> = {
   modified: "var(--warning)",
   added: "var(--success)",
   deleted: "var(--danger)",
-  renamed: "#60a5fa",
+  renamed: "var(--accent)",
   untracked: "var(--success)",
   conflict: "var(--danger)",
 };
@@ -1050,7 +1050,7 @@ export const FileExplorer = forwardRef<FileExplorerHandle, Props>(function FileE
             </div>
             {uploadPhase === "uploading" && (
               <div style={{ height: 3, marginTop: 4, overflow: "hidden", borderRadius: 2, background: "var(--border)" }}>
-                <div style={{ width: `${uploadProgress}%`, height: "100%", background: "var(--text-muted)", transition: "width 120ms ease" }} />
+                <div style={{ width: `${uploadProgress}%`, height: "100%", background: "var(--text-muted)", transition: "width var(--duration-fast) var(--ease-standard)" }} />
               </div>
             )}
           </div>

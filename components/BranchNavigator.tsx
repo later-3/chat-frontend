@@ -188,7 +188,7 @@ function TreeNodeView({ node, activePathIds, depth, isLast, parentLines, onSelec
           background: isActive ? "var(--accent)" : isOnPath ? "var(--text-muted)" : "var(--border)",
           border: isActive ? "none" : "1px solid var(--text-dim)",
           marginRight: 6,
-          transition: "background 0.12s",
+          transition: "background var(--duration-fast)",
         }} />
 
         {/* Role badge */}

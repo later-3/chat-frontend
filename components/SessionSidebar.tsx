@@ -1315,7 +1315,7 @@ export function SessionSidebar({ contentPanel, onContentPanelChange: setContentP
                                 background: "none", border: "none",
                                 color: "var(--text-dim)", cursor: "pointer",
                                 borderRadius: 5, flexShrink: 0,
-                                transition: "color 0.12s, background 0.12s",
+                                transition: "color var(--duration-fast), background var(--duration-fast)",
                               }}
                               onMouseEnter={(e) => { e.currentTarget.style.color = "var(--danger)"; e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
                               onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-dim)"; e.currentTarget.style.background = "none"; }}
@@ -1409,7 +1409,7 @@ export function SessionSidebar({ contentPanel, onContentPanelChange: setContentP
                             background: "var(--accent)",
                             border: "none",
                             borderRadius: 5,
-                            color: "#fff",
+                            color: "var(--on-accent)",
                             fontSize: 11,
                             fontWeight: 600,
                             cursor: wtBusy || !wtNewBranch.trim() ? "not-allowed" : "pointer",
@@ -1439,7 +1439,7 @@ export function SessionSidebar({ contentPanel, onContentPanelChange: setContentP
                   {wtError && (
                     <div style={{
                       padding: "5px 10px 8px",
-                      color: "#dc2626",
+                      color: "var(--danger)",
                       fontSize: 11,
                       lineHeight: 1.35,
                       overflowWrap: "anywhere",
@@ -1911,7 +1911,7 @@ function AttentionSessionIndicator({
         alignItems: "center",
         gap: 5,
         minWidth: 0,
-        color: "var(--warning, #d97706)",
+        color: "var(--warning)",
         fontWeight: 550,
       }}
     >
@@ -1939,7 +1939,7 @@ function UnreadSessionIndicator() {
         alignItems: "center",
         justifyContent: "center",
         flexShrink: 0,
-        color: "#0891b2",
+        color: "var(--accent)",
       }}
     >
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" style={{ display: "block" }}>
@@ -1985,7 +1985,7 @@ function showProjectActivity(
         <span
           title={t("sidebar.newSessionActivity")}
           aria-label={`${t("sidebar.newSessionActivity")} (${activity.unread})`}
-          style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "#0891b2", fontSize: 10, fontFamily: "var(--font-mono)" }}
+          style={{ display: "inline-flex", alignItems: "center", gap: 3, color: "var(--accent)", fontSize: 10, fontFamily: "var(--font-mono)" }}
         >
           <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor", display: "inline-block" }} />
           {activity.unread}
@@ -2411,7 +2411,7 @@ function SessionItem({
                   background: "var(--bg-hover)", border: "1px solid var(--border)",
                   borderRadius: 7, color: "var(--text-muted)",
                   cursor: "pointer", flexShrink: 0,
-                  transition: "background 0.12s, color 0.12s, border-color 0.12s",
+                  transition: "background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast)",
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = "var(--bg-selected)";
@@ -2437,7 +2437,7 @@ function SessionItem({
                   background: "var(--bg-hover)", border: "1px solid var(--border)",
                   borderRadius: 7, color: "var(--text-muted)",
                   cursor: "pointer", flexShrink: 0,
-                  transition: "background 0.12s, color 0.12s, border-color 0.12s",
+                  transition: "background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast)",
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = "color-mix(in srgb, var(--accent) 10%, transparent)";

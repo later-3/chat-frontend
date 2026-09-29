@@ -297,9 +297,17 @@ Pi 完整历史通过 `history-locale.ts` 对固定上游版本的阅读器控�
 
 内置工作流名称、说明和步骤标签经 `translateWorkflowCopy()` 按工作流 ID 与原始默认文案匹配翻译；用户改写的名称、说明与第三方工作流原样显示。不把本地化显示值送回配置或执行 API。
 
-### 共用动作与模态基础（2026-09-27）
+### 共用动作与模态基础（2026-09-27；v2.3 修订 2026-09-29）
 
 `components/ui/Button.tsx`、`PageHeader.tsx` 负责动作外观与一致的左侧返回；`SurfaceDialog` 基于固定版本 Radix Dialog，`ConfirmationProvider` 基于 AlertDialog，业务组件通过 `useConfirmation` 等待用户决定。列表选择不是动作按钮。不要新增 `window.confirm` 或复制页面级按钮样式。焦点、Escape、窄屏布局的真实浏览器回归随 `test:dev` 执行。
+
+v2.3 art 方向实现合同（规范语义见 [UI/UX 规范 §18.5](./ui-ux-guidelines.md#185-视觉精度合同v23-art-方向)）：
+
+- **阅读节奏**：`--measure-prose:42rem`、`--rhythm-body:1.7`、`--tracking-body:0.002em` 定义在 `precision.css` 的 `:root`；`.markdown-body`、设置正文、目录详情共享；`workspace-message-column` 对齐同一量级，宽屏仍为显式 opt-in。
+- **表面与圆角**：`--surface-fine` 细边 + `--shadow-popover` / `--shadow-dialog` 两档；`--radius-control/panel/dialog` 唯一体系；工具栏图标与按钮已对齐并补 Token 过渡。
+- **语义色收敛**：`--on-accent`、`--danger`、`--success`、`--warning`、`--accent` 全量替换硬编码色；画布 JPEG 底与品牌 SVG 路径黑是内容语义例外。
+- **动效收敛**：27 处 `0.12s` 魔法时长已批量替换为 `var(--duration-fast)`；`FileExplorer` 进度条、`components.css` resize 手柄同步 Token 化。
+- **Dialog 定位陷阱**：Dialog 内禁止 `position:fixed + 全屏侧栏偏移`；`LongAgentSettingsPanel` footer 已锚到对话框盒；嵌套 picker/editor 统一 1110（主层 1100/1101）。
 
 ### 设计精度与代码高亮（2026-09-28）
 

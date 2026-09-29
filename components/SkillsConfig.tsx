@@ -634,7 +634,7 @@ function AddSkillPanel({
                       : isInstalling
                         ? "var(--accent)"
                         : "var(--text-muted)",
-                    transition: "color 0.12s",
+                    transition: "color var(--duration-fast)",
                   }}
                 >
                   {isInstalled
