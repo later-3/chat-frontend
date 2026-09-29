@@ -30,10 +30,12 @@ import styles from "./FriendInspector.module.css";
  * Opening a Session still navigates the shared chat; the area never becomes
  * a second chat surface.
  */
-export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClose }: {
+export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClose, active = true }: {
   agentId: string; sessionId: string | null; date: string | null;
   onOpenSession: (sessionId: string, projectId: string, date?: string) => void | Promise<void>;
   onClose: () => void;
+  /** The shell stays mounted for the reveal animation; data loads only while visible. */
+  active?: boolean;
 }) {
   const { t, locale } = useI18n();
   const [calendar, setCalendar] = useState<FriendDailyState | null>(null);
@@ -51,8 +53,10 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClo
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => { setAddedDays(readArchivedDays(agentId)); }, [agentId]);
+  // Pending work recovery is local state; it must not be fetched while hidden.
 
   useEffect(() => {
+    if (!active) return;
     const controller = new AbortController();
     setCalendar(null);
     setDayError(null);
@@ -67,9 +71,10 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClo
       if (!controller.signal.aborted) setDayError(cause instanceof Error ? cause.message : String(cause));
     });
     return () => controller.abort();
-  }, [agentId, sessionId, date, refresh]);
+  }, [active, agentId, sessionId, date, refresh]);
 
   useEffect(() => {
+    if (!active) return;
     const controller = new AbortController();
     void Promise.all([
       fetchFriendWork(agentId, controller.signal).catch(() => [] as FriendWorkItem[]),
@@ -80,15 +85,16 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClo
       setTasks(nextTasks);
     });
     return () => controller.abort();
-  }, [agentId, refresh]);
+  }, [active, agentId, refresh]);
 
   useEffect(() => {
+    if (!active) return;
     const controller = new AbortController();
     void fetchChatProjects(controller.signal)
       .then(projects => { if (!controller.signal.aborted) setProjectNames(new Map(projects.map(project => [project.projectId, project.cachedName]))); })
       .catch(() => { if (!controller.signal.aborted) setProjectNames(new Map()); });
     return () => controller.abort();
-  }, [agentId]);
+  }, [active, agentId]);
 
   const timeZone = calendar?.timeZone;
   const today = calendar?.today ?? null;

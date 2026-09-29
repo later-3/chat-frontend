@@ -2037,6 +2037,7 @@ export function AppShell({
                 date={friendDate}
                 onOpenSession={handleOpenExistingSession}
                 onClose={() => setFriendPanelOpen(false)}
+                active={friendPanelOpen}
               />
             </div>
           </aside>
