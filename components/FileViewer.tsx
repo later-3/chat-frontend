@@ -3,15 +3,8 @@
 import { InterfaceFeedback } from "./InterfaceFeedback";
 
 import { useEffect, useState, useRef, useCallback, useMemo, type CSSProperties, type MouseEvent } from "react";
-import {
-  Prism as SyntaxHighlighter,
-  createElement as renderSyntaxNode,
-  type SyntaxHighlighterProps,
-} from "react-syntax-highlighter";
-import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import ReactMarkdown from "react-markdown";
-import { useTheme } from "@/hooks/useTheme";
+import { toast } from "sonner";
 import {
   DOCX_PREVIEW_MAX_BYTES,
   getFileExt,
@@ -24,6 +17,8 @@ import { resolveLocalFileHref } from "@/lib/file-links";
 import { parseFrontmatter } from "@/lib/frontmatter";
 import { markdownPreviewRehypePlugins, markdownPreviewRemarkPlugins, normalizeDisplayMath } from "@/lib/markdown";
 import { CodeBlock, MermaidBlock } from "./MermaidBlock";
+import { SourceCode } from "@/components/ui/SourceCode";
+import { Hint } from "@/components/ui/Tooltip";
 import { FrontmatterCard } from "./FrontmatterCard";
 import { parseUnifiedPatch } from "@/lib/patch";
 import type { GitFileDiffResponse } from "@/lib/git-types";
@@ -85,10 +80,6 @@ const FILE_LINE_NUMBER_STYLE: CSSProperties = {
   userSelect: "none",
   flexShrink: 0,
   verticalAlign: "top",
-};
-
-type SourceCodeRendererProps = Parameters<NonNullable<SyntaxHighlighterProps["renderer"]>>[0] & {
-  wrapLines: boolean;
 };
 
 interface SelectedLineRange {
@@ -163,49 +154,6 @@ function getSelectedSourceLineRange(root: HTMLElement, selection: Selection | nu
   return { startLine, endLine };
 }
 
-function SourceCodeRenderer({ rows, stylesheet, useInlineStyles, wrapLines }: SourceCodeRendererProps) {
-  return rows.map((row, lineIndex) => {
-    const children = row.children ?? [];
-    const firstChildClasses = children[0]?.properties?.className;
-    const hasLineNumber = Array.isArray(firstChildClasses)
-      && firstChildClasses.includes("react-syntax-highlighter-line-number");
-    const lineNumberNode = hasLineNumber ? children[0] : null;
-    const contentNodes = hasLineNumber ? children.slice(1) : children;
-
-    return (
-      <span
-        className="file-source-line"
-        data-line-number={lineIndex + 1}
-        key={`source-line-${lineIndex}`}
-        style={{ display: "flex", minWidth: "100%" }}
-      >
-        {lineNumberNode && renderSyntaxNode({
-          node: lineNumberNode,
-          stylesheet,
-          useInlineStyles,
-          key: `source-line-number-${lineIndex}`,
-        })}
-        <span
-          className="file-source-line-content"
-          style={{
-            flex: "1 1 auto",
-            minWidth: 0,
-            overflowWrap: wrapLines ? "anywhere" : "normal",
-            whiteSpace: wrapLines ? "pre-wrap" : "pre",
-          }}
-        >
-          {contentNodes.map((node, tokenIndex) => renderSyntaxNode({
-            node,
-            stylesheet,
-            useInlineStyles,
-            key: `source-token-${lineIndex}-${tokenIndex}`,
-          }))}
-        </span>
-      </span>
-    );
-  });
-}
-
 function getFileApiUrl(
   filePath: string,
   type: "read" | "download" | "meta" | "preview" | "watch",
@@ -224,19 +172,20 @@ function getFileApiUrl(
 function DownloadLink({ filePath, sourceSessionId }: { filePath: string; sourceSessionId?: string | null }) {
   const { t } = useI18n();
   return (
-    <a
-      href={getFileApiUrl(filePath, "download", sourceSessionId)}
-      download={getFileName(filePath)}
-      title={t("i18n.downloadFile")}
-      aria-label={t("i18n.downloadFile")}
-      className="file-viewer-icon-button"
-    >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-        <polyline points="7 10 12 15 17 10" />
-        <line x1="12" y1="15" x2="12" y2="3" />
-      </svg>
-    </a>
+    <Hint label={t("i18n.downloadFile")}>
+      <a
+        href={getFileApiUrl(filePath, "download", sourceSessionId)}
+        download={getFileName(filePath)}
+        aria-label={t("i18n.downloadFile")}
+        className="file-viewer-icon-button"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
+      </a>
+    </Hint>
   );
 }
 
@@ -972,7 +921,6 @@ function TextFileViewer({
   onStateChange,
   watchEnabled = true,
 }: Props) {
-  const { isDark } = useTheme();
   const { t } = useI18n();
   const [data, setData] = useState<FileData | null>(null);
   const [gitDiff, setGitDiff] = useState<GitFileDiffResponse | null>(null);
@@ -1248,11 +1196,15 @@ function TextFileViewer({
       }
       textarea.remove();
     }
-    if (!ok) return;
+    if (!ok) {
+      // Silent failure would leave the user unsure whether content copied.
+      toast.error(t("interface.copyFailed"));
+      return;
+    }
     setCopied(true);
     if (copyFeedbackRef.current) clearTimeout(copyFeedbackRef.current);
     copyFeedbackRef.current = setTimeout(() => setCopied(false), 1600);
-  }, [data?.content]);
+  }, [data?.content, t]);
 
   useEffect(() => {
     if (!onMentionLines || displayMode !== "source") return;
@@ -1395,76 +1347,81 @@ function TextFileViewer({
 
           <div className="file-viewer-actions">
             {(onAtMention || onMentionLines) && (
-              <button
-                type="button"
-                onPointerDown={(event) => event.preventDefault()}
-                onClick={() => {
-                  // Mention selected lines when a range is active (and line
-                  // mention is wired up); otherwise fall back to a whole-file
-                  // @mention. Same button, behavior follows the selection.
-                  if (selectedLineRange && onMentionLines) {
-                    mentionLineRange(selectedLineRange);
-                  } else {
-                    onAtMention?.(getRelativeFilePath(filePath, cwd), false);
-                  }
-                }}
-                title={
+              <Hint
+                label={
                   selectedLineRange && onMentionLines
                     ? `${t("i18n.mentionSelectedLines")} (L${selectedLineRange.startLine}${selectedLineRange.startLine !== selectedLineRange.endLine ? `-L${selectedLineRange.endLine}` : ""})`
                     : t("files.insertPath")
                 }
-                aria-label={t("files.mention")}
-                disabled={!onAtMention && !onMentionLines}
-                className="file-viewer-icon-button"
               >
-                <MentionIcon />
-              </button>
+                <button
+                  type="button"
+                  onPointerDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    // Mention selected lines when a range is active (and line
+                    // mention is wired up); otherwise fall back to a whole-file
+                    // @mention. Same button, behavior follows the selection.
+                    if (selectedLineRange && onMentionLines) {
+                      mentionLineRange(selectedLineRange);
+                    } else {
+                      onAtMention?.(getRelativeFilePath(filePath, cwd), false);
+                    }
+                  }}
+                  aria-label={t("files.mention")}
+                  disabled={!onAtMention && !onMentionLines}
+                  className="file-viewer-icon-button"
+                >
+                  <MentionIcon />
+                </button>
+              </Hint>
             )}
             {effectiveDisplayMode === "source" && (
               <>
-                <button
-                  type="button"
-                  onClick={toggleWrapLines}
-                  title={wrapLines ? t("i18n.disableWrap") : t("i18n.enableWrap")}
-                  aria-label={wrapLines ? t("i18n.disableWrap") : t("i18n.enableWrap")}
-                  aria-pressed={wrapLines}
-                  className="file-viewer-icon-button"
-                  style={{
-                    background: wrapLines ? "var(--bg-selected)" : "transparent",
-                    color: wrapLines ? "var(--text)" : "var(--text-muted)",
-                  }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M3 6h18" />
-                    <path d="M3 12h15a3 3 0 1 1 0 6h-4" />
-                    <path d="m16 16-2 2 2 2" />
-                    <path d="M3 18h7" />
-                  </svg>
-                </button>
+                <Hint label={wrapLines ? t("i18n.disableWrap") : t("i18n.enableWrap")}>
+                  <button
+                    type="button"
+                    onClick={toggleWrapLines}
+                    aria-label={wrapLines ? t("i18n.disableWrap") : t("i18n.enableWrap")}
+                    aria-pressed={wrapLines}
+                    className="file-viewer-icon-button"
+                    style={{
+                      background: wrapLines ? "var(--bg-selected)" : "transparent",
+                      color: wrapLines ? "var(--text)" : "var(--text-muted)",
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M3 6h18" />
+                      <path d="M3 12h15a3 3 0 1 1 0 6h-4" />
+                      <path d="m16 16-2 2 2 2" />
+                      <path d="M3 18h7" />
+                    </svg>
+                  </button>
+                </Hint>
               </>
             )}
           </div>
 
           {data && (
-            <button
-              type="button"
-              onClick={handleCopyContent}
-              title={copied ? t("i18n.copied") : t("i18n.copyContent")}
-              aria-label={copied ? t("i18n.copied") : t("i18n.copyContent")}
-              className="file-viewer-icon-button"
-              style={copied ? { color: "var(--success)" } : undefined}
-            >
-              {copied ? (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M20 6 9 17l-5-5" />
-                </svg>
-              ) : (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                </svg>
-              )}
-            </button>
+            <Hint label={copied ? t("i18n.copied") : t("i18n.copyContent")}>
+              <button
+                type="button"
+                onClick={handleCopyContent}
+                aria-label={copied ? t("i18n.copied") : t("i18n.copyContent")}
+                className="file-viewer-icon-button"
+                style={copied ? { color: "var(--success)" } : undefined}
+              >
+                {copied ? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                )}
+              </button>
+            </Hint>
           )}
 
           {!isDeletedDiff && <DownloadLink filePath={filePath} sourceSessionId={sourceSessionId} />}
@@ -1557,38 +1514,12 @@ function TextFileViewer({
             </ReactMarkdown>
           </div>
         ) : (
-          <SyntaxHighlighter
+          <SourceCode
+            code={content}
+            language={language}
+            fileSourceLines
             className={wrapLines ? "file-source-view is-wrapped" : "file-source-view"}
-            language={language === "text" ? "plaintext" : language}
-            style={isDark ? vscDarkPlus : vs}
-            showLineNumbers
-            lineNumberStyle={{
-              ...FILE_LINE_NUMBER_STYLE,
-            }}
-            customStyle={{
-              margin: 0,
-              padding: 0,
-              border: 0,
-              background: "var(--bg)",
-              ...FILE_CODE_STYLE,
-              width: wrapLines ? "100%" : "max-content",
-              minWidth: "100%",
-              minHeight: "100%",
-              overflow: "visible",
-            }}
-            codeTagProps={{
-              style: {
-                fontFamily: "var(--font-mono)",
-                overflowWrap: wrapLines ? "anywhere" : "normal",
-              },
-            }}
-            renderer={(rendererProps) => (
-              <SourceCodeRenderer {...rendererProps} wrapLines={wrapLines} />
-            )}
-            wrapLongLines={wrapLines}
-          >
-            {content}
-          </SyntaxHighlighter>
+          />
         )}
       </div>
     </div>

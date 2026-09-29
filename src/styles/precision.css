@@ -1,0 +1,272 @@
+/* ---------------------------------------------------------------------------
+   Design precision baseline (2026-09-28): UI/UX spec §18.
+   Focus visibility, selection, scrollbar refinement, and Shiki dual-theme
+   code highlighting. New rules live here so tokens stay authoritative.
+   --------------------------------------------------------------------------- */
+
+/* Native browser UI (scrollbars, form controls) follows the active theme. */
+:root { color-scheme: light; }
+html.dark { color-scheme: dark; }
+
+/* Text selection uses the accent wash so selected prose stays readable. */
+::selection {
+  background: var(--accent-wash);
+  color: var(--text);
+}
+
+/* Global focus-visible default: 2px accent outline (UI/UX §15). Components
+   with bespoke focus treatments keep their own rules; this only guarantees
+   the spec floor for elements that define none. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Firefox gets the same thin scrollbar as WebKit. */
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--text-muted) 45%, transparent) transparent; }
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text-muted) 55%, transparent);
+}
+
+/* --- Shiki dual-theme output --------------------------------------------
+   `defaultColor: false` puts text colors in --shiki-light / --shiki-dark
+   variables; themes switch here instead of re-highlighting on theme change.
+   Surfaces stay on app tokens; only token colors come from the Shiki theme. */
+pre.shiki {
+  margin: 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+}
+.shiki span {
+  color: var(--shiki-light);
+  font-style: normal;
+  font-weight: inherit;
+}
+html.dark .shiki span { color: var(--shiki-dark); }
+
+/* Chat markdown code fences (CodeBlock in MermaidBlock.tsx). */
+.markdown-code-source pre.shiki,
+.markdown-code-streaming {
+  padding: 11px 13px;
+  font-size: 12.5px;
+  line-height: 1.62;
+  overflow-x: auto;
+  background: color-mix(in srgb, var(--bg) 92%, var(--bg-panel));
+}
+.markdown-code-source pre.shiki { min-width: 0; }
+.markdown-code-streaming {
+  margin: 0;
+  font-family: var(--font-mono);
+  min-width: 0;
+}
+.markdown-code-streaming code { font-family: var(--font-mono); }
+
+/* Line rows produced by the Shiki file-source-lines transformer: flex rows
+   with a counter-based gutter so line numbers are never part of the text
+   selection. `.file-source-line[data-line-number]` and
+   `.file-source-line-content` are the file viewer's selection contract. */
+pre.shiki code { display: block; counter-reset: source-line; }
+.file-source-line {
+  display: flex;
+  min-width: 100%;
+  counter-increment: source-line;
+}
+.file-source-line::before {
+  content: counter(source-line);
+  flex: 0 0 auto;
+  padding-right: 10px;
+  text-align: right;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+.file-source-line-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: pre;
+  padding-right: 16px;
+}
+
+/* File viewer source surface (FileViewer.tsx SourceCode). */
+.file-source-view pre.shiki {
+  background: var(--bg);
+  font-size: 13px;
+  line-height: 1.6;
+  width: max-content;
+  min-width: 100%;
+  min-height: 100%;
+  overflow: visible;
+}
+.file-source-view.is-wrapped pre.shiki { width: 100%; }
+.file-source-view .file-source-line::before {
+  flex: 0 0 48px;
+  padding: 0 10px;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+}
+.file-source-view.is-wrapped .file-source-line-content {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.file-source-view.is-wrapped .file-source-line::before { align-self: stretch; }
+
+/* --- Global command palette (⌘K / Ctrl+K) -------------------------------- */
+.command-palette-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: min(14vh, 160px) 16px 16px;
+  background: var(--overlay);
+}
+.command-palette {
+  width: min(560px, 100%);
+  max-height: min(420px, 70vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-dialog);
+  background: var(--bg);
+  box-shadow: var(--shadow-dialog);
+}
+.command-palette-input {
+  width: 100%;
+  padding: 13px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+.command-palette-input::placeholder { color: var(--text-dim); }
+.command-palette-list {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+}
+.command-palette-group [cmdk-group-heading] {
+  padding: 8px 10px 4px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.command-palette-item {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  color: var(--text);
+  font-size: 13.5px;
+  cursor: pointer;
+}
+.command-palette-item[data-selected="true"] {
+  background: var(--bg-selected);
+  color: var(--text);
+}
+.command-palette-item[aria-disabled="true"] { color: var(--text-dim); cursor: not-allowed; }
+.command-palette-empty {
+  padding: 20px 10px;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .command-palette { animation: command-palette-in var(--duration-fast) ease-out; }
+  @keyframes command-palette-in {
+    from { opacity: 0; transform: translateY(-4px) scale(0.99); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
+/* --- Shared Radix float layer (Tooltip / Popover / DropdownMenu) ---------
+   UI/UX §18: one surface, one motion scale. Pages must not hand-roll
+   outside-click, Escape or focus management for floating layers. */
+.ui-tooltip,
+.ui-popover,
+.ui-menu {
+  z-index: 1250;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-popover);
+  color: var(--text);
+  box-sizing: border-box;
+}
+.ui-tooltip {
+  z-index: 1300;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 5px 9px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.ui-popover,
+.ui-menu {
+  min-width: 140px;
+  max-height: min(420px, calc(100dvh - 64px));
+  overflow-y: auto;
+  padding: 5px;
+  overscroll-behavior: contain;
+}
+.ui-menu-label {
+  padding: 6px 9px 4px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+.ui-menu-item {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+}
+.ui-menu-item[data-highlighted] { background: var(--bg-hover); }
+.ui-menu-item[data-disabled] { color: var(--text-dim); cursor: not-allowed; background: transparent; }
+.ui-menu-item svg { flex: 0 0 auto; }
+.ui-menu-indicator { margin-left: auto; padding-left: 8px; color: var(--accent); }
+.ui-menu-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ui-tooltip,
+  .ui-popover,
+  .ui-menu {
+    animation: ui-float-in var(--duration-fast) var(--ease-out);
+    transform-origin: var(--radix-popover-content-transform-origin, var(--radix-dropdown-menu-content-transform-origin, top));
+  }
+  @keyframes ui-float-in {
+    from { opacity: 0; transform: translateY(-3px) scale(0.98); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
+/* Global reduced-motion floor (UI/UX §8): reduced-motion users get
+   instantaneous state changes; text and layout must not depend on motion. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

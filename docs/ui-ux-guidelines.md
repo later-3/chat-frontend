@@ -1,9 +1,9 @@
 # Chat Frontend UI/UX 规范
 
 - 状态：规范基线
-- 版本：2.0
+- 版本：2.2
 - 适用项目：Chat Pi Web Frontend
-- 最后校正：2026-09-27
+- 最后校正：2026-09-28
 
 ## 1. 文档地位
 
@@ -100,7 +100,9 @@ Chat 的默认风格是温暖、安静、有辨识度的个人工作台：暖灰
 
 ### 4.2 字体与排版
 
-- 普通界面、说明和长文本使用系统无衬线字体栈；代码、命令、路径、ID、日志和结构化技术值使用 `--font-mono`。
+- 普通界面、说明和长文本使用 `--font-sans`；代码、命令、路径、ID、日志和结构化技术值使用 `--font-mono`。Token 由 `src/styles.css` 定义。
+- 品牌字体通过 `@fontsource-variable` 自托管并随应用分发：`--font-sans` 首选 Instrument Sans Variable，`--font-mono` 首选 JetBrains Mono Variable；两者在 `src/main.tsx` 中引入，Vite 会对其 woff2 产物做指纹缓存。
+- 中文不打包 webfont：中文字形回退到系统栈（PingFang SC、Hiragino Sans GB、Microsoft YaHei 等），避免 CJK 字体产物体积失控。新增字体必须沿用"拉丁品牌字体自托管 + 中文系统回退"的模式。
 - 不得仅因为 Chat 是开发工具就把所有文字设为等宽字体。
 - 移动端可编辑控件不得小于 16px，避免 iOS 聚焦缩放。
 
@@ -144,6 +146,7 @@ Chat 的默认风格是温暖、安静、有辨识度的个人工作台：暖灰
 
 - 同类组件必须共享圆角和边界处理。
 - 阴影仅用于表达真实层级：菜单、Dialog、Sheet、拖拽对象。
+- 浮层阴影必须使用全局 Token `--shadow-popover`（菜单、弹层）与 `--shadow-dialog`（模态 Dialog、命令面板）；两者都是"环境光 + 直射光"的多层阴影，不得在组件内自造单层或硬编码阴影。
 - 常驻面板主要通过背景和边界分层，不使用漂浮卡片式重阴影。
 - hover 不得使用导致布局移动的缩放；可以改变背景、边框、颜色或轻微阴影。
 
@@ -234,6 +237,21 @@ Chat 的核心不是一次性表单，而是可持续数秒到数小时的 Agent
 - 不使用持续发光、无意义循环、夸张弹跳或大范围缩放作为默认反馈。
 - 动画期间控件仍应保持可取消或避免接收重复动作。
 - reduced-motion 模式下关闭位移、缩放、视差和扩散动画，只保留必要的即时状态变化。
+
+### 8.1 动效 Token
+
+时长与缓动统一使用全局 Token（`src/styles/tokens.css` 的 `:root`），新增 `transition`/`animation` 不得写魔法时长：
+
+| Token | 值 | 用途 |
+|---|---|---|
+| `--duration-fast` | 120ms | hover/按压反馈、小元素入场、浮层提示 |
+| `--duration-panel` | 200ms | 面板、侧栏宽度、Sheet 与空间关系变化 |
+| `--duration-overlay` | 240ms | Dialog、命令面板等大型浮层揭示 |
+| `--ease-out` | `cubic-bezier(0.22, 1, 0.36, 1)` | 入场与反馈（元素从外进入） |
+| `--ease-standard` | `cubic-bezier(0.2, 0, 0, 1)` | 常规状态过渡（对称进出） |
+
+- 循环指示（spinner、脉冲）不属于以上三档，独立按场景设定。
+- 全局 `prefers-reduced-motion: reduce` 兜底把所有 `transition`/`animation` 压缩为瞬时状态变化；组件不得依赖动画时长维持逻辑正确（不要监听 `transitionend` 驱动卸载）。
 
 ## 9. 内容与术语
 
@@ -349,6 +367,8 @@ Agent 或开发者必须：
 - [Apple UI Design Dos and Don'ts](https://developer.apple.com/design/tips/)
 - [Meta Engineering: HIKE Accessibility Primer](https://engineering.fb.com/2015/11/23/web/hike-our-quick-simple-accessibility-primer/)
 - [web.dev: Learn Progressive Web Apps](https://web.dev/learn/pwa/welcome)
+- [Vercel Web Interface Guidelines](https://github.com/vercel-labs/web-interface-guidelines)（MIT）：交互质量门禁来源，适配版见 [.agents/skills/web-design-guidelines](../.agents/skills/web-design-guidelines/SKILL.md)。
+- [Vercel React Best Practices](https://github.com/vercel-labs/agent-skills)（MIT）：React 性能门禁来源，适配版见 [.agents/skills/react-best-practices](../.agents/skills/react-best-practices/SKILL.md)。
 
 ## 15. 已实施的新工作区基础参数
 
@@ -404,7 +424,7 @@ Agent 或开发者必须：
 
 全年绿色格子表示当天有原生消息记录，空会话不点亮。按月日历提供至少 44px 的日期入口，空日期无绿点但可点击，打开或幂等创建所选日期的会话；点击任意日期直接进入当日工作区，由侧栏显示当天会话和后台工作（含开始时间），中央复用共享聊天；同日条目切换保留日期，点击 Friend 回到今日。整年总览为紧凑密集索引，触摸设备扩大格子并仅允许该索引局部横向滚动。年月导航、时区、错误和关闭入口始终可发现。未来颜色深浅按真实每日 Token 用量；当前统一绿色，不暗示任务成功或强度。打开历史沿用主会话界面并能在原 Session 继续交流，不制造第二套消息展示。创建空会话不表示已经有活动，也不自动运行模型或安排定时任务。
 
-会话记忆是输入工具栏内的笔记图标入口，有可访问名称；记录开关与条目管理放在同一记忆 Dialog 内。协作项目栏、聊天区、输入工具栏共同分配可用高度，不能将额外标题/工具行叠在 100% 高度聊天区之外。验证完整工具栏的边界，不只验证输入框出现。
+会话记忆是输入工具栏内的笔记图标入口，有可访问名称；记录开关与条目管理放在同一记忆 Dialog 内。顶栏"项目"选择器、聊天区、输入工具栏共同分配可用高度，不能将额外标题/工具行叠在 100% 高度聊天区之外。验证完整工具栏的边界，不只验证输入框出现。
 
 ## 16. 从功能合同到界面验收
 
@@ -524,3 +544,81 @@ Agent 或开发者必须：
 用户消息、生成结果、自定义名称、资源正文、工具输出与原始诊断属于内容，切换界面语言不改写它们。未知服务端错误提供本地化的错误摘要及“详情”入口，保留完整诊断以便排查，不能臆造具体解决办法。完整历史阅读器的控件随当前语言，Pi Session 数据及执行脚本保持原样；离线页也使用相同偏好。
 
 交付门禁：中英文键及参数必须对齐；组件自有文案不得绕过语言包；至少验证中文浏览器中的默认英文、双向切换、刷新记忆、模型设置和离线页面。新增状态与控件必须同时补齐两种语言。
+
+## 18. 设计精度基线与交互一致性合同（2026-09-28）
+
+本节沉淀全局视觉精度与交互一致性机制，全部实现位于 `src/styles/`（2026-09-28 起拆分为 tokens/base/components/workspace/precision 五层，`src/styles.css` 是保持级联顺序的 `@import` 聚合入口；设计精度基线在 `precision.css`）及 `components/ui/` 共享原语。它们回答一个反复出现的问题：**为什么每个页面的交互逻辑看起来不一样？** 答案不是逐页调整，而是把全局体验收敛到同一批机制，任何新页面默认继承。
+
+### 18.1 全局视觉基线
+
+以下均已在 `src/styles/` 全局生效，组件不得绕过或重复定义：
+
+- **`color-scheme`**：`html` 按主题声明 `light`/`dark`，原生滚动条、表单控件和浏览器 UI 与主题一致。
+- **文本选区**：`::selection` 使用强调色的弱化底（accent-wash），明暗主题分别调校。
+- **焦点环**：全局 `:focus-visible` 默认 2px 强调色外轮廓（含 `--focus-ring` 相关声明）。组件只在特殊背景上覆写颜色，不得删除焦点指示。
+- **滚动条**：Firefox `scrollbar-width: thin`；webkit 内核统一窄滚动条与 hover 反馈。
+- **分层阴影**：`--shadow-popover`、`--shadow-dialog` 为多层（环境光 + 直射光）阴影，见 §4.4。
+
+### 18.2 代码呈现
+
+代码高亮统一使用 Shiki（`lib/highlight.ts`），替换旧的 `react-syntax-highlighter`：
+
+- **双主题**：vitesse-light / vitesse-dark，输出携带 CSS 变量，由 `html.dark` 切换；切换主题不重新高亮。
+- **按需加载**：语法与 WASM 引擎懒加载为独立 chunk；`HIGHLIGHT_LANGUAGES` 之外的语言渲染纯文本，超过 120K 字符降级纯文本，结果走 LRU 缓存。新增语言在 `LANGUAGE_LOADERS` 加一行，不引入新的高亮库。
+- **文件查看器行合同**：transformer 把每行改写为 `.file-source-line[data-line-number]` + `.file-source-line-content`；行号由 CSS counter 伪元素渲染（不可选中）。行选择、`@` 引用行号逻辑依赖该结构，改结构必须同步 `FileViewer` 的选择逻辑与测试。
+- **聊天代码块**：非流式用 `components/ui/SourceCode.tsx`（`.markdown-code-source`），流式期间用纯文本 pre（`.markdown-code-streaming`），完成后替换为高亮版本。
+
+### 18.3 全局反馈与命令入口
+
+- **Toast**：统一经 sonner 的 `components/ui/FeedbackToaster.tsx`（挂载于 `DeviceWorkspaceRoot`），主题跟随全局 `useTheme`，位置含 `--safe-area-bottom`。复制失败等非阻断反馈使用 `toast.error(t("interface.copyFailed"))`；**错误合同不变**：阻断性错误仍用 `role=alert`/`InterfaceFeedback`，toast 只承担非阻断反馈，不承担恢复路径。
+- **命令面板（⌘K）**：`components/ui/CommandPalette.tsx` 基于 cmdk，定位为**导航专用**入口（新会话、返回交流、动态、群聊、话题、设置、切换主题）。所有命令经 AppShell 既有回调执行，不得在面板内实现第二套控制逻辑。有模态 Dialog 打开时 ⌘K 不抢占；文案使用 i18n 双语键（`interface.palette.*`）。
+- **i18n**：以上所有用户可见文案按 §17.6 补齐中英双语键。
+
+### 18.4 交互一致性合同
+
+新页面/新组件使全局体验保持一致的机制清单。**默认继承，而不是重新发明：**
+
+| 需求 | 使用机制 | 禁止 |
+|---|---|---|
+| 全局任务面（Friends/Projects/动态/群聊/话题/设置） | 全屏页 + `PageHeader` 返回；左侧 rail 可直接切换，不强制先点返回；返回时恢复进入前的侧栏状态 | 再套 Dialog、强制先点返回才能切换 |
+| 临时配置（单个 Friend/资源/模型/记忆/Tools） | `SurfaceDialog`（`wide` 按需），Compact 自动全屏 Sheet；右上 X + Escape 关闭，不用 `Back` | 全屏 portal 页、自制 overlay、自制焦点陷阱 |
+| 模态确认 | Radix AlertDialog + `ConfirmationProvider` | `window.confirm`、自制遮罩 |
+| 只读目录/历史弹层 | `SurfaceDialog` / `useDialogFocus` | 手写焦点陷阱 |
+| 图标按钮/截断值提示 | `components/ui/Tooltip.tsx` 的 `Hint`（触发元素保留自己的 `aria-label`） | 依赖原生 `title` 作为唯一提示、tooltip 内容承载关键信息 |
+| 锚定非模态弹层 | `components/ui/Popover.tsx`（内容统一 portal + `.ui-popover`） | 组件内自制 outside-click/定位逻辑 |
+| 动作菜单 | `components/ui/DropdownMenu.tsx`（键盘导航、Escape、outside-click 由 Radix 提供） | 手写 `role="menu"` + outside-click 监听 |
+| 非阻断反馈 | sonner toast（`FeedbackToaster`） | 第二套通知/横幅机制 |
+| 全局导航快捷入口 | `CommandPalette`（经 AppShell 回调） | 面板内自带执行逻辑 |
+| 全局快捷键 | `useKeyboardShortcuts` / AppShell 统一监听 | 组件内散落 `keydown` 监听 |
+| 阴影/圆角/焦点环/选区色 | §18.1 全局 Token 与基线样式 | 组件内自造阴影、删除焦点指示 |
+| 代码高亮 | `lib/highlight.ts` + `SourceCode` | 引入其他高亮库 |
+| 主题切换 | `useTheme`（含 View Transition） | 组件内直接操作 `documentElement.classList` |
+| 过渡时长与缓动 | §8.1 动效 Token | 魔法时长（`0.12s`、`150ms` 等） |
+
+浮层机制说明（2026-09-28）：Tooltip / Popover / DropdownMenu 三个薄包装共享 `.ui-tooltip` / `.ui-popover` / `.ui-menu` 浮层表面（`precision.css`），统一 z-index、圆角、`--shadow-popover` 阴影与 `--duration-fast` 入场动画，Provider 挂载于 `DeviceWorkspaceRoot`。已有自制浮层按同一合同逐步收敛（DeviceSwitcher 已迁移）；移动端 Compact 的底部 action sheet 属于 Sheet 模式（§5.2），不按菜单收敛。
+
+判定方法：实现一个新界面时，若上表中的需求出现了**第三种实现方式**，先停下来——要么复用既有机制，要么在本文新增合同并迁移旧实现，不允许并存。
+
+### 18.5 门禁 skill
+
+本文是"长什么样"的事实源；交互与性能质量的逐项验收由两个适配版门禁 skill 承担（见 §14 与 `frontend/AGENTS.md` 的"质量门禁 Skills"）：
+
+- `.agents/skills/web-design-guidelines/SKILL.md`：生成或评审 UI 时按清单自查（焦点、键盘、loading、动效、表单、token 使用）。
+- `.agents/skills/react-best-practices/SKILL.md`：编写或评审 React 代码时自查（瀑布、bundle、重渲染、渲染、JS 性能）。
+
+skill 内容与本文冲突时以本文为准；skill 中的项目映射（token 名、先例文件）更新时必须核对本文对应小节。
+
+## 19. 反面案例与单一入口规范（2026-09-28）
+
+以下四个反面案例来自本次"统一项目上下文"整改（2026-09-28），是**禁止再现**的设计模式。新增界面时先对照本节自查；评审发现同类问题按 §11 例外流程处理，不允许"先上线再改"。
+
+| # | 反面案例 | 为什么是垃圾 | 强制规范 |
+|---|---|---|---|
+| 1 | 同一概念多入口/多存储：顶栏"项目上下文"选择器与聊天头部"协作项目"下拉并存，各自读写不同服务端事实 | 用户无法判断改哪个生效；两份状态必然漂移，切换后表现不一致 | 每个用户可感知概念只允许**一个**选择控件、一个服务端事实源。项目上下文的唯一入口是顶栏"项目"选择器；新增项目相关入口前必须先证明既有控件不可覆盖 |
+| 2 | 原始 ID 直接暴露给用户：后台工作面板显示 `fixedContext` 原始 project id，会话详情头显示原始 `collaborationProjectId` | 内部稳定 ID 不是用户语言；用户无法对应到自己的项目，也泄露内部命名 | 面向用户的任何位置必须显示解析后的名称（项目名/会话名）；无项目时用领域词（"Agent 容器"），解析失败时给出可读回退，绝不裸吐 ID |
+| 3 | 信息分类与领域模型不对称：任务面板只有"Background tasks"一组，而领域里实际有任务（tasks）、职责（duties）、后台工作（works）、主题节点四类 | 用户看到的分类少于系统真实能力，产生"功能缺失"错觉；排查问题信息不对症 | 展示分类必须与领域模型对齐（Long Agent 任务类别：任务/职责/后台执行/主题），缺失类别要么补齐要么明确标注范围，不允许静默裁剪 |
+| 4 | 窄侧栏高密度堆叠：左侧横向列表塞入过多控件与信息，无分组与层级 | 拥挤导致可点目标过小、扫描成本高，触控不达标 | 侧栏遵循 §4.3 间距与 44px 触控底线；信息按优先级分层，次要信息折叠或下沉到详情，不为"都可见"而堆叠 |
+
+参考模式：**Linear** 的单一列表 + 分组标题（一个对象一个列表入口，分组只是视图）；**GitHub** 的类型徽标 + 状态色（徽标标类别、状态色标运行态，二者不混用）。任务面板（`LongAgentTasksPanel`）按此实现：badge 标 task/duty/exec/work 类别，状态列标 accepted/running/failed 等运行态。
+
+选择控件唯一入口原则：任何"选择 X"的操作在整个产品中只有一个持久控件；临时上下文变化通过该控件的联动表达，不新增平行控件。Vercel 门禁 skill（§18.5）已在 `frontend/.agents/skills/`，生成与评审 UI 时按其清单自查本节。

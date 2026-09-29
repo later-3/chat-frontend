@@ -2084,6 +2084,71 @@ export const interfaceCopy: Record<string, { en: string; "zh-CN": string; source
     "en": "Read approved topic context and create its session through the controlled action.",
     "zh-CN": "读取已批准的主题上下文，调用受控提交动作创建真实主题节点会话。",
     "source": "读取已批准的主题上下文，调用受控提交动作创建真实主题节点会话。"
+  },
+  "interface.copyFailed": {
+    "en": "Copy failed",
+    "zh-CN": "复制失败",
+    "source": "Copy failed"
+  },
+  "interface.palette.open": {
+    "en": "Command menu",
+    "zh-CN": "命令菜单",
+    "source": "Command menu"
+  },
+  "interface.palette.placeholder": {
+    "en": "Type a command or search…",
+    "zh-CN": "输入命令或搜索…",
+    "source": "Type a command or search…"
+  },
+  "interface.palette.empty": {
+    "en": "No matching commands",
+    "zh-CN": "没有匹配的命令",
+    "source": "No matching commands"
+  },
+  "interface.palette.group.actions": {
+    "en": "Actions",
+    "zh-CN": "操作",
+    "source": "Actions"
+  },
+  "interface.palette.group.navigate": {
+    "en": "Navigation",
+    "zh-CN": "导航",
+    "source": "Navigation"
+  },
+  "interface.palette.newSession": {
+    "en": "New session",
+    "zh-CN": "新建会话",
+    "source": "New session"
+  },
+  "interface.palette.backToChat": {
+    "en": "Back to chat",
+    "zh-CN": "返回交流",
+    "source": "Back to chat"
+  },
+  "interface.palette.moments": {
+    "en": "Open moments",
+    "zh-CN": "打开动态",
+    "source": "Open moments"
+  },
+  "interface.palette.groups": {
+    "en": "Open group chats",
+    "zh-CN": "打开群聊",
+    "source": "Open group chats"
+  },
+  "interface.palette.topics": {
+    "en": "Open topics",
+    "zh-CN": "打开主题",
+    "source": "Open topics"
+  },
+  "interface.palette.settings": {
+    "en": "Open settings",
+    "zh-CN": "打开设置",
+    "source": "Open settings"
+  },
+  "interface.palette.toggleTheme": {
+    "en": "Switch appearance (light / dark / system)",
+    "zh-CN": "切换外观（浅色 / 深色 / 跟随系统）",
+    "source": "Switch appearance (light / dark / system)"
   }
 };
 

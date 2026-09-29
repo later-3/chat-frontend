@@ -25,7 +25,6 @@ export interface ConversationSummary {
   id: string;
   title: string;
   storageProjectId: string;
-  collaborationProjectId: string | null;
   /** The group's public root Session: raw record holds user messages plus publication references. */
   publicSessionId: string;
   lifecycle: "active" | "archived";
@@ -101,7 +100,6 @@ export function parseConversationSummary(value: unknown): ConversationSummary {
     id: text(body.id, "群 id"),
     title: text(body.title, "群名称"),
     storageProjectId: text(body.storageProjectId, "存储 Project"),
-    collaborationProjectId: nullableText(body.collaborationProjectId, "协作项目"),
     publicSessionId: text(body.publicSessionId, "公共根 Session"),
     lifecycle: body.lifecycle === "archived" ? "archived" : "active",
     revision: integer(body.revision, "群 revision"),
@@ -179,7 +177,7 @@ export async function fetchConversations(agentId: string, projectId: string, sig
 }
 
 export async function createConversation(agentId: string, input: {
-  storageProjectId: string; title: string; requestId: string; memberLongAgentIds: string[]; collaborationProjectId?: string | null;
+  storageProjectId: string; title: string; requestId: string; memberLongAgentIds: string[];
 }, signal?: AbortSignal): Promise<ConversationSummary> {
   return parseConversationSummary(await jsonRequest(base(agentId), { method: "POST", body: JSON.stringify(input) }, signal));
 }
@@ -261,7 +259,7 @@ export async function cancelConversationWork(agentId: string, conversationId: st
 }
 
 export async function updateConversation(agentId: string, conversationId: string, input: {
-  expectedRevision: number; title?: string; collaborationProjectId?: string | null; policy?: { defaultPolicy: string; moderatorLongAgentId: string | null; roundRobinOrder: string[] };
+  expectedRevision: number; title?: string; policy?: { defaultPolicy: string; moderatorLongAgentId: string | null; roundRobinOrder: string[] };
 }, signal?: AbortSignal): Promise<ConversationSummary> {
   return parseConversationSummary(await jsonRequest(`${base(agentId)}/${encodeURIComponent(conversationId)}`, { method: "PATCH", body: JSON.stringify(input) }, signal));
 }

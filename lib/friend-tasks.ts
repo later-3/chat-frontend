@@ -321,3 +321,92 @@ export async function requestFriendTasks(
     );
   return parseFriendTasks(value, agentId);
 }
+export interface TaskPanelRow {
+  key: string;
+  badge: "task" | "duty" | "exec" | "work";
+  title: string;
+  statusKey: string;
+  contextProjectId: string | null;
+  /** Raw timestamp behind the displayed time: the next run for plans, creation or scheduling for executions. */
+  timeAt: string | null;
+  sortAt: string;
+  sessionId: string | null;
+  workId: string | null;
+  execution: FriendWorkItem["execution"];
+  reason: string | null;
+}
+/** Pure view model for the tasks panel: scheduled plans, duty-owned plans and background executions (newest first). */
+export function buildFriendTaskRows(data: FriendTasks | null, works: FriendWorkItem[]): {
+  plan: TaskPanelRow[];
+  duty: TaskPanelRow[];
+  executions: TaskPanelRow[];
+} {
+  const tasks = data?.tasks ?? [];
+  const occurrences = data?.occurrences ?? [];
+  const planRow = (task: FriendTask): TaskPanelRow => ({
+    key: task.id,
+    badge: task.dutyId === undefined ? "task" : "duty",
+    title: task.name,
+    statusKey: `taskPanel.taskStatus.${task.status}`,
+    contextProjectId: task.contextProjectId,
+    timeAt: task.projection?.nextAt ?? null,
+    sortAt: task.projection?.nextAt ?? "",
+    sessionId: null,
+    workId: null,
+    execution: null,
+    reason: null,
+  });
+  const occurrenceWorkIds = new Set(occurrences
+    .map(occurrence => occurrence.work?.work.id)
+    .filter((id): id is string => typeof id === "string"));
+  const executions = [
+    ...occurrences.map((occurrence): TaskPanelRow => {
+      const work = occurrence.work;
+      if (work) return {
+        key: occurrence.id,
+        badge: "exec",
+        title: work.displayTitle ?? work.work.title,
+        statusKey: `friendWork.status.${work.execution?.status ?? "unknown"}`,
+        contextProjectId: work.work.contextProjectId,
+        timeAt: work.work.createdAt,
+        sortAt: work.work.createdAt,
+        sessionId: work.work.sessionId,
+        workId: work.work.id,
+        execution: work.execution,
+        reason: null,
+      };
+      const task = tasks.find(candidate => candidate.id === occurrence.taskId);
+      return {
+        key: occurrence.id,
+        badge: "exec",
+        title: task?.name ?? occurrence.taskId,
+        statusKey: `taskPanel.occurrence.${occurrence.state}`,
+        contextProjectId: task?.contextProjectId ?? null,
+        timeAt: occurrence.scheduledAt,
+        sortAt: occurrence.scheduledAt,
+        sessionId: null,
+        workId: null,
+        execution: null,
+        reason: occurrence.reason,
+      };
+    }),
+    ...works.filter(item => !occurrenceWorkIds.has(item.work.id)).map((item): TaskPanelRow => ({
+      key: item.work.id,
+      badge: "work",
+      title: item.displayTitle ?? item.work.title,
+      statusKey: `friendWork.status.${item.execution?.status ?? "unknown"}`,
+      contextProjectId: item.work.contextProjectId,
+      timeAt: item.work.createdAt,
+      sortAt: item.work.createdAt,
+      sessionId: item.work.sessionId,
+      workId: item.work.id,
+      execution: item.execution,
+      reason: null,
+    })),
+  ].sort((a, b) => b.sortAt.localeCompare(a.sortAt));
+  return {
+    plan: tasks.filter(task => task.dutyId === undefined).map(planRow),
+    duty: tasks.filter(task => task.dutyId !== undefined).map(planRow),
+    executions,
+  };
+}

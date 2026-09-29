@@ -217,7 +217,7 @@ Friend 简介在创建和编辑均可为空。配置响应的 `agent.description
 
 ## Friend 本轮上下文（P2）
 
-浏览项目、Friend 身份、Session 存储归属是不同状态。发送 Friend 消息时始终提交 `contextProjectId: selectedProjectId ?? null`；null 不等于“沿用上一个项目”。Backend 为该轮冻结规则与工具 cwd/Memory 目标；切换页面项目不应改写正在执行的请求。Friend inspection 的 projectId 为预览的协作项目，缺省为无项目，不是 Session 存储 Project。
+浏览项目、Friend 身份、Session 存储归属是不同状态。发送 Friend 消息时始终提交 `contextProjectId: selectedProjectId ?? null`；null 不等于“沿用上一个项目”。Backend 为该轮冻结规则与工具 cwd/Memory 目标；切换页面项目不应改写正在执行的请求。Friend inspection 的 projectId 为预览的本轮项目，缺省为无项目，不是 Session 存储 Project。
 
 Workflow Call parent/child 的可选 projectId 由响应解析器保留，不能用当前页面项目覆盖历史归属。原有旧响应仍兼容。P4 已复用同一聊天组件与实时消费核心，入口生命周期分别接 Workflow Run 和 Friend Turn。
 
@@ -250,17 +250,15 @@ Friend 发送只等耐久 202 后清理待确认输入，随后按引用观察�
 
 ## 旧链接与历史（P5）
 
-初始导航和设备快照保留可选 sessionProjectId，对应 URL 的 projectId，区别于浏览器选择的协作项目。携带 Project 的旧链接直接读取精确 Session API，并严格校验返回的 owner、readOnly 与 Session ID；迁移位置由 Backend 决定。未知链接显示失败，不改选其他项目。Home 历史 Friend 由公共 ChatWindow 正常续聊，Backend 的只读判断只用于实际受限档案；点击 Friend 默认进入今天。公共 Session 响应可带后端从节点绑定投影的 `topicNode`，解析器同时验证 owner，ChatWindow 在没有显式节点 prop 时复用它，日历/普通深链进入主题会话也走节点授权发送。不能把历史或主题误送进普通 Workflow/今日聊天。
+初始导航和设备快照保留可选 sessionProjectId，对应 URL 的 projectId，区别于浏览器当前选择的项目。携带 Project 的旧链接直接读取精确 Session API，并严格校验返回的 owner、readOnly 与 Session ID；迁移位置由 Backend 决定。未知链接显示失败，不改选其他项目。Home 历史 Friend 由公共 ChatWindow 正常续聊，Backend 的只读判断只用于实际受限档案；点击 Friend 默认进入今天。公共 Session 响应可带后端从节点绑定投影的 `topicNode`，解析器同时验证 owner，ChatWindow 在没有显式节点 prop 时复用它，日历/普通深链进入主题会话也走节点授权发送。不能把历史或主题误送进普通 Workflow/今日聊天。
 
 ## Friend 后台任务（LA1）
 
-`FriendWorkPanel` 是侧栏工作入口，`lib/friend-work.ts` 严格校验 HTTP v1 绑定及执行归属；身份、Session、workId、固定项目必须一致；可选 `topicIntegration` 必须验证其 topicId/nodeId/sessionId，不能因已有合法主题关联把整张后台工作列表判成无效。列表每 3 秒刷新，隐藏页面不轮询，卸载取消读请求。新建任务通过主聊及真实 `friend_work` Tool。旧创建表单留下的未确认请求仍由 `friend-work-draft.ts` 恢复，显式重试沿用原 ID 和原项目；实际工作状态从 Backend 恢复。
+后台工作与任务展示分两处：`LongAgentTasksPanel`（每个 Agent 行的清单图标打开）是任务/职责/后台执行的统一面板，`lib/friend-tasks.ts` 的 `buildFriendTaskRows` 为纯视图模型（plan/duty/executions 三组，occurrence 自带 work 不再重复为独立行，最新在前）；`FriendWorkPanel` 只保留当日概览与当日会话导航，不再列出全局 works。`lib/friend-work.ts` 严格校验 HTTP v1 绑定及执行归属；身份、Session、workId、固定项目必须一致；可选 `topicIntegration` 必须验证其 topicId/nodeId/sessionId，不能因已有合法主题关联把整张后台工作列表判成无效。任务面板 5 秒轮询（隐藏页面不轮询，卸载取消），项目 id 经 projects 列表解析为名称，无项目显示"Agent 容器"，绝不裸吐 ID。新建任务通过主聊及真实 `friend_work` Tool；旧创建表单留下的未确认请求仍由 `friend-work-draft.ts` 恢复。
 
-工作会话继续使用 `useAgentSession` 和 `friend-execution.ts`，没有单独聊天渲染器。FriendExecution.workId 表示固定项目工作，后续消息/引导使用执行记录的 contextProjectId，不跟随顶部项目选择；日常交流仍按下一条消息选择项目。列表按日定位并提供停止单个执行、打开原生 Session；点击 Friend 卡片是返回今日主聊的统一入口，不另设返回按钮。新增文案同时覆盖中英文；回归为 `lib/friend-work.test.mjs`，浏览器还须验证流式、刷新、跨项目及移动布局。
+工作会话继续使用 `useAgentSession` 和 `friend-execution.ts`，没有单独聊天渲染器。FriendExecution.workId 表示固定项目工作，后续消息/引导使用执行记录的 contextProjectId，不跟随顶部项目选择；日常交流仍按下一条消息选择项目。停止单个执行、执行详情（`TaskRunDetails`）与打开原生 Session 在任务面板操作；点击 Friend 卡片是返回今日主聊的统一入口，不另设返回按钮。新增文案同时覆盖中英文；回归为 `lib/friend-work.test.mjs` 与 `lib/friend-tasks.test.mjs`（含 tasks/duties/works 三类行与去重门禁），浏览器还须验证流式、刷新、跨项目及移动布局。
 
 LA2 任务页区分定义修订、调度应用状态和执行历史；不在浏览器计算 cron。create/run 未确认请求在 sessionStorage 保留同一 ID，重试沿用原命令；事实刷新仍来自 Backend。每次执行链接到 LA1 原生工作会话，继续使用公共实时聊天组件。
-
-Friend 项目关联的异步状态按所选 Friend 管理：切换时同时清理旧关联、错误和忙碌标志；旧读取/保存响应按请求代次失效，不得重新污染新 Friend。真实浏览器门禁覆盖慢 GET 快切和挂起 PUT 后切换，后者必须验证新 Friend 的控件仍可操作。
 
 ### Friend 日历与记忆目录（2026-09-27）
 
@@ -302,3 +300,23 @@ Pi 完整历史通过 `history-locale.ts` 对固定上游版本的阅读器控�
 ### 共用动作与模态基础（2026-09-27）
 
 `components/ui/Button.tsx`、`PageHeader.tsx` 负责动作外观与一致的左侧返回；`SurfaceDialog` 基于固定版本 Radix Dialog，`ConfirmationProvider` 基于 AlertDialog，业务组件通过 `useConfirmation` 等待用户决定。列表选择不是动作按钮。不要新增 `window.confirm` 或复制页面级按钮样式。焦点、Escape、窄屏布局的真实浏览器回归随 `test:dev` 执行。
+
+### 设计精度与代码高亮（2026-09-28）
+
+第一批 UI/UX 门禁落地的实现合同，规范语义见 [UI/UX 规范 §18](./ui-ux-guidelines.md#18-设计精度基线与交互一致性合同2026-09-28)。
+
+- **依赖**：新增 `@fontsource-variable/instrument-sans`、`@fontsource-variable/jetbrains-mono`（品牌字体，`src/main.tsx` 引入）、`shiki`（代码高亮）、`sonner`（toast）、`cmdk`（命令面板）；已移除 `react-syntax-highlighter` 及其类型包。依赖变更按 §1 同步自身与父仓库锁文件。
+- **代码高亮**：`lib/highlight.ts` 是唯一高亮入口。基于 `shiki/core` 懒加载单例 + oniguruma 引擎 + `shiki/wasm`；语法按需动态 import（`LANGUAGE_LOADERS`），未知语言与超 120K 字符渲染转义纯文本，结果走 200 条 LRU。组件侧统一用 `components/ui/SourceCode.tsx`；不得再引入其他高亮库或在组件内直接调用 shiki。`lib/highlight.test.mjs` 覆盖文件名到语言映射。
+- **文件查看器行结构**：transformer 将输出改写为 `.file-source-line[data-line-number]` > `.file-source-line-content`，行号由 CSS counter 伪元素渲染；`FileViewer` 的行选择/引用逻辑与 diff 视图依赖该合同。
+- **Toast**：`components/ui/FeedbackToaster.tsx` 包装 sonner，挂载于 `DeviceWorkspaceRoot`；非阻断反馈用 `toast.error/info`（i18n 键），阻断性错误仍走 `role=alert` + `InterfaceFeedback`，两者不得混用。
+- **命令面板**：`components/ui/CommandPalette.tsx`（cmdk）为导航专用入口；⌘K 监听在 AppShell capture 阶段统一注册，存在模态 Dialog 时不抢占。命令只调用 AppShell 既有回调。`new-session-draft.test.mjs` 按源码切片提取 AppShell 的 useCallback 块，AppShell 中这些回调之间的代码不得引入组件作用域外的 hook 调用。
+- **全局样式**：`color-scheme`、`::selection`、全局 `:focus-visible`、窄滚动条、shiki 双主题变量切换、命令面板样式集中在 "Design precision baseline" 区块；阴影 Token `--shadow-popover`/`--shadow-dialog` 为多层阴影，组件不得自造。
+
+### 浮层原语、动效 Token 与样式拆分（2026-09-28）
+
+第二批/第三批 UI/UX 门禁落地的实现合同，规范语义见 [UI/UX 规范 §8.1 与 §18.4](./ui-ux-guidelines.md#18-设计精度基线与交互一致性合同2026-09-28)。
+
+- **依赖**：新增 `@radix-ui/react-tooltip`、`@radix-ui/react-popover`、`@radix-ui/react-dropdown-menu`；依赖变更按 §1 同步自身与父仓库锁文件。
+- **浮层原语**：`components/ui/Tooltip.tsx`（`Hint` + `TooltipProvider`，Provider 挂载于 `DeviceWorkspaceRoot`）、`components/ui/Popover.tsx`、`components/ui/DropdownMenu.tsx` 是浮层的唯一入口；内容统一 portal 并携带 `.ui-tooltip`/`.ui-popover`/`.ui-menu` 浮层类（`src/styles/precision.css`）。Escape、outside-click、键盘导航、定位翻转由 Radix 提供，页面不得手写。图标按钮接入 `Hint` 后删除原 `title`、保留 `aria-label`。存量自制浮层按此合同逐步收敛（`DeviceSwitcher` 已迁移）；移动端底部 action sheet 属于 Sheet 模式，不按菜单收敛。
+- **动效 Token**：`--duration-fast`(120ms)/`--duration-panel`(200ms)/`--duration-overlay`(240ms)/`--ease-out`/`--ease-standard` 定义在 `src/styles/tokens.css` 的 `:root`；新增 `transition`/`animation` 必须引用 Token。全局 `prefers-reduced-motion: reduce` 兜底位于 `precision.css`，组件不得依赖动画时长维持逻辑正确。
+- **样式拆分**：`src/styles.css` 只是按声明顺序 `@import` 的聚合入口，实际规则分布在 `src/styles/` 的 `tokens.css`（`@theme`+Token）、`base.css`、`components.css`、`workspace.css`、`precision.css` 五层；拆分为纯机械移动，类名与级联顺序不变。测试源码断言统一使用 `lib/style-sources.ts` 的 `readStyleSheetSources()` 读取聚合源，新增样式源文件时必须同步该列表。

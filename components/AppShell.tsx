@@ -29,6 +29,7 @@ import { ExtensionsConfig } from "./ExtensionsConfig";
 import { PromptResourcesConfig } from "./PromptResourcesConfig";
 import { ToolsConfig } from "./ToolsConfig";
 import { BranchNavigator } from "./BranchNavigator";
+import { CommandPalette } from "@/components/ui/CommandPalette";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile, useIsNarrowMobile } from "@/hooks/useIsMobile";
@@ -40,14 +41,6 @@ import { useAudio } from "@/hooks/useAudio";
 import { copyText } from "@/lib/clipboard";
 import { getFileName } from "@/lib/file-paths";
 import { fetchChatProjects, openChatProject, type ChatProjectSummary } from "@/lib/projects-contract";
-import {
-  fetchFriendInteractionProject,
-  friendProjectSendState,
-  isFriendInteractionResponseCurrent,
-  saveFriendInteractionProject,
-  type FriendInteractionProject,
-} from "@/lib/friend-interaction-project";
-import { FriendProjectContext } from "./FriendProjectContext";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
 import {
   claimExtensionAttentionNotification,
@@ -130,7 +123,7 @@ export function AppShell({
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
   }, []);
-  const { view: workspaceView, openMoments, openGroups, openTopics, openSettings, showChat: activateChat, goBack: returnFromMoments } = useWorkspaceView();
+  const { view: workspaceView, openMoments, openGroups, openTopics, openSettings, showChat: activateChat } = useWorkspaceView();
   const settingsVisible = workspaceView === "settings";
   const setSettingsVisible = (visible: boolean) => visible ? openSettings() : activateChat();
   const { preference, toggleTheme, setTheme } = useTheme();
@@ -202,6 +195,8 @@ export function AppShell({
   const [mobileDebugOpen, setMobileDebugOpen] = useState(false);
   const [mobileWorkspaceView, setMobileWorkspaceView] = useState<MobileWorkspaceView>("sessions");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  // P1：进入全局任务页前记住侧栏状态，返回 chat 时恢复，避免默认折叠。
+  const sidebarOpenBeforeGlobalRef = useRef<boolean | null>(null);
   const chatSurfaceRef = useRef<HTMLDivElement>(null);
   const momentsTriggerRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
@@ -532,74 +527,10 @@ export function AppShell({
   const initialSessionId = initialNavigation.sessionId;
   const [activeCwd, setActiveCwd] = useState<string | null>(initialWorkspaceSnapshot.contextSelection?.cwd ?? null);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(initialWorkspaceSnapshot.contextSelection?.projectId ?? null);
-  // 用户显式选择的上下文项目（顶部栏）；Long Agent 会话不覆盖它。
+  // 用户显式选择的上下文项目（顶部栏，唯一项目入口）；Long Agent 会话共用它。
   const [contextCwd, setContextCwd] = useState<string | null>(initialWorkspaceSnapshot.contextSelection?.cwd ?? null);
-  // LA6 A: the selected Friend's own collaboration-project association. It is independent of the
-  // global workspace context project, so switching Friends never leaks a project into another one.
-  const [friendInteraction, setFriendInteraction] = useState<FriendInteractionProject | null>(null);
-  const [friendProjects, setFriendProjects] = useState<readonly ChatProjectSummary[]>([]);
-  const [friendProjectBusy, setFriendProjectBusy] = useState(false);
-  const [friendProjectError, setFriendProjectError] = useState<string | null>(null);
   const activeProjectKeyRef = useRef<string | null>(null);
   const selectedLongAgentId = selectedSession?.owner.type === "long-agent" ? selectedSession.owner.longAgentId : null;
-  // A response or save from an earlier Friend must never overwrite the current Friend's state.
-  const selectedLongAgentIdRef = useRef<string | null>(null);
-  selectedLongAgentIdRef.current = selectedLongAgentId;
-  const friendProjectGenerationRef = useRef(0);
-  useEffect(() => {
-    friendProjectGenerationRef.current += 1;
-    const generation = friendProjectGenerationRef.current;
-    const controller = new AbortController();
-    // Clear immediately on switch so a slow response cannot be shown for the previous Friend.
-    setFriendInteraction(null);
-    setFriendProjectBusy(false);
-    setFriendProjectError(null);
-    if (selectedLongAgentId === null) return () => controller.abort();
-    void fetchFriendInteractionProject(selectedLongAgentId, controller.signal)
-      .then((value) => { if (!controller.signal.aborted && generation === friendProjectGenerationRef.current && isFriendInteractionResponseCurrent(selectedLongAgentId, selectedLongAgentIdRef.current)) setFriendInteraction(value); })
-      .catch((cause) => { if (!controller.signal.aborted && generation === friendProjectGenerationRef.current) { setFriendInteraction(null); setFriendProjectError(cause instanceof Error ? cause.message : String(cause)); } });
-    return () => controller.abort();
-  }, [selectedLongAgentId]);
-  useEffect(() => {
-    if (selectedLongAgentId === null || friendProjects.length > 0) return;
-    const controller = new AbortController();
-    void fetchChatProjects(controller.signal)
-      .then((projects) => { if (!controller.signal.aborted) setFriendProjects(projects.filter((project) => project.kind === "project")); })
-      .catch(() => undefined);
-    return () => controller.abort();
-  }, [selectedLongAgentId, friendProjects.length]);
-  const saveFriendProject = useCallback(async (agentId: string, projectId: string | null) => {
-    if (friendInteraction === null || selectedLongAgentIdRef.current !== agentId) return;
-    const generation = friendProjectGenerationRef.current;
-    setFriendProjectBusy(true);
-    setFriendProjectError(null);
-    try {
-      const next = await saveFriendInteractionProject(agentId, { projectId, expectedRevision: friendInteraction.revision });
-      if (generation === friendProjectGenerationRef.current) setFriendInteraction(next);
-    } catch (cause) {
-      if (generation !== friendProjectGenerationRef.current) return;
-      setFriendProjectError(cause instanceof Error ? cause.message : String(cause));
-      try {
-        const refreshed = await fetchFriendInteractionProject(agentId);
-        if (generation === friendProjectGenerationRef.current) setFriendInteraction(refreshed);
-      } catch { /* keep the reported error */ }
-    } finally {
-      if (generation === friendProjectGenerationRef.current) setFriendProjectBusy(false);
-    }
-  }, [friendInteraction]);
-  // Same-source inputs: for a Friend the file browser/resource panel and the send target all come
-  // from that Friend's association, never from the globally selected workspace project.
-  const selectedFriendProject = selectedLongAgentId === null
-    ? null
-    : friendProjects.find((project) => project.projectId === friendInteraction?.effective.projectId) ?? null;
-  const friendContextProjectId = selectedLongAgentId === null ? null : friendInteraction?.effective.projectId ?? null;
-  const friendContextCwd = selectedLongAgentId === null ? null : (selectedFriendProject?.path ?? selectedSession?.cwd ?? null);
-  const friendSendState = friendProjectSendState(friendInteraction);
-  const friendProjectBlockedReason = selectedLongAgentId === null || friendSendState === "ready"
-    ? null
-    : friendSendState === "loading"
-      ? (friendProjectError ?? translate("friendProject.loading"))
-      : (friendInteraction?.effective.reason ?? translate("friendProject.unavailable"));
   useEffect(() => {
     if (!contextCwd || !activeProjectId) return;
     workspaceSnapshotRef.current = { ...workspaceSnapshotRef.current, contextSelection: { cwd: contextCwd, projectId: activeProjectId } };
@@ -661,6 +592,24 @@ export function AppShell({
 
     return () => controller.abort();
   }, [initialNavigation]);
+
+  // ⌘K command palette: available in every view (including settings and
+  // moments) but never while another modal dialog owns the keyboard.
+  // Kept above the navigation useCallback cluster — new-session-draft.test.mjs
+  // extracts those callbacks by source slicing.
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (event.key === "k" && (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey) {
+        if (!commandPaletteOpen && document.querySelector("dialog[open], [role=dialog][aria-modal=true]")) return;
+        event.preventDefault();
+        setCommandPaletteOpen((open) => !open);
+      }
+    };
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
+  }, [commandPaletteOpen]);
 
   // Restore the workspace's last open session after switching to it. Called
   // from handleCwdChange once the outgoing context has been reset. The session
@@ -1151,19 +1100,13 @@ export function AppShell({
     activeNewSessionDraftKeyRef.current = newSessionDraftKey;
   }, [newSessionDraftKey]);
   const showChat = Boolean(currentProjectId && (selectedSession !== null || effectiveNewSessionCwd !== null));
-  const resourceCwd = settingsProject !== undefined ? settingsProject?.path ?? null : selectedLongAgentId !== null
-    ? friendContextCwd
-    : (contextCwd ?? selectedSession?.cwd ?? effectiveNewSessionCwd);
-  const resourceProjectId = settingsProject !== undefined ? settingsProject?.projectId ?? null : selectedLongAgentId !== null
-    ? friendContextProjectId
-    : (activeProjectId ?? currentProjectId);
+  const resourceCwd = settingsProject !== undefined ? settingsProject?.path ?? null : (contextCwd ?? selectedSession?.cwd ?? effectiveNewSessionCwd);
+  const resourceProjectId = settingsProject !== undefined ? settingsProject?.projectId ?? null : (activeProjectId ?? currentProjectId);
   // While restoring initial session from URL, don't show the placeholder
   const showPlaceholder = (contentPanel === "long-agents" && selectedSession?.owner.type !== "long-agent") || (initialSessionRestored && !showChat);
 
   const activeFileTab = fileTabs.find((tab) => tab.id === activeFileTabId) ?? null;
-  // The window title follows the same source as the file browser: the Friend's association.
-  const titleCwd = selectedLongAgentId !== null ? friendContextCwd : activeCwd;
-  const activeCwdName = titleCwd ? getFileName(titleCwd) || titleCwd : null;
+  const activeCwdName = activeCwd ? getFileName(activeCwd) || activeCwd : null;
   const windowTitle = activeCwdName && activeCwdName !== "Chat" ? `${activeCwdName} - Chat` : "Chat";
 
   useEffect(() => {
@@ -1200,9 +1143,9 @@ export function AppShell({
         selectedCwd={selectedSession === null
           ? (newSessionCwd ?? contextCwd)
           : selectedLongAgentId !== null
-            ? friendContextCwd
+            ? (contextCwd ?? selectedSession.cwd)
             : selectedSession.cwd}
-        selectedProjectId={selectedLongAgentId !== null ? friendContextProjectId : activeProjectId}
+        selectedProjectId={activeProjectId}
         onCwdChange={handleCwdChange}
         onOpenFile={handleOpenFile}
         explorerRefreshKey={explorerRefreshKey}
@@ -1631,14 +1574,27 @@ export function AppShell({
     { id: "plugins", scope: "project" as const, label: translate("common.plugins"), description: translate("workspaceNav.pluginsHint"), onOpen: () => setPluginsConfigOpen(true), disabled: !resourceCwd || !resourceProjectId },
     { id: "extensions", scope: "project" as const, label: translate("interface.extensions"), description: translate("workspaceNav.extensionsHint"), onOpen: () => setExtensionsConfigOpen(true), disabled: !resourceCwd || !resourceProjectId },
   ];
+  // P1：全局任务页只在 overlay 断点关闭侧栏；返回时恢复进入前状态。
+  const enterGlobalView = useCallback((open: () => void) => {
+    if (sidebarOpenBeforeGlobalRef.current === null) sidebarOpenBeforeGlobalRef.current = sidebarOpen;
+    open();
+    if (sidebarUsesOverlay) setSidebarOpen(false);
+  }, [sidebarOpen, sidebarUsesOverlay]);
+  const returnToChatView = useCallback(() => {
+    activateChat();
+    const restore = sidebarOpenBeforeGlobalRef.current;
+    sidebarOpenBeforeGlobalRef.current = null;
+    if (restore !== null && !sidebarUsesOverlay) setSidebarOpen(restore);
+  }, [activateChat, sidebarUsesOverlay]);
   function handleNavigateSection(section: WorkspaceSection) {
     invalidateWorkspaceRestore();
     setActiveTopPanel(null);
-    if (section === "settings") { openSettings(); setSidebarOpen(false); return; }
-    if (section === "moments") { openMoments(); setSidebarOpen(false); return; }
-    if (section === "groups") { openGroups(); setSidebarOpen(false); return; }
-    if (section === "topics") { openTopics(); setSidebarOpen(false); return; }
+    if (section === "settings") { enterGlobalView(openSettings); return; }
+    if (section === "moments") { enterGlobalView(openMoments); return; }
+    if (section === "groups") { enterGlobalView(openGroups); return; }
+    if (section === "topics") { enterGlobalView(openTopics); return; }
     activateChat();
+    sidebarOpenBeforeGlobalRef.current = null;
     setSidebarOpen(true);
     setMobileWorkspaceView("sessions");
     if (isMobile || viewportWidth < 960) setRightPanelOpen(false);
@@ -2107,10 +2063,10 @@ export function AppShell({
         />
       )}
 
-      {!settingsVisible && workspaceView === "groups" && <LongAgentGroupChatView onBack={returnFromMoments} />}
-      {!settingsVisible && workspaceView === "topics" && <LongAgentTopicsView onBack={returnFromMoments} />}
+      {!settingsVisible && workspaceView === "groups" && <LongAgentGroupChatView onBack={returnToChatView} />}
+      {!settingsVisible && workspaceView === "topics" && <LongAgentTopicsView onBack={returnToChatView} />}
 
-      {!settingsVisible && workspaceView === "moments" && <LongAgentFeedView onBack={returnFromMoments} />}
+      {!settingsVisible && workspaceView === "moments" && <LongAgentFeedView onBack={returnToChatView} />}
 
       {/* Keep ChatWindow mounted while browsing Moments: draft, scroll and live Run remain owned by the same Session. */}
       <div ref={chatSurfaceRef} tabIndex={-1} data-workspace-chat hidden={settingsVisible || workspaceView !== "chat"} style={{ flex: 1, display: !settingsVisible && workspaceView === "chat" ? "flex" : "none", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
@@ -2118,22 +2074,11 @@ export function AppShell({
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
           {navigationError ? <div className="workspace-navigation-error" role="alert"><InterfaceFeedback message={navigationError} /></div> : showChat && currentProjectId && (contentPanel === "sessions" || selectedSession?.owner.type === "long-agent") ? (
             <>
-            {selectedLongAgentId !== null && <FriendProjectContext
-              agentId={selectedLongAgentId}
-              interaction={friendInteraction}
-              projects={friendProjects}
-              busy={friendProjectBusy}
-              contextCwd={friendContextCwd}
-              error={friendProjectError}
-              onSave={(projectId) => void saveFriendProject(selectedLongAgentId, projectId)}
-            />}
             <ChatWindow
               key={sessionKey}
               projectId={currentProjectId}
               deviceId={deviceId}
-              contextProjectId={selectedLongAgentId !== null ? friendInteraction?.effective.projectId ?? null : activeProjectId}
-              interactionRevision={selectedLongAgentId !== null ? friendInteraction?.revision : undefined}
-              contextBlockedReason={friendProjectBlockedReason}
+              contextProjectId={activeProjectId}
               session={selectedSession}
               sessionRunning={Boolean(selectedSession && runningSessionIds.has(selectedSession.id))}
               newSessionCwd={effectiveNewSessionCwd}
@@ -2330,7 +2275,7 @@ export function AppShell({
           window.history.pushState({workspaceNavigation:true}, "", `${url.pathname}${url.search}${url.hash}`);
         }}
         wideContent={wideContent} onContentWidth={toggleContentWidth} items={settingsItems}
-        theme={preference} onTheme={setTheme} language={locale} onLanguage={setLocale} onBack={returnFromMoments}
+        theme={preference} onTheme={setTheme} language={locale} onLanguage={setLocale} onBack={returnToChatView}
         onRefresh={() => { setRefreshKey(key => key + 1); setExplorerRefreshKey(key => key + 1); }}
         onSelfCheck={isMobile ? () => { activateChat(); setSidebarOpen(false); setRightPanelOpen(false); setMobileDebugOpen(true); } : undefined} />}
     </div>
@@ -2383,6 +2328,26 @@ export function AppShell({
         onClose={() => setMobileDebugOpen(false)}
       />
     )}
+    <CommandPalette
+      open={commandPaletteOpen}
+      onOpenChange={setCommandPaletteOpen}
+      onNewSession={() => {
+        activateChat();
+        if (activeCwd) {
+          handleNewSession(`palette-${crypto.randomUUID()}`, activeCwd);
+          if (activeProjectId) restoreWorkspaceContext(activeProjectId, activeCwd);
+        } else {
+          setSelectedSession(null);
+          setSessionKey((k) => k + 1);
+        }
+      }}
+      onBackToChat={activateChat}
+      onOpenMoments={openMoments}
+      onOpenGroups={openGroups}
+      onOpenTopics={openTopics}
+      onOpenSettings={openSettings}
+      onToggleTheme={toggleTheme}
+    />
     </>
   );
 }

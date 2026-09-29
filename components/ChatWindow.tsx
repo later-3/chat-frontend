@@ -12,6 +12,7 @@ import { getAssistantErrorMessage, getDisplayableAssistantBlocks, splitFinalAssi
 import { extractTurnWrittenFiles, type WrittenFile } from "@/lib/turn-written-files";
 import { summarizeTurn } from "@/lib/turn-summary";
 import { TurnSummary } from "./TurnSummary";
+import { Hint } from "@/components/ui/Tooltip";
 import { RunStatus, ToolActivityContext } from "./RunStatus";
 import { MessageView } from "./MessageView";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
@@ -45,13 +46,9 @@ import { observeChatAutoScroll } from "@/lib/chat-auto-scroll";
 
 interface Props {
   projectId: string;
-  /** 顶栏上下文项目（B1）：只注入 Long Agent 提示词，不改变会话归属。 */
   deviceId?: string;
+  /** 顶栏选中的项目：随 Long Agent 新轮次发送，受理时冻结为本轮执行项目。 */
   contextProjectId?: string | null;
-  /** Per-Friend collaboration-project association revision (LA6 A). */
-  interactionRevision?: number;
-  /** Non-null when a new Friend private turn must be refused (association loading/unavailable). */
-  contextBlockedReason?: string | null;
   /** Topic node target: sends go through the node route, everything else uses the shared Session surface. */
   topicNode?: TopicNodeTarget;
   onSessionMemoryChanged?: () => void;
@@ -135,7 +132,7 @@ function withAssistantBlocks(
   return next;
 }
 
-export function ChatWindow({ projectId, deviceId, contextProjectId, interactionRevision, contextBlockedReason, topicNode: requestedTopicNode, onSessionMemoryChanged, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onConnectionFailure, soundEnabled = true, onSoundToggle, playDoneSound = () => {}, unlockAudio }: Props) {
+export function ChatWindow({ projectId, deviceId, contextProjectId, topicNode: requestedTopicNode, onSessionMemoryChanged, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onConnectionFailure, soundEnabled = true, onSoundToggle, playDoneSound = () => {}, unlockAudio }: Props) {
   const topicNode = requestedTopicNode ?? session?.topicNode;
   const sessionMemoryControl = useTopicMemoryControl(topicNode, onSessionMemoryChanged);
   const { t, locale } = useI18n();
@@ -185,7 +182,7 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
     setWorkflowId, setWorkflowAgentConfigs,
     memoryEnabled, setMemoryEnabled,
   } = useAgentSession({
-    projectId, deviceId, contextProjectId, interactionRevision, contextBlockedReason, topicNode, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd: wrappedOnAgentEnd, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked,
+    projectId, deviceId, contextProjectId, topicNode, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd: wrappedOnAgentEnd, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked,
     chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsPanelOpen,
     onConnectionFailure,
     sessionMemoryEnabled: sessionMemoryControl?.enabled,
@@ -350,11 +347,13 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, interactionR
   const memoryStorageProjectId = longAgentId ?? projectId;
   const memorySessionId = session?.id ?? sessionIdRef.current ?? null;
   const memoryAction = !readOnly && memorySessionId !== null ? (
-    <button type="button" className="composer-memory-action" data-session-memory-open data-memory-enabled={memoryEnabled}
-      aria-label={t("topics.memoryPanel")} title={t("topics.memoryPanel")} onClick={() => setMemoryOpen(true)}>
-      <IconNotebook size={18} aria-hidden="true" />
-      {memoryCount > 0 && <span>{memoryCount}</span>}
-    </button>
+    <Hint label={t("topics.memoryPanel")}>
+      <button type="button" className="composer-memory-action" data-session-memory-open data-memory-enabled={memoryEnabled}
+        aria-label={t("topics.memoryPanel")} onClick={() => setMemoryOpen(true)}>
+        <IconNotebook size={18} aria-hidden="true" />
+        {memoryCount > 0 && <span>{memoryCount}</span>}
+      </button>
+    </Hint>
   ) : null;
 
   const chatInputElement = <>{readOnly ? (

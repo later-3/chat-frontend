@@ -1,12 +1,11 @@
 "use client";
 
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vs } from "react-syntax-highlighter/dist/cjs/styles/prism";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import { toast } from "sonner";
 import { useTheme } from "@/hooks/useTheme";
 import { useI18n } from "@/hooks/useI18n";
 import { copyText } from "@/lib/clipboard";
+import { SourceCode } from "@/components/ui/SourceCode";
 
 interface MermaidBlockProps {
   code: string;
@@ -232,13 +231,12 @@ interface CodeBlockProps {
  * Used as the "source" view for mermaid blocks and for all non-mermaid code fences.
  *
  * Memoized: parent markdown re-renders (e.g. streaming updates elsewhere in
- * the message list) must not re-run Prism tokenization on unchanged code.
+ * the message list) must not re-run Shiki tokenization on unchanged code.
  * While the owning message is still streaming, the block renders as plain
  * monospace text — highlighting a growing block re-tokenizes all of it on
  * every chunk, which is the single most expensive part of streamed rendering.
  */
 export const CodeBlock = memo(function CodeBlock({ code, lang, headerAction, isStreaming }: CodeBlockProps) {
-  const { isDark } = useTheme();
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
 
@@ -246,6 +244,8 @@ export const CodeBlock = memo(function CodeBlock({ code, lang, headerAction, isS
     copyText(code).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {
+      toast.error(t("interface.copyFailed"));
     });
   };
 
@@ -264,36 +264,16 @@ export const CodeBlock = memo(function CodeBlock({ code, lang, headerAction, isS
         </div>
       </div>
       {isStreaming ? (
-        <pre
-          style={{
-            margin: 0,
-            padding: "11px 13px",
-            fontSize: 12.5,
-            lineHeight: 1.62,
-            overflowX: "auto",
-            background: "color-mix(in srgb, var(--bg) 92%, var(--bg-panel))",
-          }}
-        >
-          <code style={{ fontFamily: "var(--font-mono)" }}>{code}</code>
+        <pre className="markdown-code-streaming">
+          <code>{code}</code>
         </pre>
       ) : (
-        <SyntaxHighlighter
+        <SourceCode
+          code={code}
           language={lang || "text"}
-          style={isDark ? vscDarkPlus : vs}
-          showLineNumbers
-          lineNumberStyle={{ color: "var(--text-dim)", fontStyle: "normal" }}
-          customStyle={{
-            margin: 0,
-            padding: "11px 13px",
-            fontSize: 12.5,
-            lineHeight: 1.62,
-            borderRadius: 0,
-            background: "color-mix(in srgb, var(--bg) 92%, var(--bg-panel))",
-          }}
-          codeTagProps={{ style: { fontFamily: "var(--font-mono)" } }}
-        >
-          {code}
-        </SyntaxHighlighter>
+          fileSourceLines
+          className="markdown-code-source"
+        />
       )}
     </div>
   );

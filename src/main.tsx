@@ -2,6 +2,10 @@ import { ConfirmationProvider } from "@/components/ui/Confirmation";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "katex/dist/katex.min.css";
+// Self-hosted variable fonts (latin subset); Chinese text falls back to the
+// platform font stack declared on --font-sans / --font-mono.
+import "@fontsource-variable/instrument-sans";
+import "@fontsource-variable/jetbrains-mono";
 import "./styles.css";
 import { DeviceWorkspaceRoot } from "@/components/DeviceWorkspaceRoot";
 import { PwaRegistration } from "@/components/PwaRegistration";

@@ -1492,7 +1492,6 @@ export function SessionSidebar({ contentPanel, onContentPanelChange: setContentP
       {(!isMobile || mobileView === "sessions") && onOpenSessionById && (
         <ProjectLongAgentSection
           projectId={null}
-          contextProjectId={activeProjectId}
           selectedLongAgentId={selectedSession?.owner.type === "long-agent" ? selectedSession.owner.longAgentId : undefined}
           selectedSessionId={selectedSessionId}
           visible={contentPanel === "long-agents"}

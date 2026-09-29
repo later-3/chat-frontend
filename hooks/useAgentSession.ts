@@ -36,7 +36,6 @@ import { setDraft } from "@/lib/draft-store";
 import { readPendingSubmission, retainPendingSubmission, clearPendingSubmission } from "@/lib/pending-submission";
 import {
   cancelChatWorkflowRun,
-  workflowRequestSignal,
   WorkflowTerminalError,
   type WorkflowConnectionUpdate,
   resumeChatWorkflowRun,
@@ -191,13 +190,9 @@ export interface NoticeItem {
 
 interface UseAgentSessionOptions {
   projectId: string;
-  /** 顶栏上下文项目（B1）：随消息传给 Long Agent，仅注入提示词。 */
   deviceId?: string;
+  /** 顶栏选中的项目：随 Long Agent 新轮次发送，受理时冻结为本轮执行项目。 */
   contextProjectId?: string | null;
-  /** Per-Friend collaboration-project association revision; sent on new private turns. */
-  interactionRevision?: number;
-  /** Non-null when a new Friend private turn must be refused (association loading/unavailable). */
-  contextBlockedReason?: string | null;
   /**
    * When set, this session is a topic node: sends must go through the node's authorized route and the
    * shared observer drives the round. The read path stays the ordinary Session read.
@@ -432,8 +427,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const {
     projectId,
     contextProjectId,
-    interactionRevision,
-    contextBlockedReason,
     topicNode,
     deviceId,
     session,
@@ -1005,16 +998,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       return;
     }
 
-    // A new private turn needs the loaded association; refuse instead of degrading to a no-revision
-    // send that the Backend would reject. Work-session continuations keep their frozen target.
-    if (selectedLongAgent !== undefined
-      && friendExecutionRef.current?.workId === undefined
-      && (contextBlockedReason ?? null) !== null) {
-      restoreSubmission(message, images);
-      addNotice({ type: "error", message: String(contextBlockedReason) });
-      return;
-    }
-
     if (composerDraftKey && readPendingSubmission(composerDraftKey)) {
       restoreSubmission(message, images);
       addNotice({ type: "warning", message: "上次发送尚未确认，请先核对会话并处理保留的文字，再发送新消息" });
@@ -1083,7 +1066,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           ...(sessionIdRef.current === null ? {} : { sessionId: sessionIdRef.current }),
           text: message, ...(friendExecutionRef.current?.workId
             ? { contextProjectId: friendExecutionRef.current.contextProjectId }
-            : { contextProjectId: contextProjectId ?? null, ...(interactionRevision === undefined ? {} : { interactionRevision }) }),
+            : { contextProjectId: contextProjectId ?? null }),
           ...(memoryEnabled ? {} : { sessionMemory: "off" as const }),
           ...(images?.length ? { images: images.map(image => ({ type: "image" as const, data:image.data, mimeType:image.mimeType })) } : {}),
         }, controller.signal);
@@ -1357,7 +1340,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             text: message,
             ...(friendExecutionRef.current?.workId
               ? { contextProjectId: friendExecutionRef.current.contextProjectId }
-              : { contextProjectId: contextProjectId ?? null, ...(interactionRevision === undefined ? {} : { interactionRevision }) }),
+              : { contextProjectId: contextProjectId ?? null }),
           });
           addNotice({
             type: "info",
@@ -1384,7 +1367,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             text: message,
             ...(friendExecutionRef.current?.workId
               ? { contextProjectId: friendExecutionRef.current.contextProjectId }
-              : { contextProjectId: contextProjectId ?? null, ...(interactionRevision === undefined ? {} : { interactionRevision }) }),
+              : { contextProjectId: contextProjectId ?? null }),
             ...(images?.length
               ? {
                   images: images.map((image) => ({ type: "image" as const, data: image.data, mimeType: image.mimeType })),
@@ -1399,7 +1382,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         addNotice({ type: "error", message: cause instanceof Error ? cause.message : String(cause) });
       }
     },
-    [addNotice, composerDraftKey, contextProjectId, interactionRevision, longAgentId, memoryEnabled, restoreSubmission, topicNode, unsupported, workflowId],
+    [addNotice, composerDraftKey, contextProjectId, longAgentId, memoryEnabled, restoreSubmission, topicNode, unsupported, workflowId],
   );
   const handleSteer = useCallback(
     (message: string, images?: AttachedImage[]) => {

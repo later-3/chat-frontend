@@ -29,6 +29,15 @@
 - 规范文档是视觉、交互、Web/PWA、自适应和无障碍要求的事实源；本文件只声明强制入口，不复制其内容。
 - 现有实现与规范不一致时采用渐进治理：不得扩大不一致，本次触达区域应在任务范围内向规范收敛。
 
+## 质量门禁 Skills
+
+以下 Agent Skills 是规范的可执行验收清单，生成或评审 UI/React 代码时按清单自查：
+
+- [web-design-guidelines](./.agents/skills/web-design-guidelines/SKILL.md)：UI 交互质量门禁（焦点、键盘、loading、动效、表单、设计 token），源自 Vercel web-interface-guidelines（MIT，已适配 Vite SPA）。
+- [react-best-practices](./.agents/skills/react-best-practices/SKILL.md)：React 性能与质量门禁（瀑布、bundle、重渲染、渲染、JS 性能），源自 Vercel react-best-practices（MIT，已去除 Next/RSC 专属规则）。
+
+Skills 内容与规范文档冲突时以规范文档为准；修改 skill 中的项目适配映射（token 名、文件路径、模式先例）时须同步核对对应文档。
+
 ## 文档索引
 
 - [Frontend 开发指南](./docs/development.md)：工程职责、开发方式和交付流程。

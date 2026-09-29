@@ -9,6 +9,8 @@ import { useDeviceWorkspace } from "@/hooks/useDeviceWorkspace";
 import { useI18n } from "@/hooks/useI18n";
 import { getInitialNavigation } from "@/lib/initial-navigation";
 import { AppShell } from "./AppShell";
+import { FeedbackToaster } from "@/components/ui/FeedbackToaster";
+import { TooltipProvider } from "@/components/ui/Tooltip";
 import styles from "./DeviceWorkspaceRoot.module.css";
 
 export function DeviceWorkspaceRoot() {
@@ -92,6 +94,8 @@ export function DeviceWorkspaceRoot() {
 
   return (
     <div className={styles.root}>
+      <TooltipProvider>
+        <FeedbackToaster />
       {!deviceDirectory.loading && !deviceOffline && !switching && (
         <AppShell
           key={workspace.workspaceEpoch}
@@ -118,6 +122,7 @@ export function DeviceWorkspaceRoot() {
           <button type="button" onClick={workspace.dismissSwitchError} aria-label={t("common.close")}>×</button>
         </div>
       )}
+      </TooltipProvider>
     </div>
   );
 }

@@ -130,7 +130,7 @@ export function LongAgentConversationsPanel({ longAgentId, agents, onEnter }: {
           <header className={styles.header}>
             <h3>{detail.conversation.title}</h3>
             <p>{detail.conversation.lifecycle === "archived" ? t("conversations.archived") : t("conversations.active")}
-              {detail.conversation.collaborationProjectId === null ? ` · ${t("conversations.noCollaborationProject")}` : ` · ${detail.conversation.collaborationProjectId}`}</p>
+              {` · ${projects.find((project) => project.projectId === detail.conversation.storageProjectId)?.cachedName ?? detail.conversation.storageProjectId}`}</p>
           </header>
           <div className={styles.members}>
             {detail.conversation.members.map((member) => <div key={member.longAgentId} className={styles.member}>

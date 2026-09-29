@@ -97,8 +97,6 @@ export async function acceptFriendMessage(
     workflow?: string;
     sessionId?: string;
     contextProjectId?: string | null;
-    /** Association revision the client last read; the Backend freezes the project from it. */
-    interactionRevision?: number;
     text: string;
     sessionMemory?: "on" | "off";
     images?: { type: "image"; data: string; mimeType: string }[];

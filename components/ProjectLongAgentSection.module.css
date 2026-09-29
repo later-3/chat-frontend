@@ -101,10 +101,10 @@
 
 .agentRow { display: flex; align-items: center; gap: 2px; }
 .agentRow > .agentButton { flex: 1; min-width: 0; }
-.calendarButton { flex: 0 0 32px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; }
-.calendarButton:hover { background: var(--bg-hover); color: var(--text); }
-.calendarButton:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-@media (pointer: coarse), (max-width: 768px) { .calendarButton { flex-basis: 44px; height: 44px; } }
+.iconButton { flex: 0 0 32px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; }
+.iconButton:hover { background: var(--bg-hover); color: var(--text); }
+.iconButton:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (pointer: coarse), (max-width: 768px) { .iconButton { flex-basis: 44px; height: 44px; } }
 
 .agentButton {
   width: 100%;
