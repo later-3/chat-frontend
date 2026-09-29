@@ -174,6 +174,8 @@ export const zhCNLocale: LocalePlugin = {
     "friendCalendar.open": "日历",
     "friendInspector.heading": "任务与归档",
     "friendInspector.todayHeading": "今天",
+    "friendInspector.addedDaysHeading": "已加入的日期",
+    "friendInspector.dayCounts": "{sessions} 会话 · {tasks} 任务",
     "friendInspector.todayChat": "今日对话",
     "friendInspector.sessionsLabel": "会话",
     "friendInspector.tasksLabel": "任务",

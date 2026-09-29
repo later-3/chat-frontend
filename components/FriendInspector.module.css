@@ -8,6 +8,9 @@
 .dayHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 24px; }
 .dayHeader h3 { display: flex; align-items: baseline; gap: 8px; margin: 0; font-size: 13px; font-weight: 600; }
 .dayHeader h3 em { font-style: normal; font-size: 12px; font-weight: 400; color: var(--text-muted); }
+.dayMeta { display: flex; align-items: center; gap: 8px; }
+.dayMeta > span { font-size: 12px; color: var(--text-muted); }
+.sectionLabel { margin: 4px 0 0; color: var(--text-dim); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 .group { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .groupLabel { display: flex; align-items: center; gap: 8px; color: var(--text-dim); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 .count { font-size: 11px; font-weight: 600; color: var(--accent); background: var(--bg-selected); border-radius: 999px; padding: 1px 8px; letter-spacing: 0; text-transform: none; }
@@ -19,6 +22,9 @@
 .row:disabled { opacity: 0.55; cursor: default; }
 .taskRow { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
 .taskRow:last-child { border-bottom: 0; }
+.taskRowOpen { cursor: pointer; }
+.taskRowOpen:hover:not(:disabled) { background: var(--bg-hover); }
+.taskRowOpen:disabled { opacity: 0.55; cursor: default; }
 .rowText { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .rowText strong { font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
 .rowText small { color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }

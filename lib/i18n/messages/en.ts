@@ -174,6 +174,8 @@ export const enLocale: LocalePlugin = {
     "friendCalendar.open": "Calendar",
     "friendInspector.heading": "Tasks & archive",
     "friendInspector.todayHeading": "Today",
+    "friendInspector.addedDaysHeading": "Added days",
+    "friendInspector.dayCounts": "{sessions} sessions · {tasks} tasks",
     "friendInspector.todayChat": "Today’s conversation",
     "friendInspector.sessionsLabel": "Sessions",
     "friendInspector.tasksLabel": "Tasks",

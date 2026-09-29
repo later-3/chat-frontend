@@ -1,5 +1,5 @@
 import { InterfaceFeedback } from "./InterfaceFeedback";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IconChevronRight, IconPlus, IconX } from "@tabler/icons-react";
 import { useI18n } from "@/hooks/useI18n";
 import { fetchFriendDailyState, type FriendDailyState, type FriendCalendarSession } from "@/lib/friend-daily-browser";
@@ -14,8 +14,6 @@ import { Button } from "./ui/Button";
 import { FriendCalendar } from "./FriendCalendar";
 import { LongAgentTasksPanel } from "./LongAgentTasksPanel";
 import styles from "./FriendInspector.module.css";
-
-const DAY_TASK_ROWS = 6;
 
 /**
  * "Tasks & archive" for one Friend (ui-ux §17.3).
@@ -98,10 +96,12 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClo
   const byDate = useMemo(() => sessionsByDate(sessions), [sessions]);
   const rows = useMemo(() => buildFriendTaskRows(tasks, works), [tasks, works]);
 
+  // A day the user picked stays in the area even when it turns out empty —
+  // silently dropping it would look like the pick failed. Today is always first.
   const days = useMemo(() => {
-    const older = addedDays.filter(day => day !== today && (byDate.has(day) || rows.executions.some(row => inDay(row.sortAt, day, timeZone))));
+    const older = addedDays.filter(day => day !== today);
     return today === null ? older : [today, ...older];
-  }, [addedDays, byDate, rows, today, timeZone]);
+  }, [addedDays, today]);
 
   function inDay(timestamp: string | null, day: string, tz: string | undefined): boolean {
     return timestamp !== null && tz !== undefined && dateInTimeZone(timestamp, tz) === day;
@@ -141,21 +141,29 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClo
   }, [agentId, today]);
   const dropDay = (day: string) => setAddedDays(removeArchivedDay(agentId, day));
 
-  const taskRow = (row: TaskPanelRow) => <div key={row.key} className={styles.taskRow}>
-    <span className={styles.badge} data-kind={row.badge}>{t(`taskPanel.badge.${row.badge}`)}</span>
-    <span className={styles.rowText}>
-      <strong>{row.title}</strong>
-      <small>{[t(row.statusKey), projectOf(row), row.badge === "task" || row.badge === "duty"
-        ? (row.timeAt === null ? t("taskPanel.unscheduled") : formatTime(row.timeAt))
-        : formatTime(row.timeAt)].filter(Boolean).join(" · ")}</small>
-    </span>
-  </div>;
+  const taskRow = (row: TaskPanelRow, day: string) => {
+    const meta = [t(row.statusKey), projectOf(row), row.badge === "task" || row.badge === "duty"
+      ? (row.timeAt === null ? t("taskPanel.unscheduled") : formatTime(row.timeAt))
+      : formatTime(row.timeAt)].filter(Boolean).join(" · ");
+    const body = <>
+      <span className={styles.badge} data-kind={row.badge}>{t(`taskPanel.badge.${row.badge}`)}</span>
+      <span className={styles.rowText}><strong>{row.title}</strong><small>{meta}</small></span>
+    </>;
+    // Only an execution has a readable Session; a plan has nothing to open here.
+    return row.sessionId === null
+      ? <div key={row.key} className={styles.taskRow}>{body}</div>
+      : <button type="button" key={row.key} className={`${styles.taskRow} ${styles.taskRowOpen}`} disabled={busy}
+          data-task-row-open={row.key}
+          onClick={() => void openSession(row.sessionId!, day)}>
+          {body}<IconChevronRight size={16} aria-hidden="true" />
+        </button>;
+  };
 
   return <section className={styles.panel} data-friend-panel={agentId} aria-label={t("friendInspector.heading")}>
     <header className={styles.panelHeader}>
       <div>
-        <h2>{t("friendInspector.heading")}</h2>
-        <p title={timeZone}>{calendar === null ? t("common.loading") : (timeZone ?? "")}</p>
+        {/* The timezone only matters when reading day boundaries, so it stays a hint. */}
+        <h2 title={timeZone ?? undefined}>{t("friendInspector.heading")}</h2>
       </div>
       <Button iconOnly variant="ghost" type="button" onClick={onClose} aria-label={t("chat.close")}><IconX size={18} /></Button>
     </header>
@@ -173,15 +181,21 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClo
     {(error || dayError) && <div role="alert" className={styles.error}><p><InterfaceFeedback message={error || dayError} /></p>
       <Button type="button" onClick={() => setRefresh(value => value + 1)}>{t("friendWork.retry")}</Button></div>}
 
-    {days.map(day => {
+    {days.map((day, index) => {
       const isToday = day === today;
+      const firstAdded = index === 1;
       const { daySessions, planned, executed } = dayContent(day);
       const activeCount = executed.filter(row => row.execution && ["running", "queued"].includes(row.execution.status)).length;
-      return <section key={day} className={styles.dayBlock} data-friend-day={day}>
+      return <Fragment key={day}>
+      {firstAdded && <h3 className={styles.sectionLabel}>{t("friendInspector.addedDaysHeading")}</h3>}
+      <section className={styles.dayBlock} data-friend-day={day}>
         <header className={styles.dayHeader}>
           <h3>{isToday ? t("friendInspector.todayHeading") : formatDay(day)}{isToday && <em>{formatDay(day)}</em>}</h3>
-          {!isToday && <Button iconOnly variant="ghost" type="button" data-friend-day-remove={day}
-            aria-label={t("friendInspector.removeDay")} onClick={() => dropDay(day)}><IconX size={16} /></Button>}
+          <div className={styles.dayMeta}>
+            <span>{t("friendInspector.dayCounts", { sessions: daySessions.length, tasks: planned.length + executed.length })}</span>
+            {!isToday && <Button iconOnly variant="ghost" type="button" data-friend-day-remove={day}
+              aria-label={t("friendInspector.removeDay")} onClick={() => dropDay(day)}><IconX size={16} /></Button>}
+          </div>
         </header>
 
         <div className={styles.group}>
@@ -198,12 +212,13 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClo
               </span>
               <IconChevronRight size={16} aria-hidden="true" />
             </button>)}
-            {daySessions.length > 0 && <button type="button" className={styles.row} disabled={busy}
+            {/* Always available: an empty day still has (or creates) its daily session on open. */}
+            <button type="button" className={styles.row} disabled={busy}
               data-friend-enter-day={day}
               onClick={() => void openDay(day)}>
               <span className={styles.rowText}><strong>{t("friendInspector.enterDay")}</strong></span>
               <IconChevronRight size={16} aria-hidden="true" />
-            </button>}
+            </button>
           </div>
         </div>
 
@@ -214,11 +229,12 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClo
           </span>
           <div className={styles.rows}>
             {planned.length === 0 && executed.length === 0 && <p className={styles.empty}>{t("friendInspector.noTasks")}</p>}
-            {planned.map(taskRow)}
-            {executed.map(taskRow)}
+            {planned.map(row => taskRow(row, day))}
+            {executed.map(row => taskRow(row, day))}
           </div>
         </div>
-      </section>;
+      </section>
+      </Fragment>;
     })}
 
     <div className={styles.panelActions}>
