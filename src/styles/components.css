@@ -1335,3 +1335,39 @@ span.token.table {
    dimming layer (§8.2) and keep their original stacking order. */
 .ui-scrim { position: fixed; inset: 0; z-index: 1099; background: var(--overlay); animation: scrim-in var(--duration-overlay) var(--ease-out) both; }
 .ui-scrim-center { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; background: var(--overlay); animation: scrim-in var(--duration-overlay) var(--ease-out) both; }
+
+/* ---------------------------------------------------------------------------
+   Toolbar actions (UI/UX §13.2): icons only by default; Settings → Appearance
+   can show labels. One class means the top bar, the right panel header and any
+   future toolbar keep the same height, borders and states.
+   --------------------------------------------------------------------------- */
+.toolbar-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-width: 36px;
+  height: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-right: 1px solid var(--border);
+  border-top: 2px solid transparent;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard), opacity var(--duration-fast) var(--ease-standard);
+}
+.toolbar-action.is-icon-only { width: 36px; min-width: 36px; padding: 0; }
+.toolbar-action:hover:not(:disabled) { color: var(--text); background: var(--bg-hover); }
+.toolbar-action.is-active { color: var(--text); background: var(--bg-selected); border-top-color: var(--accent); }
+.toolbar-action:disabled { color: var(--text-dim); opacity: 0.45; cursor: not-allowed; }
+.toolbar-action-icon { display: inline-flex; flex-shrink: 0; }
+.toolbar-action-label { overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .toolbar-action, .toolbar-action.is-icon-only { min-width: 44px; min-height: 44px; }
+}

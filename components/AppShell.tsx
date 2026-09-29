@@ -8,7 +8,7 @@ import { FriendInspector } from "./FriendInspector";
 import { WorkspaceNavigation, type WorkspaceSection } from "./WorkspaceNavigation";
 import { WorkspaceSettings } from "./WorkspaceSettings";
 import { IconLayoutSidebar, IconFolder, IconX, IconCalendarStats } from "@tabler/icons-react";
-import { Hint } from "./ui/Tooltip";
+import { ToolbarAction } from "./ui/ToolbarAction";
 import { useBrowserRouter } from "@/lib/browser-router";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionSidebar, type MobileWorkspaceView } from "./SessionSidebar";
@@ -476,8 +476,8 @@ export function AppShell({
   const [fileTabs, setFileTabs] = useState<Tab[]>(
     () => initialWorkspaceSnapshot.fileTabs.map((tab) => ({ ...tab })),
   );
-  // Header-anchored day/task panel: the conversation title is the toggle.
-  const [friendPanelOpen, setFriendPanelOpen] = useState(false);
+  // Right panel has two task modes: project files and the Friend's tasks & archive.
+  const [detailsMode, setDetailsMode] = useState<"files" | "tasks">("files");
   const [friendDate, setFriendDate] = useState(() => friendDateFromUrl(window.location.href));
   useEffect(() => {
     const restore = () => setFriendDate(friendDateFromUrl(window.location.href));
@@ -485,9 +485,10 @@ export function AppShell({
     window.addEventListener("popstate", restore);
     return () => window.removeEventListener("popstate", restore);
   }, [selectedSession?.id]);
+  // Tasks mode belongs to a Friend session; leaving one returns the panel to files.
   useEffect(() => {
-    if (selectedSession?.owner.type !== "long-agent") setFriendPanelOpen(false);
-  }, [selectedSession?.owner.type, selectedSession?.id]);
+    if (selectedSession?.owner.type !== "long-agent" && detailsMode === "tasks") setDetailsMode("files");
+  }, [selectedSession?.owner.type, selectedSession?.id, detailsMode]);
   const [activeFileTabId, setActiveFileTabId] = useState<string | null>(
     () => initialWorkspaceSnapshot.activeFileTabId,
   );
@@ -1069,6 +1070,7 @@ export function AppShell({
       tabId,
     }));
     setActiveFileTabId(tabId);
+    setDetailsMode("files");
     setRightPanelOpen(true);
     // On mobile the file panel is full-screen; close the drawer so it shows.
     if (isMobile) {
@@ -1265,67 +1267,17 @@ export function AppShell({
     if (!mobile && !showChat) return null;
     return (
       <div style={{ display: "flex", alignItems: "stretch", height: "100%" }}>
-        <button
-          type="button"
+        <ToolbarAction
+          iconOnly={mobile}
+          label={selectedSession ? translate("history.full") : translate("history.unsaved")}
+          icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l3 2" /></svg>}
+          disabled={!selectedSession}
+          data-mobile-toolbar-action={mobile ? "history" : undefined}
           onClick={() => {
             handleViewFullHistory();
             if (mobile && isNarrowMobile) setMobileToolbarMoreOpen(true);
           }}
-          disabled={!selectedSession}
-          title={selectedSession ? translate("history.full") : translate("history.unsaved")}
-          aria-label={translate("history.full")}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 6,
-            width: mobile ? TOP_BAR_ICON_BUTTON_SIZE : undefined,
-            height: "100%",
-            padding: mobile ? 0 : "0 12px",
-            background: "none",
-            border: "none",
-            borderTop: "2px solid transparent",
-            borderRight: "1px solid var(--border)",
-            color: selectedSession ? "var(--text-muted)" : "var(--text-dim)",
-            cursor: selectedSession ? "pointer" : "not-allowed",
-            opacity: selectedSession ? 1 : 0.45,
-            flexShrink: 0,
-            fontSize: 12,
-            whiteSpace: "nowrap",
-            transition: "color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard), opacity var(--duration-fast) var(--ease-standard)",
-          }}
-          onMouseEnter={(event) => {
-            if (!selectedSession) return;
-            event.currentTarget.style.color = "var(--text)";
-            event.currentTarget.style.background = "var(--bg-hover)";
-          }}
-          onMouseLeave={(event) => {
-            event.currentTarget.style.color = selectedSession ? "var(--text-muted)" : "var(--text-dim)";
-            event.currentTarget.style.background = "none";
-          }}
-          data-mobile-toolbar-action={mobile ? "history" : undefined}
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{
-              color: selectedSession ? "var(--text-muted)" : "var(--text-dim)",
-              flexShrink: 0,
-            }}
-            aria-hidden="true"
-          >
-            <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
-            <path d="M3 3v5h5" />
-            <path d="M12 7v5l3 2" />
-          </svg>
-          {!mobile && <span>{translate("history.label")}</span>}
-        </button>
+        />
         {mobile ? (
           <button
             type="button"
@@ -1364,44 +1316,16 @@ export function AppShell({
             hasSession
           />
         )}
-        <button
+        <ToolbarAction
           ref={systemBtnRef}
-          type="button"
-          onClick={() => handleSystemPromptToggle(mobile)}
+          iconOnly={mobile}
+          label={translate("system.label")}
+          icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="13" y2="17" /></svg>}
+          active={activeTopPanel === "system"}
           disabled={mobile && !showChat}
-          title={translate("system.prompt")}
-          aria-label={translate("system.prompt")}
-          aria-pressed={activeTopPanel === "system"}
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-            width: mobile ? TOP_BAR_ICON_BUTTON_SIZE : undefined,
-            height: "100%", padding: mobile ? 0 : "0 12px",
-            background: activeTopPanel === "system" ? "var(--bg-selected)" : "none",
-            border: "none",
-            borderTop: activeTopPanel === "system" ? "2px solid var(--accent)" : "2px solid transparent",
-            borderRight: "1px solid var(--border)",
-            cursor: mobile && !showChat ? "not-allowed" : "pointer",
-            color: activeTopPanel === "system" ? "var(--text)" : "var(--text-muted)",
-            opacity: mobile && !showChat ? 0.45 : 1,
-            fontSize: 12, whiteSpace: "nowrap", transition: "color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard)",
-          }}
-          onMouseEnter={(event) => {
-            if (mobile && !showChat) return;
-            event.currentTarget.style.color = "var(--text)";
-          }}
-          onMouseLeave={(event) => {
-            event.currentTarget.style.color = activeTopPanel === "system" ? "var(--text)" : "var(--text-muted)";
-          }}
           data-mobile-toolbar-action={mobile ? "system" : undefined}
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: systemPrompt ? "var(--accent)" : "var(--text-dim)", flexShrink: 0 }} aria-hidden="true">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-            <line x1="8" y1="13" x2="16" y2="13" />
-            <line x1="8" y1="17" x2="13" y2="17" />
-          </svg>
-          {!mobile && <span>{translate("system.label")}</span>}
-        </button>
+          onClick={() => handleSystemPromptToggle(mobile)}
+        />
         {mobile && renderThemeButton(true)}
         {mobile && renderLanguageButton(true)}
       </div>
@@ -1670,18 +1594,17 @@ export function AppShell({
         <div className="workspace-conversation-toolbar">
           <h1 className="workspace-conversation-heading" title={selectedSession?.name || undefined}>{contentPanel === "long-agents" ? (selectedSession?.owner.type === "long-agent" ? selectedSession.name || selectedSession.owner.longAgentId : translate("workspaceNav.coworkers")) : selectedSession?.name || translate("i18n.newSession")}</h1>
           {selectedSession?.owner.type === "long-agent" && (
-            // The control names its purpose (tasks + date archive); the Session title
-            // stays a title and never doubles as a button label.
-            <Hint label={translate("friendInspector.heading")}>
-              <Button iconOnly variant="ghost" type="button" className="workspace-icon"
-                aria-label={translate("friendInspector.heading")}
-                aria-expanded={friendPanelOpen}
-                aria-controls="friend-day-panel"
-                data-friend-panel-toggle={selectedSession.owner.longAgentId}
-                onClick={() => setFriendPanelOpen(open => !open)}>
-                <IconCalendarStats size={20} />
-              </Button>
-            </Hint>
+            // Same shape as every other toolbar action: icon only unless the label
+            // preference is on. It opens the right panel in its tasks mode.
+            <ToolbarAction
+              label={translate("friendInspector.heading")}
+              icon={<IconCalendarStats size={18} />}
+              active={rightPanelOpen && detailsMode === "tasks"}
+              aria-expanded={rightPanelOpen && detailsMode === "tasks"}
+              aria-controls="file-panel"
+              data-friend-panel-toggle={selectedSession.owner.longAgentId}
+              onClick={() => { setDetailsMode("tasks"); setRightPanelOpen(true); }}
+            />
           )}
           {isMobile && (
             <div
@@ -2034,7 +1957,7 @@ export function AppShell({
         </div>
 
           <DeviceSwitcher variant="desktop" directory={deviceDirectory} onNavigate={onDeviceNavigate} />
-          <Button iconOnly variant="ghost" type="button" className="workspace-icon" onClick={() => { setSettingsVisible(false); activateChat(); setRightPanelOpen(open => !open); if (isMobile || viewportWidth < 960) setSidebarOpen(false); }} aria-label={translate("workspaceNav.files")} aria-expanded={rightPanelOpen}><IconFolder size={20} /></Button>
+          <Button iconOnly variant="ghost" type="button" className="workspace-icon" onClick={() => { setSettingsVisible(false); activateChat(); setDetailsMode("files"); setRightPanelOpen(open => detailsMode !== "files" || !open); if (isMobile || viewportWidth < 960) setSidebarOpen(false); }} aria-label={translate("workspaceNav.files")} aria-expanded={rightPanelOpen}><IconFolder size={20} /></Button>
         </header>
     <div className={`app-shell-root workspace-body${viewportWidth < 960 && !isMobile ? " workspace-medium" : ""}${rightPanelOverlay ? " workspace-right-overlay" : ""}${settingsVisible || workspaceView !== "chat" ? " workspace-global-view" : ""}`}>
 
@@ -2097,18 +2020,6 @@ export function AppShell({
       <div ref={chatSurfaceRef} tabIndex={-1} data-workspace-chat hidden={settingsVisible || workspaceView !== "chat"} style={{ flex: 1, display: !settingsVisible && workspaceView === "chat" ? "flex" : "none", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         {/* Chat content */}
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
-          {friendPanelOpen && selectedSession?.owner.type === "long-agent" && (
-            <div className="workspace-friend-panel" id="friend-day-panel" data-friend-panel={selectedSession.owner.longAgentId}>
-              <FriendInspector
-                key={`${selectedSession.owner.longAgentId}:${selectedSession.id}`}
-                agentId={selectedSession.owner.longAgentId}
-                sessionId={selectedSession.id}
-                date={friendDate}
-                onOpenSession={handleOpenExistingSession}
-                onClose={() => setFriendPanelOpen(false)}
-              />
-            </div>
-          )}
           {navigationError ? <div className="workspace-navigation-error" role="alert"><InterfaceFeedback message={navigationError} /></div> : showChat && currentProjectId && (contentPanel === "sessions" || selectedSession?.owner.type === "long-agent") ? (
             <>
             <ChatWindow
@@ -2220,10 +2131,30 @@ export function AppShell({
         } as React.CSSProperties}
       >
         <div className="workspace-details-heading">
-          <span className="workspace-details-title">{translate("workspaceNav.files")}</span>
+          <div className="workspace-details-modes">
+            <ToolbarAction label={translate("workspaceNav.files")} icon={<IconFolder size={18} />}
+              active={detailsMode === "files"} data-panel-mode="files"
+              onClick={() => setDetailsMode("files")} />
+            {selectedSession?.owner.type === "long-agent" && (
+              <ToolbarAction label={translate("friendInspector.heading")} icon={<IconCalendarStats size={18} />}
+                active={detailsMode === "tasks"} data-panel-mode="tasks"
+                onClick={() => setDetailsMode("tasks")} />
+            )}
+          </div>
           <Button iconOnly variant="ghost" type="button" className="workspace-icon" onClick={() => setRightPanelOpen(false)} aria-label={translate("files.hidePanel")}><IconX size={20} /></Button>
         </div>
-        <div className="workspace-file-details">
+        {detailsMode === "tasks" && selectedSession?.owner.type === "long-agent" && (
+          <div className="workspace-panel-body" data-friend-panel={selectedSession.owner.longAgentId}>
+            <FriendInspector
+              key={`${selectedSession.owner.longAgentId}:${selectedSession.id}`}
+              agentId={selectedSession.owner.longAgentId}
+              sessionId={selectedSession.id}
+              date={friendDate}
+              onOpenSession={handleOpenExistingSession}
+            />
+          </div>
+        )}
+        <div className="workspace-file-details" hidden={detailsMode === "tasks" && selectedSession?.owner.type === "long-agent"}>
         {!activeFileTab && fileTabs.length > 0 && <Button variant="secondary" type="button" className="workspace-button" onClick={() => setActiveFileTabId(fileTabs.at(-1)?.id ?? null)}>{translate("workspaceNav.lastFile")}</Button>}
         <div ref={setFilesSlot} className="workspace-files-slot" hidden={activeFileTab !== null} />
         {activeFileTab && <div className="workspace-file-source" title={activeFileTab.sourceCwd ?? activeFileTab.filePath}>

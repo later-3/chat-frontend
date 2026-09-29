@@ -1,7 +1,7 @@
 # Chat Frontend UI/UX 规范
 
 - 状态：规范基线
-- 版本：2.6
+- 版本：2.7
 - 适用项目：Chat Pi Web Frontend
 - 最后校正：2026-09-29
 -  art 方向：安静画廊级工具表面（littleplains / aside / resurf / daybridge 取精度不取装饰）；暖灰 + 墨字 + 克制紫品牌不变，深浅双主题同时成立
@@ -595,6 +595,7 @@ Agent 或开发者必须：
 | 临时配置（单个 Friend/资源/模型/记忆/Tools） | `SurfaceDialog`（`wide` 按需），Compact 自动全屏 Sheet；右上 X + Escape 关闭，不用 `Back` | 全屏 portal 页、自制 overlay、自制焦点陷阱 |
 | 模态确认 | Radix AlertDialog + `ConfirmationProvider` | `window.confirm`、自制遮罩 |
 | 只读目录/历史弹层 | `SurfaceDialog` / `useDialogFocus` | 手写焦点陷阱 |
+| 右侧面板内容（文件 / Friend 任务与归档） | 同一个右侧面板容器内按模式切换（`data-panel-mode`，面板头承担切换与关闭），面板本体 `flex:1` 独立滚动 | 在会话列里再插一个半截区域、另开第二个面板容器 |
 | 图标按钮/截断值提示 | `components/ui/Tooltip.tsx` 的 `Hint`（触发元素保留自己的 `aria-label`） | 依赖原生 `title` 作为唯一提示、tooltip 内容承载关键信息 |
 | 锚定非模态弹层 | `components/ui/Popover.tsx`（内容统一 portal + `.ui-popover`） | 组件内自制 outside-click/定位逻辑 |
 | 动作菜单 | `components/ui/DropdownMenu.tsx`（键盘导航、Escape、outside-click 由 Radix 提供） | 手写 `role="menu"` + outside-click 监听 |
@@ -692,6 +693,12 @@ skill 内容与本文冲突时以本文为准；skill 中的项目映射（token
 
 资源对话框（Models / Skills / Plugins / Extensions / Provider requests）的重复排版收敛为 `src/styles/components.css` 的 `ui-*` 布局类（`ui-stack-*`、`ui-row-*`、`ui-grow`、`ui-list-scroll`、`ui-dim*`、`ui-muted*`、`ui-note`、`ui-scrim*` 等）：**布局进类、语义进组件**。新增一个值要在这里命名，而不是再写一个 inline `style={{…}}`。`ui-scrim`/`ui-scrim-center` 同时承担这些对话框遮罩的淡入（§8.2），不允许再写 `rgba(0,0,0,…)`。
 
-### 20.5 门禁
+### 20.5 工具栏动作
 
-`lib/motion-contract.test.mjs` 守住：动效时长与缓动必须来自 Token、pressed 不使用 `filter: brightness()`、每个遮罩必须淡入（Radix 还需淡出）、按钮与模态保持唯一原语、手写模态清单不得无声扩张、组件用到的每个 `ui-*` 类必须在样式表中有对应规则（防拼写漂移）。
+- 工具栏动作（顶栏、右侧面板头、会话工具栏）**默认仅图标**，尺寸 36px（粗指针 44px），共享 `.toolbar-action` 类与 `components/ui/ToolbarAction.tsx`。
+- 设置 → 外观 → “工具栏操作”可切换“仅图标 / 图标与文字”（`chat:toolbar-labels`，默认仅图标）。开启后**所有**工具栏动作一起显示文字，不允许有的带文字、有的只有图标。
+- 图标按钮保留 `aria-label` 与 `Hint`；文字只是同一名称的可视化，不引入第二个术语。
+
+### 20.6 门禁
+
+`lib/motion-contract.test.mjs` 守住：工具栏动作只能由 `ToolbarAction` 声明（页面不得自造带文字的工具栏按钮）；动效时长与缓动必须来自 Token、pressed 不使用 `filter: brightness()`、每个遮罩必须淡入（Radix 还需淡出）、按钮与模态保持唯一原语、手写模态清单不得无声扩张、组件用到的每个 `ui-*` 类必须在样式表中有对应规则（防拼写漂移）。

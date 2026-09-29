@@ -30,10 +30,9 @@ import styles from "./FriendInspector.module.css";
  * Opening a Session still navigates the shared chat; the area never becomes
  * a second chat surface.
  */
-export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClose }: {
+export function FriendInspector({ agentId, sessionId, date, onOpenSession }: {
   agentId: string; sessionId: string | null; date: string | null;
   onOpenSession: (sessionId: string, projectId: string, date?: string) => void | Promise<void>;
-  onClose: () => void;
 }) {
   const { t, locale } = useI18n();
   const [calendar, setCalendar] = useState<FriendDailyState | null>(null);
@@ -160,14 +159,6 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClo
   };
 
   return <section className={styles.panel} data-friend-panel={agentId} aria-label={t("friendInspector.heading")}>
-    <header className={styles.panelHeader}>
-      <div>
-        {/* The timezone only matters when reading day boundaries, so it stays a hint. */}
-        <h2 title={timeZone ?? undefined}>{t("friendInspector.heading")}</h2>
-      </div>
-      <Button iconOnly variant="ghost" type="button" onClick={onClose} aria-label={t("chat.close")}><IconX size={18} /></Button>
-    </header>
-
     {pending && <div className={styles.pending} role="status" data-friend-work-pending>
       <p>{t("friendWork.unconfirmed")}</p>
       <Button type="button" data-friend-work-confirm disabled={busy}

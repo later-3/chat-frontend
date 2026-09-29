@@ -203,23 +203,19 @@
 @media (prefers-reduced-motion:reduce) { .configuration-toggle-track > span { transition:none; } }
 
 .workspace-conversation-toolbar { display:flex; align-items:center; position:relative; height:48px; flex:none; gap:8px; padding-left:16px; border-bottom:1px solid var(--border); }
-/* v2.4: the day/task area is a docked vertical column under the header. It is a
-   column, not a strip: rows stack, it scrolls on its own, and it never covers chat. */
-.workspace-friend-panel {
-  flex: none;
-  align-self: flex-start;
-  width: min(420px, 100%);
-  max-height: min(62dvh, 560px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  background: var(--bg-panel);
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  border-bottom-right-radius: var(--radius-panel);
+/* Right panel: two modes share one container, so both are full height and
+   switch in place instead of stacking another region into the chat column.
+   The panel header hosts the mode switch; the body owns the single scroll. */
+.workspace-panel-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.workspace-details-modes { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.workspace-details-modes .toolbar-action {
+  height: 36px;
+  min-height: 36px;
+  border: 0;
+  border-radius: var(--radius-control);
 }
-@media (max-width:768px), (hover:none) and (pointer:coarse) and (max-height:500px) {
-  .workspace-friend-panel { width: 100%; max-height: 68dvh; border-right: 0; border-radius: 0; }
-}
+.workspace-details-modes .toolbar-action.is-icon-only { width: 36px; }
+.workspace-details-modes .toolbar-action.is-active { background: var(--bg-selected); color: var(--text); }
 .workspace-conversation-heading { flex:1; min-width:0; margin:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:14px; line-height:20px; font-weight:600; }
 @media (max-width:768px), (hover:none) and (pointer:coarse) and (max-height:500px) {
   .workspace-conversation-toolbar { height:44px; padding-left:12px; gap:4px; }

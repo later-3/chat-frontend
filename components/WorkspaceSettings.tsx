@@ -5,6 +5,7 @@ import { InterfaceFeedback } from "./InterfaceFeedback";
 import { IconAdjustments, IconChevronRight, IconDeviceDesktop, IconMoon, IconSun, IconPalette, IconFolder, IconUser } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { useToolbarLabels } from "@/hooks/useToolbarLabels";
 import type { ThemePreference } from "@/hooks/useTheme";
 import type { Locale } from "@/lib/i18n/types";
 import { SearchSelect, type SelectOption } from "./SearchSelect";
@@ -40,6 +41,7 @@ export function WorkspaceSettings({ items, wideContent, onContentWidth, theme, o
   onSelfCheck?: () => void;
 }) {
   const { t } = useI18n();
+  const { mode: toolbarLabelMode, setMode: setToolbarLabelMode } = useToolbarLabels();
   const [section, setSection] = useState(currentSection);
   const [refreshed, setRefreshed] = useState(false);
   useEffect(() => {
@@ -76,6 +78,9 @@ export function WorkspaceSettings({ items, wideContent, onContentWidth, theme, o
           </section>
           <section className="settings-section"><h3>{t("workspaceNav.contentWidth")}</h3><p>{t("design.densityHint")}</p>
             <div className="settings-segments" role="group" aria-label={t("workspaceNav.contentWidth")}>{[false,true].map(wide => <button key={String(wide)} type="button" aria-pressed={wideContent === wide} onClick={() => { if (wide !== wideContent) onContentWidth(); }}>{t(wide ? "workspaceNav.wide" : "workspaceNav.standard")}</button>)}</div>
+          </section>
+          <section className="settings-section"><h3>{t("design.toolbarLabels")}</h3><p>{t("design.toolbarLabelsHint")}</p>
+            <div className="settings-segments" role="group" aria-label={t("design.toolbarLabels")}>{(['icons','icons-and-labels'] as const).map(value => <button key={value} type="button" aria-pressed={toolbarLabelMode === value} onClick={() => setToolbarLabelMode(value)}>{t(`design.toolbarLabels.${value === "icons" ? "icons" : "iconsAndLabels"}`)}</button>)}</div>
           </section>
           <section className="settings-section"><h3>{t("workspaceNav.language")}</h3><p>{t("design.languageHint")}</p>
             <div className="settings-segments" role="group" aria-label={t("workspaceNav.language")}>{([['en',t('language.en')],['zh-CN',t('language.zh')]] as const).map(([value,label]) => <button key={value} type="button" aria-pressed={language === value} onClick={() => onLanguage(value)}>{label}</button>)}</div>
