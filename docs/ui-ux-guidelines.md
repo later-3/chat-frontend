@@ -1,7 +1,7 @@
 # Chat Frontend UI/UX 规范
 
 - 状态：规范基线
-- 版本：3.4
+- 版本：3.5
 - 适用项目：Chat Pi Web Frontend
 - 最后校正：2026-09-29
 -  art 方向：安静画廊级工具表面（littleplains / aside / resurf / daybridge 取精度不取装饰）；暖灰 + 墨字 + 克制紫品牌不变，深浅双主题同时成立
@@ -720,9 +720,10 @@ skill 内容与本文冲突时以本文为准；skill 中的项目映射（token
 - **组件来源**：用既有原语 `@radix-ui/react-slider`（Root/Track/Range/Thumb），不手写轨道。拖拽跟随、点击定位、pointer capture、触控与 `role="slider"` 语义都由原语提供；自造分隔条实现过一版，拖动时圆点不跟随指针，已废弃。面板边缘拖拽仍用 `useResizablePanel`（分隔条与值控件是两类交互，各自唯一）。
 - **一个值**：滑杆只改 `--conversation-measure`（写在 chat surface 上），消息列、运行状态、输入框都读 `var(--conversation-measure, var(--measure-prose, 42rem))`。任何元素都不得再写自己的宽度上限——消息区与输入框错位就是各自硬编码像素宽度造成的（§7 阅读面）。
 - **交互**：拖动时圆点与列宽实时跟随指针；`←/→` 12px、`PageUp/PageDown` 120px、`Home/End` 到 30rem/60rem；轨道任意位置按下即定位；`Enter` 或双击恢复自适应。拖动中只在滑杆内部更新值，松手才提交并持久化（避免整页重渲染）。
-- **范围**：`30rem–60rem`（480–960px，常量在 `lib/conversation-measure.ts`）；窄窗口由 `max-width` 自然收窄，不溢出、不挤压左右栏。
+- **范围**：下限 30rem（480px）；硬上限 90rem（1440px）；**实际可达上限跟随当前会话列**：`conversationMeasureMaxWidth(列宽)` = 列宽 − 68px 栏内边距（16px 侧边距 + 36px ChatMinimap 沟槽）− 48px 余量（两侧各 24px），由 `ResizeObserver` 观察会话列，左右栏开合、窗口缩放都实时更新。所以滑杆能一直拉到“填满但仍留余量”，不会出现拉到头却没变宽。存下的偏好可以大于当前可达值：应用与显示按当前列宽夹取，窗口变大后自动恢复偏好。窄窗口由 `max-width` 自然收窄，不溢出、不挤压左右栏。
 - **自适应**：默认自适应（不写像素覆盖、跟随 `--measure-prose` 与窗口）；拖动即进入手动并按设备持久化（`chat:conversation-measure`，`auto` 表示自适应）。不按 Session/Project 存储。
-- **样式**：轨道 96×3px、圆角 999px、`--border`；滑块 14px 圆、`--text-muted`，hover 提到 `--text`，拖动中 `--accent`；命中区桌面 36px 高、Compact 44px；无边框无阴影，轨道 `cursor: col-resize`；动效只做颜色，用 `--duration-fast` + `--ease-standard`，拖动期间圆点与填充不带过渡。
+- **样式**：轨道 96×3px、圆角 999px、`--border`；滑块 14px 圆、`--text-muted`；命中区桌面 36px 高、Compact 44px；无边框无阴影，轨道 `cursor: col-resize`；动效只做颜色，用 `--duration-fast` + `--ease-standard`，拖动期间填充不带过渡。
+- **hover 不得改变外观**：轨道、填充、滑块在 hover 时颜色与尺寸都不变（原语不提供 hover 高亮，门禁禁止 `.measure-slider*:hover` 规则）；拖动中的反馈只体现在已填充段用 `--accent`，滑块本身保持恒定。可发现性靠 `Hint` 与 `aria-label`，不靠悬停高亮。
 - **可达性**：滑杆 `aria-label` 为「会话宽度」，`aria-valuemin/max/now` 由 Radix 输出；`Hint` 显示读数（`会话宽度 · 48rem`，自适应时后缀「自适应」），拖动中 Tooltip 按 Radix 默认收起、不额外加浮层；键盘可达，焦点环画在滑块上。
 - **Compact**：不渲染滑杆（宽度按屏宽），只有桌面/平板入口。
 

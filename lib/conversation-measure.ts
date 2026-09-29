@@ -9,8 +9,17 @@
 
 /** 30rem — below this the readable prose measure breaks down. */
 export const CONVERSATION_MEASURE_MIN_WIDTH = 480;
-/** 60rem — above this a single prose column stops being readable. */
-export const CONVERSATION_MEASURE_MAX_WIDTH = 960;
+/**
+ * 90rem — the ceiling for very wide screens. The width that is actually
+ * reachable is smaller: it comes from the column that is available right now
+ * (`conversationMeasureMaxWidth`), minus the column chrome and a margin, so the
+ * column can be filled without touching the surrounding panels.
+ */
+export const CONVERSATION_MEASURE_MAX_WIDTH = 1440;
+/** Message-area chrome: 16px side padding + the 36px ChatMinimap gutter. */
+export const CONVERSATION_MEASURE_CHROME_WIDTH = 68;
+/** Aesthetic breathing room kept on both sides when the column is filled. */
+export const CONVERSATION_MEASURE_EDGE_MARGIN = 24;
 /** Pointer/keyboard step in px; Shift uses the coarse step. */
 export const CONVERSATION_MEASURE_STEP = 12;
 export const CONVERSATION_MEASURE_COARSE_STEP = 32;
@@ -27,6 +36,17 @@ export function clampConversationMeasure(width: number): number {
 
 export function stepConversationMeasure(current: number, delta: number): number {
   return clampConversationMeasure(current + delta);
+}
+
+/**
+ * Widest measure that still leaves a margin inside `columnWidth` (the width of
+ * the conversation column area). Never below the readable minimum, never above
+ * the hard ceiling.
+ */
+export function conversationMeasureMaxWidth(columnWidth: number): number {
+  if (!Number.isFinite(columnWidth) || columnWidth <= 0) return CONVERSATION_MEASURE_MAX_WIDTH;
+  const usable = columnWidth - CONVERSATION_MEASURE_CHROME_WIDTH - CONVERSATION_MEASURE_EDGE_MARGIN * 2;
+  return Math.max(CONVERSATION_MEASURE_MIN_WIDTH, Math.min(CONVERSATION_MEASURE_MAX_WIDTH, Math.round(usable)));
 }
 
 /** `null` means auto: the column follows `--measure-prose` and the window width. */

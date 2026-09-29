@@ -43,6 +43,7 @@ import {
   CONVERSATION_MEASURE_MIN_WIDTH,
   CONVERSATION_MEASURE_STEP,
   conversationMeasureCssValue,
+  conversationMeasureMaxWidth,
   readConversationMeasure,
   writeConversationMeasure,
 } from "@/lib/conversation-measure";
@@ -210,6 +211,7 @@ export function AppShell({
   // P1：进入全局任务页前记住侧栏状态，返回 chat 时恢复，避免默认折叠。
   const sidebarOpenBeforeGlobalRef = useRef<boolean | null>(null);
   const chatSurfaceRef = useRef<HTMLDivElement>(null);
+  const chatColumnRef = useRef<HTMLDivElement>(null);
   const momentsTriggerRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     if (workspaceView !== "chat" || !momentsTriggerRef.current) return;
@@ -271,6 +273,9 @@ export function AppShell({
   // composer share this one value, and the top bar slider is its only writer.
   // `null` means auto, which leaves the custom property unset.
   const [conversationMeasure, setConversationMeasure] = useState<number | null>(null);
+  // The reachable maximum follows the column that exists right now, so the
+  // slider can fill it while keeping a margin (never a fixed 960px ceiling).
+  const [conversationMeasureMax, setConversationMeasureMax] = useState(CONVERSATION_MEASURE_MAX_WIDTH);
   const applyConversationMeasure = useCallback((value: number | null) => {
     const surface = chatSurfaceRef.current;
     if (!surface) return;
@@ -278,16 +283,28 @@ export function AppShell({
     if (cssValue) surface.style.setProperty("--conversation-measure", cssValue);
     else surface.style.removeProperty("--conversation-measure");
   }, []);
+  useEffect(() => { setConversationMeasure(readConversationMeasure()); }, []);
   useEffect(() => {
-    const stored = readConversationMeasure();
-    setConversationMeasure(stored);
-    applyConversationMeasure(stored);
-  }, [applyConversationMeasure]);
+    const column = chatColumnRef.current;
+    if (!column) return;
+    const update = () => setConversationMeasureMax(conversationMeasureMaxWidth(column.clientWidth));
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(column);
+    return () => observer.disconnect();
+  }, []);
+  // A stored preference may exceed the current column: clamp what is applied and
+  // shown, keep the preference itself so a wider window restores it.
+  const effectiveConversationMeasure = conversationMeasure === null
+    ? null
+    : Math.min(conversationMeasure, conversationMeasureMax);
+  useEffect(() => {
+    applyConversationMeasure(effectiveConversationMeasure);
+  }, [applyConversationMeasure, effectiveConversationMeasure]);
   const commitConversationMeasure = useCallback((value: number | null) => {
     setConversationMeasure(value);
     writeConversationMeasure(value);
-    applyConversationMeasure(value);
-  }, [applyConversationMeasure]);
+  }, []);
   const rightPanelResizer = useResizablePanel({
     ariaLabel: translate("layout.resizeFilePanel"),
     cssVariable: "--right-panel-width",
@@ -1713,9 +1730,9 @@ export function AppShell({
               {renderChatToolbarActions(false)}
               {renderSessionStatsButton(false)}
               <MeasureSlider
-                value={conversationMeasure ?? CONVERSATION_MEASURE_DEFAULT_WIDTH}
+                value={effectiveConversationMeasure ?? Math.min(CONVERSATION_MEASURE_DEFAULT_WIDTH, conversationMeasureMax)}
                 min={CONVERSATION_MEASURE_MIN_WIDTH}
-                max={CONVERSATION_MEASURE_MAX_WIDTH}
+                max={conversationMeasureMax}
                 step={CONVERSATION_MEASURE_STEP}
                 isAuto={conversationMeasure === null}
                 onLive={applyConversationMeasure}
@@ -2085,7 +2102,7 @@ export function AppShell({
             </div>
           </aside>
         )}
-        <div className="workspace-chat-column">
+        <div ref={chatColumnRef} className="workspace-chat-column">
           {navigationError ? <div className="workspace-navigation-error" role="alert"><InterfaceFeedback message={navigationError} /></div> : showChat && currentProjectId && (contentPanel === "sessions" || selectedSession?.owner.type === "long-agent") ? (
             <>
             <ChatWindow
