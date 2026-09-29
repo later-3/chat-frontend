@@ -324,28 +324,28 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
     <div className={`${styles.surfaceBody} configuration-dialog`}>
 
       <div className={styles.content}>
-        <div className="memoryTreeLayout">
+        <div className={styles.memoryTreeLayout}>
           <nav
             aria-label={t("memory.scopeTree")}
-className="memoryTreeNav"
+className={styles.memoryTreeNav}
           >
-            {treeError !== null && <div className="memoryTreeError"><InterfaceFeedback message={treeError} /></div>}
+            {treeError !== null && <div className={styles.memoryTreeError}><InterfaceFeedback message={treeError} /></div>}
             {tree === null && treeError === null && (
-              <div className="memoryTreeLoading">{t("common.loading")}</div>
+              <div className={styles.memoryTreeLoading}>{t("common.loading")}</div>
             )}
             {tree !== null && (
               <>
-                <div className="memoryTreeHeader">
+                <div className={styles.memoryTreeHeader}>
                   <button
                     type="button"
                     onClick={() => selectScope({ kind: "personal" })}
-                    className={scopeKeyState === "personal" ? "memoryTreeItem is-active" : "memoryTreeItem"}
+                    className={scopeKeyState === "personal" ? `${styles.memoryTreeItem} ${styles.treeActive}` : styles.memoryTreeItem}
                   >
                     <span>{t("memory.scope.personal")}</span>
                     <span>{tree.personal.total}</span>
                   </button>
                 </div>
-                <div className="memoryTreeHeader">
+                <div className={styles.memoryTreeHeader}>
                   <p>{t("memory.scopeTreeProjects")}</p>
                   {tree.projects.map((project) => (
                     <button
@@ -353,21 +353,21 @@ className="memoryTreeNav"
                       type="button"
                       disabled={!project.available}
                       onClick={() => selectScope({ kind: "project", projectId: project.projectId })}
-                      className={scopeKeyState === `project:${project.projectId}` ? "memoryTreeItem is-active" : "memoryTreeItem"}
+                      className={scopeKeyState === `project:${project.projectId}` ? `${styles.memoryTreeItem} ${styles.treeActive}` : styles.memoryTreeItem}
                     >
                       <span>{project.name}</span>
                       <span>{project.available ? project.total : "—"}</span>
                     </button>
                   ))}
                 </div>
-                <div className="memoryTreeHeader">
+                <div className={styles.memoryTreeHeader}>
                   <p>{t("memory.scopeTreeAgents")}</p>
                   {tree.longAgents.map((agent) => (
                     <button
                       key={agent.longAgentId}
                       type="button"
                       onClick={() => selectScope({ kind: "agent", longAgentId: agent.longAgentId })}
-                      className={scopeKeyState === `agent:${agent.longAgentId}` ? "memoryTreeItem is-active" : "memoryTreeItem"}
+                      className={scopeKeyState === `agent:${agent.longAgentId}` ? `${styles.memoryTreeItem} ${styles.treeActive}` : styles.memoryTreeItem}
                     >
                       <span>{agent.name}</span>
                       <span>{agent.coreIndexRevision === null ? "—" : `${agent.memoryFiles} f`}</span>
@@ -403,7 +403,7 @@ className="memoryTreeNav"
           <Button variant="primary" type="button" className={styles.primaryButton} onClick={startCreate} disabled={busy}><IconPlus size={16} stroke={2} aria-hidden="true" />{t("memory.add")}</Button>
         </form>
 
-        {activeQuery !== "" && <div className={styles.notice}>{t("memory.searchingFor", { query: activeQuery })}<Button type="button" className={`${styles.button} memoryClearSearch`} onClick={() => { setQuery(""); setActiveQuery(""); setOffset(0); }}>{t("memory.clearSearch")}</Button></div>}
+        {activeQuery !== "" && <div className={styles.notice}>{t("memory.searchingFor", { query: activeQuery })}<Button type="button" className={`${styles.button} ${styles.memoryClearSearch}`} onClick={() => { setQuery(""); setActiveQuery(""); setOffset(0); }}>{t("memory.clearSearch")}</Button></div>}
         {notice && <div className={styles.notice} role="status">{notice}</div>}
         {error && <div className={styles.error} role="alert"><InterfaceFeedback message={error} /></div>}
 
@@ -419,7 +419,7 @@ className="memoryTreeNav"
                 <span>v{memory.version}</span>
                 {scores.has(memory.id) && <span>{t("memory.score")}: {scores.get(memory.id)?.toFixed(3) ?? "—"}</span>}
                 <span>{formatDate(memory.updatedAt)}</span>
-              </div>{memory.indexError && <div className={`${styles.error} memoryErrorSpaced`}><InterfaceFeedback message={memory.indexError} /></div>}</div>
+              </div>{memory.indexError && <div className={`${styles.error} ${styles.memoryErrorSpaced}`}><InterfaceFeedback message={memory.indexError} /></div>}</div>
               <div className={styles.cardActions}>
                 <Button iconOnly variant="ghost" type="button" className={styles.iconButton} onClick={() => startEdit(memory)} disabled={busy} aria-label={t("memory.edit")}><IconPencil size={15} stroke={1.8} aria-hidden="true" /></Button>
                 <button type="button" className={styles.dangerButton} onClick={() => void remove(memory)} disabled={busy} aria-label={t("memory.delete")}><IconTrash size={15} stroke={1.8} aria-hidden="true" /></button>
