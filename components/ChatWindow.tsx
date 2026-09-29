@@ -35,7 +35,7 @@ import { MarkdownBody } from "./MarkdownBody";
 import { PlanReviewCard } from "./PlanReviewCard";
 import { SessionMemoryDialog } from "./SessionMemoryDialog";
 import { ToolbarAction } from "./ui/ToolbarAction";
-import { IconNotebook } from "@tabler/icons-react";
+import { IconBell, IconBellOff, IconNotebook, IconVolume, IconVolumeOff } from "@tabler/icons-react";
 import { SurfaceDialog } from "./SurfaceDialog";
 import { TopicCreationRequests } from "./TopicCreationRequests";
 import {
@@ -372,6 +372,24 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
       onClick={() => setMemoryOpen(true)}
     />
   ) : null;
+  // Notification preferences live with the other session-level actions (UI/UX §20.5).
+  const soundAction = onSoundToggle === undefined ? null : (
+    <ToolbarAction
+      label={soundEnabled ? t("chat.disableSound") : t("chat.enableSound")}
+      active={soundEnabled}
+      onClick={onSoundToggle}
+      icon={soundEnabled ? <IconVolume size={18} stroke={1.8} /> : <IconVolumeOff size={18} stroke={1.8} />}
+    />
+  );
+  const pushAction = onPushToggle === undefined ? null : (
+    <ToolbarAction
+      label={pushStatus === "on" ? t("chat.disablePush") : t("chat.enablePush")}
+      active={pushStatus === "on"}
+      disabled={["checking", "unsupported", "enabling", "disabling", "denied"].includes(pushStatus)}
+      onClick={onPushToggle}
+      icon={pushStatus === "on" ? <IconBell size={18} stroke={1.8} /> : <IconBellOff size={18} stroke={1.8} />}
+    />
+  );
   const compactAction = canCompact && (!sessionBusy || isCompacting) ? (
     <ToolbarAction
       label={isCompacting ? t("chat.stopCompaction") : t("chat.compactContext")}
@@ -437,10 +455,6 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
       slashCommandsLoading={slashCommandsLoading}
       onLoadSlashCommands={loadSlashCommands}
       onBuiltinCommand={handleBuiltinSlashCommand}
-      soundEnabled={soundEnabled}
-      onSoundToggle={onSoundToggle}
-      pushStatus={pushStatus}
-      onPushToggle={onPushToggle}
       onAudioUnlock={unlockAudio}
       draftKey={composerDraftKey(session?.id, session?.owner.type === "long-agent", contextProjectId, newSessionDraftKey, deviceId, projectId)}
       cwd={session?.cwd ?? newSessionCwd}
@@ -476,7 +490,7 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
       onDrop={handleDrop}
     >
       {chatActionsSlot !== null && chatActionsSlot !== undefined && createPortal(
-        <>{sessionMemoryAction}{compactAction}</>, chatActionsSlot,
+        <>{sessionMemoryAction}{compactAction}{soundAction}{pushAction}</>, chatActionsSlot,
       )}
       {memoryOpen && memorySessionId !== null && (
         <SessionMemoryDialog

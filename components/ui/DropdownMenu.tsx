@@ -60,6 +60,18 @@ export const DropdownMenuSeparator = forwardRef<
   return <DropdownMenuPrimitive.Separator ref={ref} className={`ui-menu-separator ${className}`} {...props} />;
 });
 
+export const DropdownMenuRadioItem = forwardRef<
+  HTMLDivElement,
+  ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioItem>
+>(function DropdownMenuRadioItem({ className = "", children, ...props }, ref) {
+  return (
+    <DropdownMenuPrimitive.RadioItem ref={ref} className={`ui-menu-item ${className}`} {...props}>
+      {children}
+      <DropdownMenuPrimitive.ItemIndicator className="ui-menu-indicator">✓</DropdownMenuPrimitive.ItemIndicator>
+    </DropdownMenuPrimitive.RadioItem>
+  );
+});
+
 export const DropdownMenuCheckboxItem = forwardRef<
   HTMLDivElement,
   ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem>

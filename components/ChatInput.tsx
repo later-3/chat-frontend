@@ -31,13 +31,9 @@ import { FolderIcon, getFileIcon } from "./FileIcons";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { ToolbarAction } from "./ui/ToolbarAction";
-import type { PushNotificationStatus } from "@/hooks/usePushNotifications";
+import { WorkflowPicker } from "./WorkflowPicker";
 import {
   IconAdjustmentsHorizontal,
-  IconBell,
-  IconBellOff,
-  IconVolume,
-  IconVolumeOff,
   IconX,
 } from "@tabler/icons-react";
 import {
@@ -89,10 +85,6 @@ interface Props {
   slashCommandsLoading?: boolean;
   onLoadSlashCommands?: () => Promise<SlashCommandInfo[]> | SlashCommandInfo[];
   onBuiltinCommand?: (message: string) => Promise<BuiltinSlashCommandResult>;
-  soundEnabled?: boolean;
-  onSoundToggle?: () => void;
-  pushStatus?: PushNotificationStatus;
-  onPushToggle?: () => void;
   onAudioUnlock?: () => void;
   draftKey?: string;
   /** Session working directory — enables the @ file autocomplete menu */
@@ -366,7 +358,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   retryInfo, queuedMessages, inputHistory = [], onRecallQueue,
   slashCommands, slashCommandsLoading, onLoadSlashCommands,
   onBuiltinCommand,
-  soundEnabled, onSoundToggle, pushStatus, onPushToggle, onAudioUnlock,
+  onAudioUnlock,
   onPromptWithStreamingBehavior,
   draftKey,
   cwd,
@@ -377,7 +369,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     () => draftKey ? readPendingSubmission(draftKey) : null, () => null);
   const [missingImages, setMissingImages] = useState(() => draftKey ? getDraft(draftKey)?.missingImages ?? 0 : 0);
   const [value, setValue] = useState(() => (draftKey ? getDraft(draftKey)?.value ?? "" : ""));
-  const [controlsMenuOpen, setControlsMenuOpen] = useState(false);
   const [workflowSummaries, setWorkflowSummaries] = useState<ChatWorkflowSummary[]>([]);
   const [workflowAgentDialogOpen, setWorkflowAgentDialogOpen] = useState(false);
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>(() => (
@@ -440,7 +431,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
     ? longAgentId !== null ? t("chat.longAgentTextOnly") : t("chat.workflowNoImages")
     : t("chat.attachImage");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const controlsMenuRef = useRef<HTMLDivElement>(null);
   const historyMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isComposingRef = useRef(false);
@@ -1315,46 +1305,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const compactResultText = compactResult
     ? t("sessionControls.compacted", { before: formatTokenCount(compactResult.tokensBefore), after: formatTokenCount(compactResult.estimatedTokensAfter), saved: formatTokenCount(compactSavedTokens) })
     : null;
-  const pushStatusLabel = (() => {
-    switch (pushStatus) {
-      case "on": return t("chat.pushStatusOn");
-      case "off": return t("chat.pushStatusOff");
-      case "unverified": return t("chat.pushStatusUnverified");
-      case "error": return t("chat.pushStatusError");
-      case "denied": return t("chat.pushStatusDenied");
-      case "unsupported": return t("chat.pushStatusUnsupported");
-      case "enabling": return t("chat.pushStatusEnabling");
-      case "disabling": return t("chat.pushStatusDisabling");
-      default: return t("chat.pushStatusChecking");
-    }
-  })();
-  const pushStatusHint = pushStatus === "unverified"
-    ? t("chat.pushUnverifiedHint")
-    : pushStatus === "error"
-      ? t("chat.pushErrorHint")
-      : pushStatus === "denied"
-        ? t("chat.pushDenied")
-        : pushStatus === "unsupported"
-          ? t("chat.pushUnsupported")
-          : null;
 
-  // Close dropdowns on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (controlsMenuRef.current && !controlsMenuRef.current.contains(e.target as Node)) {
-        setControlsMenuOpen(false);
-      }
-      if (historyMenuRef.current && !historyMenuRef.current.contains(e.target as Node) && !textareaRef.current?.contains(e.target as Node)) {
-        setHistoryMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  useEffect(() => {
-    if (!isMobile) setControlsMenuOpen(false);
-  }, [isMobile]);
 
 
   return (
@@ -2044,7 +1995,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           gap: 6,
         }}>
 
-          {/* LEFT: attach + model selector (idle) or steer/followup toggle (streaming) */}
+          {/* LEFT: input-level actions only (UI/UX §20.5): attach, workflow, its agents. */}
           <div style={{ flex: isMobile ? "1 1 auto" : "0 0 auto", minWidth: 0, display: "flex", alignItems: "center", gap: 2 }}>
             <ToolbarAction
               shape="frame"
@@ -2056,34 +2007,13 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>}
             />
             {/* Long Agent identity lives in the sidebar coworker panel; the composer never repeats it. */}
-            {(
-              <select
-                value={workflowId}
-                onChange={(event) => onWorkflowChange(event.target.value as ChatWorkflowId)}
-                disabled={isStreaming}
-                aria-label={t("chat.workflow")}
-                title={t("chat.workflowTitle")}
-                style={{
-                  flexShrink: 0,
-                  height: isMobile ? 44 : 32,
-                  maxWidth: isMobile ? 124 : 170,
-                  padding: "0 28px 0 10px",
-                  border: "1px solid var(--border)",
-                  borderRadius: 9,
-                  background: "var(--bg)",
-                  color: "var(--text-muted)",
-                  fontSize: 12,
-                  cursor: isStreaming ? "not-allowed" : "pointer",
-                  opacity: isStreaming ? 0.5 : 1,
-                }}
-              >
-                {visibleWorkflows.map((workflow) => (
-                  <option key={workflow.id} value={workflow.id} title={translateWorkflowCopy(workflow.id, workflow.description, t)}>
-                    {translateWorkflowCopy(workflow.id, workflow.name, t)}
-                  </option>
-                ))}
-              </select>
-            )}
+            <WorkflowPicker
+              disabled={isStreaming}
+              onChange={(next) => onWorkflowChange(next as ChatWorkflowId)}
+              selected={selectedWorkflow}
+              summaries={visibleWorkflows}
+              value={workflowId}
+            />
             {longAgentId === null && <ToolbarAction
               shape="frame"
               label={t("interface.configure.workflow.agents")}
@@ -2125,151 +2055,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                  {stopLabel ?? t("chat.stop")}
               </button>
             )}
-
-          <div ref={controlsMenuRef} style={{
-            flex: "0 0 auto",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            position: "relative",
-            marginLeft: isMobile ? 0 : "auto",
-          }}>
-            {isMobile && (
-              <button
-                type="button"
-                className="composer-settings-trigger"
-                 title={t("chat.runtimeSettings")}
-                 aria-label={t("chat.runtimeSettings")}
-                aria-expanded={controlsMenuOpen}
-                onClick={() => {
-                  setControlsMenuOpen((open) => !open);
-                }}
-                style={{
-                  position: "relative",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: 44,
-                  height: 44,
-                  padding: 0,
-                  background: controlsMenuOpen ? "var(--bg-selected)" : "none",
-                  border: `1px solid ${controlsMenuOpen ? "color-mix(in srgb, var(--accent) 36%, var(--border))" : "transparent"}`,
-                  borderRadius: 11,
-                  color: controlsMenuOpen ? "var(--text)" : "var(--text-muted)",
-                  cursor: "pointer",
-                  transition: "background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard)",
-                }}
-              >
-                <IconAdjustmentsHorizontal size={19} stroke={1.8} />
-                {(pushStatus === "on" || pushStatus === "unverified" || pushStatus === "error") && (
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      position: "absolute",
-                      top: 7,
-                      right: 7,
-                      width: 7,
-                      height: 7,
-                      borderRadius: 999,
-                      background: pushStatus === "on" ? "var(--success)" : pushStatus === "unverified" ? "var(--warning)" : "var(--danger)",
-                      boxShadow: "0 0 0 2px var(--bg)",
-                    }}
-                  />
-                )}
-              </button>
-            )}
-            <div className={isMobile ? "mobile-settings-panel" : undefined} style={{
-              display: isMobile ? (controlsMenuOpen ? "grid" : "none") : "flex",
-              alignItems: "center",
-              gap: isMobile ? 1 : 2,
-              ...(isMobile ? {
-                position: "absolute",
-                right: 0,
-                bottom: "calc(100% + 8px)",
-                zIndex: 160,
-                padding: 10,
-                width: "min(320px, calc(100vw - 32px))",
-                maxWidth: "calc(100vw - 32px)",
-                boxSizing: "border-box",
-                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                border: "1px solid color-mix(in srgb, var(--border) 72%, transparent)",
-                borderRadius: 16,
-                background: "color-mix(in srgb, var(--bg) 96%, transparent)",
-                boxShadow: "0 -8px 32px rgba(15,23,42,0.16)",
-                backdropFilter: "blur(16px)",
-              } : null),
-            }}>
-            {isMobile && (
-              <div className="mobile-settings-header">
-                <div>
-                  <strong>{t("chat.runtimeSettings")}</strong>
-                  <span>{pushStatusLabel}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setControlsMenuOpen(false);
-                  }}
-                  aria-label={t("chat.closeSettings")}
-                >
-                  <IconX size={18} stroke={1.8} />
-                </button>
-              </div>
-            )}
-            {isMobile && (
-              <button
-                type="button"
-                className="mobile-settings-tile mobile-settings-workflow-agent"
-                disabled={isStreaming || longAgentId !== null || !cwd || selectedWorkflow?.agents.length === 0}
-                onClick={() => {
-                  setControlsMenuOpen(false);
-                  setWorkflowAgentDialogOpen(true);
-                }}
-                style={{
-                  gridColumn: "1 / -1",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "flex-start",
-                  gap: 8,
-                  width: "100%",
-                  height: 44,
-                  padding: "0 12px",
-                  border: "none",
-                  borderRadius: 9,
-                  background: "transparent",
-                  color: "var(--text-muted)",
-                  cursor: isStreaming || !cwd ? "not-allowed" : "pointer",
-                  opacity: isStreaming || !cwd ? 0.5 : 1,
-                }}
-              >
-                <IconAdjustmentsHorizontal size={16} stroke={1.8} />
-                <span>{t("interface.workflow.agents")}</span>
-              </button>
-            )}
-            {onSoundToggle !== undefined && <ToolbarAction
-              shape="frame"
-              label={soundEnabled ? t("chat.disableSound") : t("chat.enableSound")}
-              active={soundEnabled}
-              iconOnly
-              onClick={onSoundToggle}
-              icon={soundEnabled ? <IconVolume size={16} stroke={1.8} /> : <IconVolumeOff size={16} stroke={1.8} />}
-            />}
-            {pushStatus !== undefined && onPushToggle !== undefined && <ToolbarAction
-              shape="frame"
-              label={pushStatus === "on" ? t("chat.disablePush") : t("chat.enablePush")}
-              active={pushStatus === "on"}
-              disabled={["checking", "unsupported", "enabling", "disabling", "denied"].includes(pushStatus)}
-              iconOnly
-              onClick={onPushToggle}
-              icon={pushStatus === "on" ? <IconBell size={16} stroke={1.8} /> : <IconBellOff size={16} stroke={1.8} />}
-            />}
-            {isMobile && pushStatusHint && (
-              <div className="mobile-settings-note" role="status">
-                {pushStatusHint}
-              </div>
-            )}
-            </div>
-          </div>
 
         </div>
       </div>

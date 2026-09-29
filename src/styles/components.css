@@ -1154,73 +1154,6 @@ span.token.table {
     border-top: 1px solid var(--mobile-border);
   }
 
-  .mobile-settings-panel {
-    align-items: stretch !important;
-    gap: 7px !important;
-  }
-
-  .mobile-settings-header {
-    grid-column: 1 / -1;
-    min-height: 42px;
-    padding: 0 2px 7px 4px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    border-bottom: 1px solid var(--mobile-border);
-  }
-
-  .mobile-settings-header > div {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .mobile-settings-header strong,
-  .mobile-settings-header span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .mobile-settings-header strong {
-    color: var(--text);
-    font-size: 14px;
-  }
-
-  .mobile-settings-header span {
-    color: var(--text-dim);
-    font-size: 11px;
-  }
-
-  .mobile-settings-header > button {
-    flex: 0 0 auto;
-    width: 36px;
-    height: 36px;
-    padding: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-muted);
-    background: var(--mobile-surface-muted);
-    border: 1px solid var(--mobile-border);
-    border-radius: 10px;
-  }
-
-
-  .mobile-settings-push {
-    grid-column: 1 / -1;
-  }
-
-  .mobile-settings-note {
-    grid-column: 1 / -1;
-    padding: 2px 4px 0;
-    color: var(--text-dim);
-    font-size: 11px;
-    line-height: 1.45;
-  }
-
   /* Mobile top panel dropdowns: safe area aware */
   .mobile-top-panel {
     padding-top: var(--safe-area-top);
@@ -1361,6 +1294,21 @@ span.token.table {
   border-left: 1px solid var(--border);
   background: none;
 }
+/* A value control inside the composer frame (workflow picker): same metrics as the
+   frame actions, but it shows the current value. */
+.composer-control { display: inline-flex; align-items: center; gap: 4px; max-width: 220px; height: 32px; min-height: 32px; padding: 0 8px; border: 0; border-radius: 9px; background: none; color: var(--text-muted); font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer; transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard); }
+.composer-control:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
+.composer-control:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.composer-control:disabled { opacity: 0.5; cursor: not-allowed; }
+.composer-control-label { overflow: hidden; text-overflow: ellipsis; }
+.workflow-menu { min-width: 260px; max-width: min(420px, calc(100vw - 32px)); }
+.workflow-menu-row { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.workflow-menu-name { color: var(--text); }
+.workflow-menu-detail { color: var(--text-muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .composer-control, .composer-control:disabled { height: 44px; min-height: 44px; }
+}
+
 /* Composer controls (UI/UX §20.5): states come from classes + tokens, never from
    onMouseEnter mutation, so the frame matches the toolbar behaviour. */
 .composer-stop:hover:not(:disabled) { background: rgba(239,68,68,0.16); }
