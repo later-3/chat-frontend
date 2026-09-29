@@ -105,7 +105,7 @@ const COMPOSITION_END_ENTER_GRACE_MS = 100;
 const MODEL_OPTION_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 const ANCHORED_MENU_GAP = 8;
 
-export function getUpwardMenuMaxHeight(menuBottom: number, visibleTop: number, gap = ANCHORED_MENU_GAP): number {
+function getUpwardMenuMaxHeight(menuBottom: number, visibleTop: number, gap = ANCHORED_MENU_GAP): number {
   return Math.max(0, Math.floor(menuBottom - visibleTop - gap));
 }
 
@@ -132,15 +132,15 @@ type SlashCommandPaletteItem = SlashCommandInfo | BuiltinSlashCommand;
 
 type SlashCommandSource = SlashCommandPaletteItem["source"];
 
-export function canRunBuiltinSlashCommandWhileStreaming(message: string): boolean {
+function canRunBuiltinSlashCommandWhileStreaming(message: string): boolean {
   return getBuiltinSlashCommand(message)?.availableWhileStreaming === true;
 }
 
-export function isExactSlashCommand(message: string, command: SlashCommandPaletteItem): boolean {
+function isExactSlashCommand(message: string, command: SlashCommandPaletteItem): boolean {
   return command.source === "builtin" && message.trim() === `/${command.name}`;
 }
 
-export function canClearBuiltinCommandInput(message: string, imageCount: number, submittedMessage: string): boolean {
+function canClearBuiltinCommandInput(message: string, imageCount: number, submittedMessage: string): boolean {
   return imageCount === 0 && message.trim() === submittedMessage;
 }
 
@@ -181,7 +181,7 @@ function isDormantSkillCommand(command: SlashCommandPaletteItem, dormancy: Recor
   return dormancy[command.name.slice("skill:".length)] === true;
 }
 
-export function buildSlashCommandLayout(
+function buildSlashCommandLayout(
   commands: SlashCommandPaletteItem[],
   dormancy: Record<string, boolean>,
 ) {
@@ -212,7 +212,7 @@ const CLIENT_IMAGE_COMPRESSION_THRESHOLD_BYTES = 1024 * 1024;
 const CLIENT_MAX_IMAGE_SIDE = 1024;
 const CLIENT_JPEG_QUALITY = 0.85;
 
-export function shouldCompressImageFile(file: Pick<File, "size" | "type">): boolean {
+function shouldCompressImageFile(file: Pick<File, "size" | "type">): boolean {
   return file.size > CLIENT_IMAGE_COMPRESSION_THRESHOLD_BYTES && file.type !== "image/gif";
 }
 
@@ -232,7 +232,7 @@ function readImageFile(file: Blob, mimeType: string): Promise<{ data: string; mi
   });
 }
 
-export async function compressImageFile(file: File): Promise<{ data: string; mimeType: string }> {
+async function compressImageFile(file: File): Promise<{ data: string; mimeType: string }> {
   const original = () => readImageFile(file, file.type);
   if (!shouldCompressImageFile(file) || typeof createImageBitmap !== "function") return original();
 
@@ -278,7 +278,7 @@ function draftImagesToAttachedImages(images: ChatDraftImage[] | undefined): Atta
     .map(draftImageToAttachedImage);
 }
 
-export function canRestoreUserMessage(
+function canRestoreUserMessage(
   value: string,
   attachedImageCount: number,
   pendingImageCount: number,
@@ -286,7 +286,7 @@ export function canRestoreUserMessage(
   return !value.trim() && attachedImageCount === 0 && pendingImageCount === 0;
 }
 
-export function getUserMessageText(message: UserMessage): string {
+function getUserMessageText(message: UserMessage): string {
   if (typeof message.content === "string") return message.content;
   return message.content
     .filter((block): block is TextContent => block.type === "text")
@@ -294,7 +294,7 @@ export function getUserMessageText(message: UserMessage): string {
     .join("\n");
 }
 
-export function getUserMessageDraftImages(message: UserMessage): ChatDraftImage[] {
+function getUserMessageDraftImages(message: UserMessage): ChatDraftImage[] {
   if (typeof message.content === "string") return [];
   return message.content.flatMap((block) => {
     if (block.type !== "image") return [];
