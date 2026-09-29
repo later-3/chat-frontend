@@ -1,6 +1,6 @@
 "use client";
 
-import { IconChevronDown } from "@tabler/icons-react";
+import { IconChevronDown, IconSitemap } from "@tabler/icons-react";
 import { useI18n } from "@/hooks/useI18n";
 import { translateWorkflowCopy } from "@/lib/i18n/workflow-copy";
 import type { ChatWorkflowSummary } from "@/lib/chat-workflows-browser";
@@ -29,6 +29,7 @@ export function WorkflowPicker({ disabled, onChange, selected, summaries, value 
     <DropdownMenuTrigger asChild>
       <button type="button" className="composer-control" data-workflow-picker aria-label={t("chat.workflow")}
         title={t("chat.workflowTitle")} disabled={disabled}>
+        <IconSitemap size={15} stroke={1.8} aria-hidden="true" />
         <span className="composer-control-label">{label}</span>
         <IconChevronDown size={14} stroke={1.8} aria-hidden="true" />
       </button>

@@ -1,7 +1,7 @@
 # Chat Frontend UI/UX 规范
 
 - 状态：规范基线
-- 版本：3.9
+- 版本：3.10
 - 适用项目：Chat Pi Web Frontend
 - 最后校正：2026-09-29
 -  art 方向：安静画廊级工具表面（littleplains / aside / resurf / daybridge 取精度不取装饰）；暖灰 + 墨字 + 克制紫品牌不变，深浅双主题同时成立
@@ -701,6 +701,8 @@ skill 内容与本文冲突时以本文为准；skill 中的项目映射（token
 - **两个位置，一个原语**：`shape="bar"` 用于顶栏条带（带分隔线、整高）；`shape="frame"` 用于输入框框内的动作（圆角 32px、Compact 44px、无分隔线）。计数徽标用 `badge`，不另做角标实现。
 - **职责分工**：会话级动作（任务与归档、会话记忆+计数、压缩、声音、推送通知、视图宽度）在**顶栏**，通过 `workspace-chat-actions-slot` 由会话组件 portal 进去；本轮输入级动作（附件、Workflow 选择、Workflow Agents、发送/停止）留在**输入框框内**。二者都不得自建按钮样式。
 - **框内的值控件**：选择当前值（如 Workflow）用 `composer-control` 触发 + 共享 `DropdownMenu`（`ui-menu`/`ui-menu-item`/`ui-menu-indicator` 单选标记）；**禁止原生 `<select>`** 与自绘下拉列表。
+- **框内布局**：输入框是**一个** `.composer-frame`（`.composer-frame` = 列 flex，持边框/背景/圆角/阴影），textarea 行与输入级控件行都在框**内**；不得把控件行放到框外下方，也不得把边框留在 textarea 容器上。焦点/流式/排队等状态用 `is-bash`/`is-queued` 之类的状态类表达。
+- **值控件显示图标 + 当前值**：Workflow 选择器的触发点是图标 + Workflow 名称（不是纯图标、也不是原生 select），浮层用共享单选菜单。
 - **状态来自类与 Token**：禁止用 `onMouseEnter/onMouseLeave` 直接改 DOM 样式（历史上 composer 那一排就是这样与工具栏分叉的）；hover/pressed/active 必须是 CSS 类 + 语义 Token。
 - **Compact 例外**：触控没有 hover，底部主导航保留可见名称，仅视觉隐藏标签的既有短横屏规则不变（§7 可发现性优先）。
 - 规范语义见 §15：主导航仍占 64px 栏宽，图标居中；开启文字后恢复图标在上、名称在下的形态。

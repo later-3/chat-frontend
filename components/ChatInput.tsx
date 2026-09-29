@@ -1828,21 +1828,16 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               </div>
             );
           })()}
+          {/* The bordered frame holds the textarea AND the controls row: the buttons
+              belong inside the box, not in a strip below it (UI/UX §20.5). */}
+          <div className={`composer-frame${bashMode ? " is-bash" : isStreaming && (onSteer || onFollowUp) ? " is-queued" : ""}`}>
           <div
             style={{
               minWidth: 0,
               display: "flex",
               gap: 8,
               alignItems: "center",
-              background: "var(--bg)",
-              border: `1px solid ${bashMode ? "var(--tool-bg)" : isStreaming && (onSteer || onFollowUp)
-                ? "rgba(234,179,8,0.4)"
-                : "color-mix(in srgb, var(--border) 70%, transparent)"}`,
-              borderRadius: 14,
-              padding: "10px 10px 10px 14px",
-              boxShadow: "0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -12px rgba(15,23,42,0.10)",
-              transition: "border-color var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard)",
-            } as React.CSSProperties}
+            }}
           >
           <textarea
             data-chat-composer
@@ -1988,7 +1983,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
         {/* Bottom bar: left | center (context) | right */}
         <div data-chat-toolbar className={isMobile ? "mobile-composer-controls" : undefined} style={{
-          marginTop: 8,
           display: isMobile ? "grid" : "flex",
           gridTemplateColumns: isMobile ? "minmax(0, 1fr) auto" : undefined,
           alignItems: "center",
@@ -2056,6 +2050,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               </button>
             )}
 
+        </div>
         </div>
       </div>
       {workflowAgentDialogOpen && cwd && selectedWorkflow && selectedWorkflow.agents.length > 0 && (

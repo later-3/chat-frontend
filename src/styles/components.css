@@ -1294,6 +1294,12 @@ span.token.table {
   border-left: 1px solid var(--border);
   background: none;
 }
+/* The composer box (UI/UX §20.5): one bordered frame containing the textarea row
+   and the input-level controls row, so the buttons read as part of the box. */
+.composer-frame { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 10px 10px 10px 14px; background: var(--bg); border: 1px solid color-mix(in srgb, var(--border) 70%, transparent); border-radius: 14px; box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -12px rgba(15,23,42,0.10); transition: border-color var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard); }
+.composer-frame.is-bash { border-color: var(--tool-bg); }
+.composer-frame.is-queued { border-color: rgba(234,179,8,0.4); }
+
 /* A value control inside the composer frame (workflow picker): same metrics as the
    frame actions, but it shows the current value. */
 .composer-control { display: inline-flex; align-items: center; gap: 4px; max-width: 220px; height: 32px; min-height: 32px; padding: 0 8px; border: 0; border-radius: 9px; background: none; color: var(--text-muted); font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer; transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard); }
