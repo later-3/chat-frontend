@@ -716,6 +716,7 @@ skill 内容与本文冲突时以本文为准；skill 中的项目映射（token
 - **动效**：同一个 modal 家族用 `scrim-in`（遮罩淡入）+ `layer-in`（内容浮现），关闭用 `scrim-out`/`layer-out`；锚点浮层用 `ui-float-in`。禁止私人 `@keyframes`（命令面板曾是唯一例外，已并入 `layer-in`）。一次性揭示与循环指示器仍按 §8.1 白名单。
 - **层级**：只允许使用层级 Token —— `--layer-sheet: 240` < `--layer-modal: 1101` < `--layer-float: 1250` < `--layer-tooltip: 1300` < `--layer-toast: 1500`（锚点浮层高于模态，保证对话框内的选择器不会被埋住）。组件内联 `zIndex` 仅允许组件内部堆叠（≤200），覆盖层级别的数字必须迁到 Token（门禁维护已评审清单）。
 - **iOS 独立模式**：所有模态的遮罩统一使用 `max(59px, var(--safe-area-top))` 等安全区内边距，不再只对某一种对话框生效。
+- **底部 sheet 模式**：Compact 的动作面板用 `SurfaceSheet`（同一遮罩、同一 `layer-in` 家族的上滑 `sheet-in/out`、同一 `--layer-modal`、同一圆角/阴影/安全区），只把**位置**钉在底部；不允许再自绘 `.mobile-action-*` 遮罩/面板/头部。桌面如需 sheet 也可直接用同一原语。
 
 ### 20.6 停靠面板
 

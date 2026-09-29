@@ -5,7 +5,6 @@ import { SurfaceDialog } from "./SurfaceDialog";
 
 import { InterfaceFeedback } from "./InterfaceFeedback";
 
-import { useDialogFocus } from "@/hooks/useDialogFocus";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -132,7 +131,6 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
   };
   // P3: outer shell is the shared SurfaceDialog (wide). The nested add/edit
   // editor keeps its own focus scope while open.
-  const editorRef = useDialogFocus(closeEditor, editing !== undefined);
   useEffect(() => {
     if (!editorDirty) return;
     const warn = (event: BeforeUnloadEvent) => event.preventDefault();
@@ -439,22 +437,43 @@ className={styles.memoryTreeNav}
         </div>
       </div>
 
-      {editing !== undefined && <div className={styles.editorBackdrop} role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) closeEditor(); }}>
-        <div ref={editorRef} tabIndex={-1} className={styles.editor} role="dialog" aria-modal="true" aria-label={editing === null ? t("memory.add") : t("memory.edit")}>
-          <div className={styles.editorHeader}><h2>{editing === null ? t("memory.add") : t("memory.edit")}</h2><Button iconOnly variant="ghost" type="button" className={styles.iconButton} onClick={closeEditor} disabled={busy} aria-label={t("common.close")}><IconX size={18} stroke={1.8} aria-hidden="true" /></Button></div>
-          <div className={styles.form}>
-            <div className={styles.field}><label htmlFor="memory-text">{t("memory.text")}</label><textarea id="memory-text" className={styles.textarea} value={draft.text} maxLength={50_000} autoFocus onChange={(event) => setDraft((value) => ({ ...value, text: event.target.value }))} /></div>
-            <div className={styles.formRow}>
-              <div className={styles.field}><label htmlFor="memory-kind">{t("memory.kind")}</label><select id="memory-kind" className={styles.select} value={draft.kind} onChange={(event) => setDraft((value) => ({ ...value, kind: event.target.value as MemoryKind }))}>{MEMORY_KINDS.map((value) => <option key={value} value={value}>{t(`memory.kind.${value}`)}</option>)}</select></div>
-              <div className={styles.field}><label htmlFor={editing === null ? "memory-target" : undefined}>{t("memory.scope")}</label>{editing === null ? <select id="memory-target" className={styles.select} value={draftTargetKey} onChange={(event) => setDraftTargetKey(event.target.value)}>
-                <option value="personal">{t("memory.scope.personal")}</option>
-                {projects.map((project) => <option key={project.projectId} value={`project:${project.projectId}`}>{project.cachedName}</option>)}
-              </select> : <div className={styles.input}>{editing.scope === "personal" ? t("memory.scope.personal") : editing.projectId}</div>}</div>
+      {editing !== undefined && (
+        // Nested editor above the shared dialog (UI/UX §18.4/§20.6): the same modal
+        // primitive, so scrim, reveal, radius, shadow and layer are shared — and it
+        // stacks above the management dialog because Radix portals it later.
+        <SurfaceDialog
+          title={editing === null ? t("memory.add") : t("memory.edit")}
+          onClose={() => { if (!busy) closeEditor(); }}
+        >
+          <div className="ui-scroll-20 ui-stack-16">
+            <div className="ui-stack-4">
+              <label className="ui-muted-12-medium" htmlFor="memory-text">{t("memory.text")}</label>
+              <textarea id="memory-text" className={styles.textarea} value={draft.text} maxLength={50_000} autoFocus
+                onChange={(event) => setDraft((value) => ({ ...value, text: event.target.value }))} />
             </div>
-            <div className={styles.editorActions}><Button type="button" className={styles.button} onClick={closeEditor} disabled={busy}>{t("common.cancel")}</Button><Button variant="primary" type="button" className={styles.primaryButton} onClick={() => void saveDraft()} disabled={busy}>{busy ? t("common.saving") : t("common.save")}</Button></div>
+            <div className="ui-row-6" style={{ alignItems: "flex-start", flexWrap: "wrap" }}>
+              <div className="ui-stack-4 ui-grow">
+                <label className="ui-muted-12-medium" htmlFor="memory-kind">{t("memory.kind")}</label>
+                <select id="memory-kind" className={styles.select} value={draft.kind}
+                  onChange={(event) => setDraft((value) => ({ ...value, kind: event.target.value as MemoryKind }))}>
+                  {MEMORY_KINDS.map((value) => <option key={value} value={value}>{t(`memory.kind.${value}`)}</option>)}
+                </select>
+              </div>
+              <div className="ui-stack-4 ui-grow">
+                <label className="ui-muted-12-medium" htmlFor={editing === null ? "memory-target" : undefined}>{t("memory.scope")}</label>
+                {editing === null ? <select id="memory-target" className={styles.select} value={draftTargetKey} onChange={(event) => setDraftTargetKey(event.target.value)}>
+                  <option value="personal">{t("memory.scope.personal")}</option>
+                  {projects.map((project) => <option key={project.projectId} value={`project:${project.projectId}`}>{project.cachedName}</option>)}
+                </select> : <div className={styles.input}>{editing.scope === "personal" ? t("memory.scope.personal") : editing.projectId}</div>}
+              </div>
+            </div>
+            <div className="ui-row-6" style={{ justifyContent: "flex-end" }}>
+              <Button variant="secondary" type="button" className={styles.button} onClick={closeEditor} disabled={busy}>{t("common.cancel")}</Button>
+              <Button variant="primary" type="button" className={styles.primaryButton} onClick={() => void saveDraft()} disabled={busy}>{busy ? t("common.saving") : t("common.save")}</Button>
+            </div>
           </div>
-        </div>
-      </div>}
+        </SurfaceDialog>
+      )}
     </div>
     </SurfaceDialog>
   );

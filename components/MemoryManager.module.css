@@ -327,59 +327,6 @@
   font-size: 12px;
 }
 
-/* P3 nested editor: must sit above the shared SurfaceDialog overlay (1100) + content (1101). */
-.editorBackdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 1110;
-  animation: scrim-in var(--duration-overlay) var(--ease-out) both;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 18px;
-  background: rgba(0, 0, 0, 0.46);
-}
-
-.editor {
-  width: min(620px, 100%);
-  max-height: min(760px, calc(100dvh - 36px));
-  overflow: auto;
-  padding: 16px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: var(--shadow-dialog);
-}
-
-.editorHeader,
-.editorActions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.editorHeader h2 {
-  margin: 0;
-  font-size: 15px;
-}
-
-.editorHeader .iconButton {
-  margin-left: auto;
-}
-
-.form {
-  margin-top: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.formRow {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
 .field {
   min-width: 0;
   display: flex;
@@ -393,10 +340,6 @@
   font-weight: 600;
 }
 
-.editorActions {
-  justify-content: flex-end;
-  margin-top: 4px;
-}
 
 @media (max-width: 760px) {
   .header {
@@ -437,21 +380,8 @@
     justify-content: flex-end;
   }
 
-  .editorBackdrop {
-    align-items: flex-end;
-    padding: 0;
-  }
 
-  .editor {
-    width: 100%;
-    max-height: calc(100dvh - 24px);
-    padding-bottom: calc(16px + env(safe-area-inset-bottom));
-    border-radius: 14px 14px 0 0;
-  }
 
-  .formRow {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

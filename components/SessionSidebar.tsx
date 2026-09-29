@@ -3,6 +3,7 @@ import { Button } from "./ui/Button";
 
 import { formatRelativeTime } from "@/lib/i18n/format";
 import { InterfaceFeedback } from "./InterfaceFeedback";
+import { SurfaceSheet } from "./SurfaceSheet";
 
 import { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -2345,35 +2346,12 @@ function SessionItem({
           )}
 
           {isMobile && !diskActionsDisabled && mobileActionsOpen && (
-            <>
-              <button
-                type="button"
-                className="mobile-action-backdrop"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setMobileActionsOpen(false);
-                }}
-                aria-label={t("interface.close.session.actions")}
-              />
-              <div className="mobile-action-sheet" role="dialog" aria-modal="true" aria-label={`Session actions for ${title}`}>
-                <div className="mobile-action-sheet-header">
-                  <div>
-                    <strong>{title}</strong>
-                    <span>{session.messageCount}{t("interface.messages.3")}</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="mobile-icon-button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setMobileActionsOpen(false);
-                    }}
-                    aria-label={t("interface.close.session.actions")}
-                  >
-                    <IconX size={22} stroke={1.8} aria-hidden="true" />
-                  </button>
-                </div>
-                <div className="mobile-action-grid">
+            <SurfaceSheet
+              title={title}
+              description={`${session.messageCount}${t("interface.messages.3")}`}
+              onClose={() => setMobileActionsOpen(false)}
+            >
+              <div className="mobile-action-grid">
                   <button
                     type="button"
                     onClick={(event) => {
@@ -2395,8 +2373,7 @@ function SessionItem({
                     <span>{t("sidebar.delete")}</span>
                   </button>
                 </div>
-              </div>
-            </>
+            </SurfaceSheet>
           )}
 
           {/* Desktop action buttons — shown on hover */}

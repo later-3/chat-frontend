@@ -42,80 +42,14 @@
   box-shadow: 0 0 0 2px var(--mobile-control);
 }
 
-.backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 810;
-  padding: 0;
-  background: rgba(15, 23, 42, 0.34);
-  border: 0;
-  backdrop-filter: blur(2px);
-}
 
-.sheet {
-  position: fixed;
-  left: max(10px, var(--safe-area-left));
-  right: max(10px, var(--safe-area-right));
-  bottom: max(10px, var(--safe-area-bottom));
-  z-index: 820;
-  max-height: min(520px, calc(var(--visual-viewport-height, 100dvh) - var(--safe-area-top) - 20px));
-  overflow-y: auto;
-  padding: 12px;
-  color: var(--text);
-  background: var(--mobile-surface);
-  border: 1px solid var(--mobile-border);
-  border-radius: var(--mobile-radius-sheet);
-  box-shadow: var(--shadow-dialog);
-  overscroll-behavior: contain;
-}
 
-.header {
-  min-height: 56px;
-  padding: 2px 2px 11px 10px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border-bottom: 1px solid var(--mobile-border);
-}
 
-.heading {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
 
 .heading strong,
-.heading span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
-.heading strong {
-  font-size: 16px;
-  letter-spacing: -0.01em;
-}
 
-.heading span {
-  color: var(--text-muted);
-  font-size: 12px;
-}
 
-.closeButton {
-  flex: 0 0 44px;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-  background: var(--mobile-control);
-  border: 1px solid var(--mobile-border);
-  border-radius: var(--mobile-radius-control);
-}
 
 .deviceList {
   padding-top: 10px;
@@ -208,12 +142,5 @@
 @media (max-width: 360px) {
   .trigger {
     width: min(94px, 27vw);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sheet,
-  .backdrop {
-    scroll-behavior: auto;
   }
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { SurfaceSheet } from "./SurfaceSheet";
 import { InterfaceFeedback } from "./InterfaceFeedback";
 
 import { useEffect, useId, useRef, useState } from "react";
@@ -111,38 +112,12 @@ export function MobileDeviceSwitcher({ directory, runningCount, onNavigate }: Pr
       </button>
 
       {open && (
-        <>
-          <button
-            type="button"
-            className={styles.backdrop}
-            onClick={closeSheet}
-            aria-label={t("devices.close")}
-          />
-          <section
-            ref={sheetRef}
-            className={styles.sheet}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={titleId}
-            aria-describedby={descriptionId}
-          >
-            <div className={styles.header}>
-              <div className={styles.heading}>
-                <strong id={titleId}>{t("devices.sheetTitle")}</strong>
-                <span id={descriptionId}>{t("devices.sheetDescription")}</span>
-              </div>
-              <button
-                ref={closeRef}
-                type="button"
-                className={styles.closeButton}
-                onClick={closeSheet}
-                aria-label={t("devices.close")}
-              >
-                <IconX size={22} stroke={1.8} aria-hidden="true" />
-              </button>
-            </div>
-
-            <div className={styles.deviceList}>
+        <SurfaceSheet
+          title={t("devices.sheetTitle")}
+          description={t("devices.sheetDescription")}
+          onClose={closeSheet}
+        >
+          <div className={styles.deviceList}>
               {directory.devices.map((device) => {
                 const isCurrent = device.id === directory.currentDeviceId;
                 const isSwitching = switchingId === device.id;
@@ -181,10 +156,8 @@ export function MobileDeviceSwitcher({ directory, runningCount, onNavigate }: Pr
                 );
               })}
             </div>
-
-            {switchError && <div className={styles.error} role="alert"><InterfaceFeedback message={switchError} /></div>}
-          </section>
-        </>
+          {switchError && <div className={styles.error} role="alert"><InterfaceFeedback message={switchError} /></div>}
+        </SurfaceSheet>
       )}
     </>
   );

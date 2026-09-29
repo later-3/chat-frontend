@@ -1,6 +1,7 @@
 "use client";
 
 import { InterfaceFeedback } from "./InterfaceFeedback";
+import { SurfaceSheet } from "./SurfaceSheet";
 
 import { forwardRef, useState, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from "react";
 import { getFileIcon, FolderIcon } from "./FileIcons";
@@ -468,35 +469,12 @@ function TreeNode({
           </button>
         )}
         {isMobile && mobileActionsOpen && (
-          <>
-            <button
-              type="button"
-              className="mobile-action-backdrop"
-              onClick={(event) => {
-                event.stopPropagation();
-                setMobileActionsOpen(false);
-              }}
-              aria-label={t("files.closeActions")}
-            />
-            <div className="mobile-action-sheet" role="dialog" aria-modal="true" aria-label={t("files.actionsFor", { name: node.name })}>
-              <div className="mobile-action-sheet-header">
-                <div>
-                  <strong>{node.name}</strong>
-                  <span>{node.isDir ? t("files.folder") : t("files.file")}</span>
-                </div>
-                <button
-                  type="button"
-                  className="mobile-icon-button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setMobileActionsOpen(false);
-                  }}
-                  aria-label={t("files.closeActions")}
-                >
-                  <IconX size={22} stroke={1.8} aria-hidden="true" />
-                </button>
-              </div>
-              <div className="mobile-action-grid">
+          <SurfaceSheet
+            title={node.name}
+            description={node.isDir ? t("files.folder") : t("files.file")}
+            onClose={() => setMobileActionsOpen(false)}
+          >
+            <div className="mobile-action-grid">
                 {onAtMention && (
                   <button
                     type="button"
@@ -524,8 +502,7 @@ function TreeNode({
                   </a>
                 )}
               </div>
-            </div>
-          </>
+          </SurfaceSheet>
         )}
       </div>
       {node.isDir && open && (
@@ -605,23 +582,11 @@ function MobileFileRow({
         <IconDotsVertical size={20} stroke={1.8} aria-hidden="true" />
       </button>
       {mobileActionsOpen && (
-        <>
-          <button
-            type="button"
-            className="mobile-action-backdrop"
-            onClick={() => setMobileActionsOpen(false)}
-            aria-label={t("files.closeActions")}
-          />
-          <div className="mobile-action-sheet" role="dialog" aria-modal="true" aria-label={t("files.actionsFor", { name: node.name })}>
-            <div className="mobile-action-sheet-header">
-              <div>
-                <strong>{node.name}</strong>
-                <span>{node.isDir ? t("files.folder") : t("files.file")}</span>
-              </div>
-              <button type="button" className="mobile-icon-button" onClick={() => setMobileActionsOpen(false)} aria-label={t("files.closeActions")}>
-                <IconX size={22} stroke={1.8} aria-hidden="true" />
-              </button>
-            </div>
+          <SurfaceSheet
+            title={node.name}
+            description={node.isDir ? t("files.folder") : t("files.file")}
+            onClose={() => setMobileActionsOpen(false)}
+          >
             <div className="mobile-action-grid">
               {onAtMention && (
                 <button
@@ -646,9 +611,8 @@ function MobileFileRow({
                 </a>
               )}
             </div>
-          </div>
-        </>
-      )}
+          </SurfaceSheet>
+        )}
     </div>
   );
 }

@@ -956,69 +956,14 @@ span.token.table {
     box-shadow: 0 0 0 2px var(--mobile-control);
   }
 
-  .mobile-action-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 790;
-    animation: scrim-in var(--duration-overlay) var(--ease-out) both;
-    padding: 0;
-    background: rgba(15, 23, 42, 0.34);
-    border: 0;
-    backdrop-filter: blur(2px);
-  }
 
-  .mobile-action-sheet {
-    position: fixed;
-    left: max(10px, var(--safe-area-left));
-    right: max(10px, var(--safe-area-right));
-    bottom: max(10px, var(--safe-area-bottom));
-    z-index: 800;
-    padding: 12px;
-    color: var(--text);
-    background: var(--mobile-surface);
-    border: 1px solid var(--mobile-border);
-    border-radius: var(--mobile-radius-sheet);
-    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
-  }
 
-  .mobile-action-sheet-header {
-    min-height: 52px;
-    padding: 2px 2px 10px 10px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    border-bottom: 1px solid var(--mobile-border);
-  }
 
-  .mobile-action-sheet-header > div {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-  }
 
-  .mobile-action-sheet-header > .mobile-action-sheet-header-actions {
-    flex: 0 0 auto;
-    flex-direction: row;
-    gap: 6px;
-  }
 
   .mobile-action-sheet-header strong,
-  .mobile-action-sheet-header span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
 
-  .mobile-action-sheet-header strong {
-    font-size: 15px;
-  }
 
-  .mobile-action-sheet-header span {
-    color: var(--text-muted);
-    font-size: 12px;
-  }
 
   .mobile-action-grid {
     padding-top: 10px;
@@ -1186,6 +1131,36 @@ span.token.table {
 .ui-grow { flex: 1; min-width: 0; }
 .ui-minw { min-width: 0; }
 .ui-mb-6 { margin-bottom: 6px; }
+/* Bottom sheet (UI/UX §20.6): same surface, reveal and layer as the modal family,
+   only anchored to the bottom edge and safe-area aware. */
+.surface-sheet {
+  position: fixed;
+  left: max(10px, var(--safe-area-left));
+  right: max(10px, var(--safe-area-right));
+  bottom: max(10px, var(--safe-area-bottom));
+  z-index: var(--layer-modal);
+  display: flex;
+  flex-direction: column;
+  max-height: min(80dvh, 640px);
+  padding: 0;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-dialog);
+  box-shadow: var(--shadow-dialog);
+  overflow: hidden;
+}
+.surface-sheet-header { display: flex; align-items: center; gap: 10px; flex: none; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.surface-sheet-title { margin: 0; font-size: 15px; font-weight: 650; }
+.surface-sheet-description { margin: 3px 0 0; color: var(--text-muted); font-size: 12px; }
+.surface-sheet-body { padding: 12px; }
+@media (prefers-reduced-motion: no-preference) {
+  .surface-sheet { animation: sheet-in var(--duration-overlay) var(--ease-out) both; }
+  .surface-sheet[data-state="closed"] { animation: sheet-out var(--duration-panel) var(--ease-standard) forwards; }
+  @keyframes sheet-in { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+  @keyframes sheet-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(18px); } }
+}
+
 /* A dialog body owns its scrolling: without min-height the flex child cannot
    shrink below its content and the modal (overflow:hidden) clips it silently. */
 .ui-scroll-20 { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px; }

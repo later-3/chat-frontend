@@ -1,5 +1,7 @@
 "use client";
 
+import { SurfaceSheet } from "./SurfaceSheet";
+import { Button } from "./ui/Button";
 import { useEffect, useRef, useState } from "react";
 import {
   IconAdjustmentsHorizontal,
@@ -163,34 +165,16 @@ export function MobileWorkspaceHeader({
       </header>
 
       {menuOpen && (
-        <>
-          <button
-            type="button"
-            className="mobile-action-backdrop"
-            onClick={() => setMenuOpen(false)}
-            aria-label={t("mobile.closeMenu")}
-          />
-          <div className="mobile-action-sheet" role="dialog" aria-modal="true" aria-label={t("mobile.menu")}>
-            <div className="mobile-action-sheet-header">
-              <div>
-                <strong>{projectName}</strong>
-                <span>{selectedSession ? sessionLabel(selectedSession) : t("mobile.newSessionLabel")}</span>
-              </div>
-              <div className="mobile-action-sheet-header-actions">
-                <button
-                  type="button"
-                  className={`mobile-icon-button${refreshing ? " is-refreshing" : ""}`}
-                  onClick={handleRefresh}
-                  aria-label={t("mobile.refreshWorkspace")}
-                >
-                  <IconRefresh size={22} stroke={1.8} aria-hidden="true" />
-                </button>
-                <button type="button" className="mobile-icon-button" onClick={() => setMenuOpen(false)} aria-label={t("mobile.closeMenu")}>
-                  <IconX size={22} stroke={1.8} aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-            <div className="mobile-action-grid">
+        <SurfaceSheet
+          title={projectName}
+          description={selectedSession ? sessionLabel(selectedSession) : t("mobile.newSessionLabel")}
+          onClose={() => setMenuOpen(false)}
+          actions={<Button iconOnly variant="ghost" type="button" className={refreshing ? "is-refreshing" : undefined}
+            aria-label={t("mobile.refreshWorkspace")} onClick={handleRefresh}>
+            <IconRefresh size={20} stroke={1.8} aria-hidden="true" />
+          </Button>}
+        >
+          <div className="mobile-action-grid">
               <button type="button" onClick={() => { setMenuOpen(false); onOpenWorkspace(); }}>
                 <IconFolder size={21} stroke={1.7} aria-hidden="true" />
                 <span>{t("mobile.projectsSessions")}</span>
@@ -244,8 +228,7 @@ export function MobileWorkspaceHeader({
                 <span>{t("mobile.selfCheck")}</span>
               </button>
             </div>
-          </div>
-        </>
+        </SurfaceSheet>
       )}
     </section>
   );
