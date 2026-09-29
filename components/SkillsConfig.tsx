@@ -3,10 +3,10 @@
 import { translateWorkflowCopy } from "@/lib/i18n/workflow-copy";
 
 import { InterfaceFeedback } from "./InterfaceFeedback";
+import { SurfaceDialog } from "./SurfaceDialog";
 
 import { ConfigurationToggle as Toggle } from "./ConfigurationToggle";
 
-import { useDialogFocus } from "@/hooks/useDialogFocus";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -672,7 +672,6 @@ export function SkillsConfig({
   cwd: string;
   onClose: () => void;
 }) {
-  const modalRef = useDialogFocus(onClose);
   const isMobile = useIsMobile();
   const { t } = useI18n();
   const [skills, setSkills] = useState<Skill[]>([]);
@@ -1072,77 +1071,8 @@ export function SkillsConfig({
     );
   };
 
-  return (
-    <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("interface.skills")} className="configuration-dialog ui-scrim-center"
-
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        style={{
-          width: isMobile ? "calc(100vw - 16px)" : 860,
-          maxWidth: "calc(100vw - 16px)",
-          height: isMobile ? "calc(100dvh - 16px)" : "78vh",
-          maxHeight: "calc(100dvh - 16px)",
-          background: "var(--bg)",
-          border: "1px solid var(--border)",
-          borderRadius: 10,
-          display: "flex",
-          flexDirection: "column",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-          overflow: "hidden",
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "12px 18px",
-            borderBottom: "1px solid var(--border)",
-            flexShrink: 0,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <span
-              className="ui-title-15"
-            >
-               {t("common.skills")}
-            </span>
-            <code
-              style={{
-                fontSize: 12,
-                color: "var(--text-muted)",
-                fontFamily: "var(--font-mono)",
-                maxWidth: 320,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {shortenPath(cwd)}
-            </code>
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: "none",
-              border: "none",
-              color: "var(--text-muted)",
-              cursor: "pointer",
-              fontSize: 20,
-              lineHeight: 1,
-              padding: "2px 6px",
-            }}
-          >
-            ×
-          </button>
-        </div>
-
-        {/* Body */}
-        <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
+  return <SurfaceDialog title={t("common.skills")} description={shortenPath(cwd)} onClose={onClose}>
+<div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
           {/* Left: skill list */}
           <div
             style={{
@@ -1549,22 +1479,6 @@ export function SkillsConfig({
               </span>
             )}
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              padding: "6px 14px",
-              background: "none",
-              border: "1px solid var(--border)",
-              borderRadius: 6,
-              color: "var(--text-muted)",
-              cursor: "pointer",
-              fontSize: 13,
-            }}
-          >
-             {t("i18n.close")}
-          </button>
         </div>
-      </div>
-    </div>
-  );
+  </SurfaceDialog>;
 }

@@ -5,15 +5,16 @@ import { useI18n } from "@/hooks/useI18n";
 import { Button } from "./ui/Button";
 
 /** One modal primitive owns focus, Escape and accessible naming for every reader. */
-export function SurfaceDialog({ title, description, children, onClose, wide = false, actions }: {
+export function SurfaceDialog({ title, description, children, onClose, size = "regular", actions }: {
   title: string; description?: string; children: ReactNode; onClose: () => void;
-  wide?: boolean; actions?: ReactNode;
+  /** regular: 960x800 · wide: 1440x1000 (reading) · full: the whole viewport (maximized). */
+  size?: "regular" | "wide" | "full"; actions?: ReactNode;
 }) {
   const { t } = useI18n();
   const origin = useRef(document.activeElement);
   return <Dialog.Root open onOpenChange={open => { if (!open) onClose(); }}>
     <Dialog.Portal><Dialog.Overlay className="surface-overlay" />
-      <Dialog.Content className={`surface-dialog configuration-dialog${wide ? " surface-dialog-wide" : ""}`} data-ui-dialog
+      <Dialog.Content className={`surface-dialog configuration-dialog${size === "regular" ? "" : ` surface-dialog-${size}`}`} data-ui-dialog
         {...(description ? {} : { "aria-describedby": undefined })}
         onCloseAutoFocus={event => { event.preventDefault(); if (origin.current instanceof HTMLElement && origin.current.isConnected) origin.current.focus(); }}>
         <header className="surface-header">

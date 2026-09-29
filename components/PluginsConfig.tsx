@@ -2,10 +2,11 @@
 import { useConfirmation } from "./ui/Confirmation";
 
 import { InterfaceFeedback } from "./InterfaceFeedback";
+import { SurfaceDialog } from "./SurfaceDialog";
+import { Button } from "./ui/Button";
 
 import { ConfigurationToggle as Toggle } from "./ConfigurationToggle";
 
-import { useDialogFocus } from "@/hooks/useDialogFocus";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -569,7 +570,6 @@ export function PluginsConfig({
     if (installSource.trim() && !await confirm(t("longAgentSettings.discardConfirm"), t("common.discard"))) return;
     onClose();
   };
-  const modalRef = useDialogFocus(requestClose);
   const isMobile = useIsMobile();
   const { t } = useI18n();
   const [data, setData] = useState<PluginsResponse | null>(null);
@@ -686,72 +686,8 @@ export function PluginsConfig({
 
   const addBusy = busyKey?.startsWith("install:") ?? false;
 
-  return (
-    <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("interface.plugins")} className="configuration-dialog ui-scrim-center"
-
-      onClick={(e) => {
-        if (e.target === e.currentTarget) requestClose();
-      }}
-    >
-      <div
-        style={{
-          width: isMobile ? "calc(100vw - 16px)" : 860,
-          maxWidth: "calc(100vw - 16px)",
-          height: isMobile ? "calc(100dvh - 16px)" : "76vh",
-          maxHeight: "calc(100dvh - 16px)",
-          background: "var(--bg)",
-          border: "1px solid var(--border)",
-          borderRadius: 8,
-          display: "flex",
-          flexDirection: "column",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "12px 18px",
-            borderBottom: "1px solid var(--border)",
-            flexShrink: 0,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
-            <span className="ui-title-15">
-              {t("common.plugins")}
-            </span>
-            <code
-              style={{
-                fontSize: 12,
-                color: "var(--text-muted)",
-                fontFamily: "var(--font-mono)",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {shortenPath(cwd)}
-            </code>
-          </div>
-          <button
-            onClick={requestClose}
-            style={{
-              background: "none",
-              border: "none",
-              color: "var(--text-muted)",
-              cursor: "pointer",
-              fontSize: 20,
-              lineHeight: 1,
-              padding: "2px 6px",
-            }}
-          >
-            ×
-          </button>
-        </div>
-
-        <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
+  return <SurfaceDialog title={t("interface.plugins")} description={shortenPath(cwd)} onClose={requestClose}>
+<div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
           <div
             style={{
               width: isMobile ? "100%" : 245,
@@ -986,14 +922,9 @@ export function PluginsConfig({
               </span>
             )}
           </div>
-          <button onClick={() => void loadPlugins()} disabled={loading || busyKey !== null} style={buttonStyle(loading || busyKey !== null)}>
-             {t("i18n.refresh")}
-          </button>
-          <button onClick={requestClose} style={buttonStyle(false)}>
-             {t("i18n.close")}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+          <Button variant="secondary" type="button" onClick={() => void loadPlugins()} disabled={loading || busyKey !== null}>
+            {t("i18n.refresh")}
+          </Button>
+</div>
+  </SurfaceDialog>;
 }

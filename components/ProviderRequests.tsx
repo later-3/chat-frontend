@@ -1,10 +1,11 @@
 "use client";
 
 import { InterfaceFeedback } from "./InterfaceFeedback";
+import { SurfaceDialog } from "./SurfaceDialog";
+import { Button } from "./ui/Button";
 
 import { useI18n } from "@/hooks/useI18n";
 
-import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   ProviderRequestDetail,
@@ -459,24 +460,8 @@ function IconWindow() {
   );
 }
 
-const headerBtnStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: 28,
-  height: 28,
-  padding: 0,
-  background: "none",
-  border: "1px solid transparent",
-  borderRadius: 5,
-  color: "var(--text-muted)",
-  cursor: "pointer",
-  transition: "background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard)",
-};
-
 export function ProviderRequests({ cwd, onClose }: { cwd: string; onClose: () => void }) {
   const { t: tr } = useI18n();
-  const modalRef = useDialogFocus(onClose);
   const [list, setList] = useState<ProviderRequestSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -535,124 +520,28 @@ export function ProviderRequests({ cwd, onClose }: { cwd: string; onClose: () =>
     };
   }, [cwd, selectedFile]);
 
-  const overlayStyle: React.CSSProperties = fullscreen
-    ? {
-        position: "fixed",
-        inset: 0,
-        zIndex: 1100,
-        display: "flex",
-        flexDirection: "column",
-        background: "var(--bg)",
-      }
-    : {
-        position: "fixed",
-        inset: 24,
-        zIndex: 1100,
-        display: "flex",
-        flexDirection: "column",
-        background: "var(--bg)",
-        border: "1px solid var(--border)",
-        borderRadius: 10,
-        boxShadow: "0 12px 40px rgba(0,0,0,0.28)",
-      };
-
-  return (
-    <>
-      {/* Backdrop (window mode only) */}
-      {!fullscreen && (
-        <div
-          className="ui-scrim"
-          onClick={onClose}
-        />
-      )}
-
-      <div ref={modalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={tr("interface.provider.requests")} className="configuration-dialog provider-requests-dialog" style={overlayStyle}>
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            padding: "8px 14px",
-            borderBottom: "1px solid var(--border)",
-            flexShrink: 0,
-          }}
-        >
-          <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)", flexShrink: 0 }}>{tr("interface.provider.requests")}</span>
-          <code
-            style={{
-              fontSize: 12,
-              color: "var(--text-muted)",
-              fontFamily: "var(--font-mono)",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              minWidth: 0,
-            }}
-          >
-            {shortenPath(cwd)}
-          </code>
-
-          <div style={{ flex: 1 }} />
-
-          <button
-            onClick={() => setListCollapsed((c) => !c)}
-            title={listCollapsed ? tr("interface.show.request.list") : tr("interface.hide.request.list")}
-            aria-label={listCollapsed ? tr("interface.show.list") : tr("interface.hide.list")}
-            style={headerBtnStyle}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "var(--bg-hover)";
-              e.currentTarget.style.color = "var(--text)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "none";
-              e.currentTarget.style.color = "var(--text-muted)";
-            }}
-          >
-            {listCollapsed ? <IconListExpand /> : <IconListCollapse />}
-          </button>
-
-          <button
-            onClick={() => setFullscreen((f) => !f)}
-            title={fullscreen ? tr("interface.window.mode") : tr("interface.fullscreen")}
-            aria-label={fullscreen ? tr("interface.window.mode") : tr("interface.fullscreen")}
-            style={headerBtnStyle}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "var(--bg-hover)";
-              e.currentTarget.style.color = "var(--text)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "none";
-              e.currentTarget.style.color = "var(--text-muted)";
-            }}
-          >
-            {fullscreen ? <IconWindow /> : <IconFullscreen />}
-          </button>
-
-          <button
-            onClick={onClose}
-            title={tr("interface.close")}
-            aria-label={tr("interface.close")}
-            style={{
-              ...headerBtnStyle,
-              fontSize: 18,
-              lineHeight: 1,
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "var(--bg-hover)";
-              e.currentTarget.style.color = "var(--text)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "none";
-              e.currentTarget.style.color = "var(--text-muted)";
-            }}
-          >
-            ×
-          </button>
-        </div>
-
-        {/* Body */}
-        <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+  // Maximized ("full") and window ("wide") are the same shared modal, only the tier changes.
+  return <SurfaceDialog
+    title={tr("interface.provider.requests")}
+    description={shortenPath(cwd)}
+    size={fullscreen ? "full" : "wide"}
+    onClose={onClose}
+    actions={<>
+      <Button iconOnly variant="ghost" type="button"
+        aria-label={listCollapsed ? tr("interface.show.request.list") : tr("interface.hide.request.list")}
+        title={listCollapsed ? tr("interface.show.request.list") : tr("interface.hide.request.list")}
+        onClick={() => setListCollapsed((collapsed) => !collapsed)}>
+        {listCollapsed ? <IconListExpand /> : <IconListCollapse />}
+      </Button>
+      <Button iconOnly variant="ghost" type="button"
+        aria-label={fullscreen ? tr("interface.window.mode") : tr("interface.fullscreen")}
+        title={fullscreen ? tr("interface.window.mode") : tr("interface.fullscreen")}
+        onClick={() => setFullscreen((value) => !value)}>
+        {fullscreen ? <IconWindow /> : <IconFullscreen />}
+      </Button>
+    </>}
+  >
+<div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
           {/* Left: request list */}
           {!listCollapsed && (
             <div
@@ -752,7 +641,5 @@ export function ProviderRequests({ cwd, onClose }: { cwd: string; onClose: () =>
             )}
           </div>
         </div>
-      </div>
-    </>
-  );
+  </SurfaceDialog>;
 }

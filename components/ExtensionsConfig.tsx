@@ -1,12 +1,13 @@
 "use client";
 
 import { InterfaceFeedback } from "./InterfaceFeedback";
+import { SurfaceDialog } from "./SurfaceDialog";
+import { Button } from "./ui/Button";
 
 import { ConfigurationToggle as Toggle } from "./ConfigurationToggle";
 
 import { useI18n } from "@/hooks/useI18n";
 
-import { useDialogFocus } from "@/hooks/useDialogFocus";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -217,7 +218,6 @@ export function ExtensionsConfig({
   onReloaded?: () => void;
 }) {
   const { t } = useI18n();
-  const modalRef = useDialogFocus(onClose);
   const isMobile = useIsMobile();
   const [data, setData] = useState<ExtensionsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -319,72 +319,8 @@ export function ExtensionsConfig({
     return <ProviderRequests cwd={cwd} onClose={() => setViewMode("detail")} />;
   }
 
-  return (
-    <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("interface.extensions")} className="configuration-dialog ui-scrim-center"
-
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        style={{
-          width: isMobile ? "calc(100vw - 16px)" : 920,
-          maxWidth: "calc(100vw - 16px)",
-          height: isMobile ? "calc(100dvh - 16px)" : "78vh",
-          maxHeight: "calc(100dvh - 16px)",
-          background: "var(--bg)",
-          border: "1px solid var(--border)",
-          borderRadius: 10,
-          display: "flex",
-          flexDirection: "column",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-          overflow: "hidden",
-        }}
-      >
-        {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "12px 18px",
-            borderBottom: "1px solid var(--border)",
-            flexShrink: 0,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
-            <span className="ui-title-15">{t("interface.extensions")}</span>
-            <code
-              style={{
-                fontSize: 12,
-                color: "var(--text-muted)",
-                fontFamily: "var(--font-mono)",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {shortenPath(cwd)}
-            </code>
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: "none",
-              border: "none",
-              color: "var(--text-muted)",
-              cursor: "pointer",
-              fontSize: 20,
-              lineHeight: 1,
-              padding: "2px 6px",
-            }}
-          >
-            ×
-          </button>
-        </div>
-
-        {/* Body */}
-        <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
+  return <SurfaceDialog title={t("interface.extensions")} description={shortenPath(cwd)} onClose={onClose}>
+<div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", overflow: "hidden" }}>
             <div
               style={{
                 width: isMobile ? "100%" : 230,
@@ -549,14 +485,9 @@ export function ExtensionsConfig({
               </span>
             ) : null}
           </div>
-          <button onClick={() => void load()} disabled={loading || busy} style={buttonStyle(loading || busy)}>
+          <Button variant="secondary" type="button" onClick={() => void load()} disabled={loading || busy}>
             {t("common.refresh")}
-          </button>
-          <button onClick={onClose} style={buttonStyle(false)}>
-            {t("common.close")}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+          </Button>
+</div>
+  </SurfaceDialog>;
 }
