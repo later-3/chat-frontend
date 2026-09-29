@@ -40,7 +40,7 @@ export function FullHistoryDialog({ projectId, sessionId, onClose }: { projectId
     const declarations = Object.entries(mapping).map(([target, source]) => `--${target}:${computed.getPropertyValue(`--${source}`)};`).join('');
     return styleHistoryDocument(html, `:root { color-scheme:${theme}; ${declarations} }\n${historyCss}`, locale);
   }, [html, theme, locale]);
-  return <SurfaceDialog title={t("history.label")} description={t("interface.complete.history.and.branches.read.only.browsing.keeps.the.current.conversation.in.place")} size="wide" onClose={onClose}
+  return <SurfaceDialog title={t("history.label")} description={t("interface.complete.history.and.branches.read.only.browsing.keeps.the.current.conversation.in.place")} onClose={onClose}
     actions={<a className="workspace-button" href={url} download>{t("interface.export")}</a>}>
     {error ? <div className="surface-empty surface-error" role="alert"><p><InterfaceFeedback message={error} /></p><Button variant="secondary" className="workspace-button" onClick={() => setRevision(value => value + 1)}>{t("interface.retry")}</Button></div>
       : document ? <iframe className="full-history-frame" srcDoc={document} title={t("history.label")} sandbox="allow-downloads allow-scripts" />

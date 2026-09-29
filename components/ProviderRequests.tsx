@@ -524,7 +524,7 @@ export function ProviderRequests({ cwd, onClose }: { cwd: string; onClose: () =>
   return <SurfaceDialog
     title={tr("interface.provider.requests")}
     description={shortenPath(cwd)}
-    size={fullscreen ? "full" : "wide"}
+    maximized={fullscreen}
     onClose={onClose}
     actions={<>
       <Button iconOnly variant="ghost" type="button"

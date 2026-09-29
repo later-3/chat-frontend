@@ -1745,7 +1745,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
   // P3: outer shell is the shared SurfaceDialog (wide). Radix owns overlay +
   // focus + Escape; the inner body keeps its own navigation/detail layout.
-  return (<SurfaceDialog title={t("common.models")} description={t("design.providerHint")} size="wide" onClose={requestClose}>
+  return (<SurfaceDialog title={t("common.models")} description={t("design.providerHint")} onClose={requestClose}>
       <div className={`${styles.dialog} ${styles.surfaceBody} configuration-dialog`}>
 
         {/* Body */}

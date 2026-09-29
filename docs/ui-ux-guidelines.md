@@ -1,7 +1,7 @@
 # Chat Frontend UI/UX 规范
 
 - 状态：规范基线
-- 版本：3.12
+- 版本：3.13
 - 适用项目：Chat Pi Web Frontend
 - 最后校正：2026-09-29
 -  art 方向：安静画廊级工具表面（littleplains / aside / resurf / daybridge 取精度不取装饰）；暖灰 + 墨字 + 克制紫品牌不变，深浅双主题同时成立
@@ -712,7 +712,7 @@ skill 内容与本文冲突时以本文为准；skill 中的项目映射（token
 所有浮层（模态、锚点菜单、气泡、底部 sheet）必须共享同一套语言，禁止每个浮层各写一份：
 
 - **组件**：临时配置/阅读类一律 `SurfaceDialog`（Radix，负责遮罩、焦点、Escape、安全区、动效与层级）；锚点浮层一律 `Popover`/`DropdownMenu`（`ui-popover`/`ui-menu`）；移动端底部 sheet 只允许改**位置**，表面与动效仍取共享样式。组件内不得再出现手写 `role="dialog"`（`lib/motion-contract.test.mjs` 维护已评审的迁移清单，新增即失败）。
-- **尺寸**：三档，用同一个公式（`min(<档位>, <视口 − 48px>)`），只换数字：`regular` 常规 `960×800`，`wide` 宽屏阅读 `1440×1000`，`full` 最大化（`100vw×100dvh`，无边框圆角，用于 Provider 请求等需要满屏的工作台）；Compact 一律全屏。`size` 是显式档位（不是布尔），高度规则不许各写各的。
+- **尺寸只有一个**：所有浮层页面都是 `min(1120px, 100vw − 48px)` × `min(860px, 100dvh − 48px)`，居中（`margin:auto`），因此**任意两个浮层的大小与位置完全一致**——不存在“完整历史比会话记忆大一圈”这种事。Compact 一律全屏；`maximized` 只是用户点“全屏”后的一次性状态（`ProviderRequests`），不是可供各页面挑的档位。调用方不得传尺寸参数。
 - **动效**：同一个 modal 家族用 `scrim-in`（遮罩淡入）+ `layer-in`（内容浮现），关闭用 `scrim-out`/`layer-out`；锚点浮层用 `ui-float-in`。禁止私人 `@keyframes`（命令面板曾是唯一例外，已并入 `layer-in`）。一次性揭示与循环指示器仍按 §8.1 白名单。
 - **层级**：只允许使用层级 Token —— `--layer-sheet: 240` < `--layer-modal: 1101` < `--layer-float: 1250` < `--layer-tooltip: 1300` < `--layer-toast: 1500`（锚点浮层高于模态，保证对话框内的选择器不会被埋住）。组件内联 `zIndex` 仅允许组件内部堆叠（≤200），覆盖层级别的数字必须迁到 Token（门禁维护已评审清单）。
 - **iOS 独立模式**：所有模态的遮罩统一使用 `max(59px, var(--safe-area-top))` 等安全区内边距，不再只对某一种对话框生效。

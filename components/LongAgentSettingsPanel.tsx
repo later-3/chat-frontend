@@ -486,7 +486,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
       </Button>
   </>);
   return (<SurfaceDialog title={t("longAgentSettings.title")} description={t("longAgentSettings.subtitle")}
-    size="wide" onClose={requestClose} actions={headerActions}>
+    onClose={requestClose} actions={headerActions}>
     <div className={`${styles.dialog} configuration-dialog`}>
       <div className={styles.workspace}>
         <nav className={styles.agentNav} aria-label={t("longAgentSettings.agentList")}>

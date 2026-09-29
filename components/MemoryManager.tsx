@@ -318,7 +318,7 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
     <Button iconOnly variant="ghost" type="button" className={styles.iconButton} onClick={refresh} disabled={loading || busy} aria-label={t("common.refresh")}><IconRefresh size={17} stroke={1.8} aria-hidden="true" /></Button>
   </>);
   return (
-    <SurfaceDialog title={t("memory.title")} description={t("memory.subtitle")} size="wide" onClose={() => void closeManager()} actions={headerActions}>
+    <SurfaceDialog title={t("memory.title")} description={t("memory.subtitle")} onClose={() => void closeManager()} actions={headerActions}>
     <div className={`${styles.surfaceBody} configuration-dialog`}>
 
       <div className={styles.content}>
