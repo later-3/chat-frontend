@@ -30,9 +30,10 @@ import styles from "./FriendInspector.module.css";
  * Opening a Session still navigates the shared chat; the area never becomes
  * a second chat surface.
  */
-export function FriendInspector({ agentId, sessionId, date, onOpenSession }: {
+export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClose }: {
   agentId: string; sessionId: string | null; date: string | null;
   onOpenSession: (sessionId: string, projectId: string, date?: string) => void | Promise<void>;
+  onClose: () => void;
 }) {
   const { t, locale } = useI18n();
   const [calendar, setCalendar] = useState<FriendDailyState | null>(null);
@@ -159,6 +160,12 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession }: {
   };
 
   return <section className={styles.panel} data-friend-panel={agentId} aria-label={t("friendInspector.heading")}>
+    <header className={styles.panelHeader}>
+      {/* Purpose, not identity: the rail already shows who this Friend is. */}
+      <h2 title={timeZone ?? undefined}>{t("friendInspector.heading")}</h2>
+      <Button iconOnly variant="ghost" type="button" className={styles.headerAction} onClick={onClose}
+        aria-label={t("chat.close")}><IconX size={18} /></Button>
+    </header>
     {pending && <div className={styles.pending} role="status" data-friend-work-pending>
       <p>{t("friendWork.unconfirmed")}</p>
       <Button type="button" data-friend-work-confirm disabled={busy}
@@ -192,7 +199,7 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession }: {
         <div className={styles.group}>
           <span className={styles.groupLabel}>{t("friendInspector.sessionsLabel")}</span>
           <div className={styles.rows}>
-            {daySessions.length === 0 && <p className={styles.empty}>{t("friendInspector.noSessions")}</p>}
+            {/* The day's sessions read like the project session list: name + kind + time. */}
             {daySessions.map(session => <button type="button" key={session.sessionId} className={styles.row} disabled={busy}
               data-day-session={session.sessionId}
               aria-current={session.sessionId === sessionId ? "page" : undefined}
@@ -203,13 +210,15 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession }: {
               </span>
               <IconChevronRight size={16} aria-hidden="true" />
             </button>)}
-            {/* Always available: an empty day still has (or creates) its daily session on open. */}
-            <button type="button" className={styles.row} disabled={busy}
+            {daySessions.length === 0 && <button type="button" className={styles.row} disabled={busy}
               data-friend-enter-day={day}
               onClick={() => void openDay(day)}>
-              <span className={styles.rowText}><strong>{t("friendInspector.enterDay")}</strong></span>
+              <span className={styles.rowText}>
+                <strong>{t("friendInspector.enterDay")}</strong>
+                <small>{t("friendInspector.noSessions")}</small>
+              </span>
               <IconChevronRight size={16} aria-hidden="true" />
-            </button>
+            </button>}
           </div>
         </div>
 

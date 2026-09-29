@@ -1,8 +1,9 @@
 /* "Tasks & archive" column: day blocks, each with sessions then tasks.
    Identity lives in the rail, so nothing here repeats avatar/name/简介. */
 .panel { display: flex; flex-direction: column; gap: 14px; padding: 14px 16px 18px; color: var(--text); font-size: 13px; min-width: 0; }
-.panelHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.panelHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; }
 .panelHeader h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.headerAction { flex: 0 0 auto; }
 .panelHeader p { margin: 2px 0 0; font-size: 12px; color: var(--text-muted); }
 .dayBlock { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .dayHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 24px; }
