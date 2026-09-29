@@ -4,7 +4,7 @@ import { Button } from "./ui/Button";
 import { InterfaceFeedback } from "./InterfaceFeedback";
 
 import { useState, useCallback, useRef, useEffect, useLayoutEffect } from "react";
-import { CoworkerDetails } from "./CoworkerDetails";
+import { FriendInspector } from "./FriendInspector";
 import { WorkspaceNavigation, type WorkspaceSection } from "./WorkspaceNavigation";
 import { WorkspaceSettings } from "./WorkspaceSettings";
 import { IconLayoutSidebar, IconFolder, IconX, IconArrowLeft, IconUser } from "@tabler/icons-react";
@@ -474,7 +474,7 @@ export function AppShell({
   const [fileTabs, setFileTabs] = useState<Tab[]>(
     () => initialWorkspaceSnapshot.fileTabs.map((tab) => ({ ...tab })),
   );
-  const [detailsMode, setDetailsMode] = useState<"files" | "coworker">("files");
+  const [detailsMode, setDetailsMode] = useState<"files" | "friend">("files");
   const [activeFileTabId, setActiveFileTabId] = useState<string | null>(
     () => initialWorkspaceSnapshot.activeFileTabId,
   );
@@ -2007,7 +2007,7 @@ export function AppShell({
         </div>
         </div>
 
-          {selectedSession?.owner.type === "long-agent" && <Button iconOnly variant="ghost" type="button" className="workspace-icon" aria-label={translate("workspaceNav.profile")} aria-expanded={rightPanelOpen && detailsMode === "coworker"} onClick={() => { setDetailsMode("coworker"); setRightPanelOpen(true); if (isMobile || viewportWidth < 960) setSidebarOpen(false); }}><IconUser size={20} /></Button>}
+          {selectedSession?.owner.type === "long-agent" && <Button iconOnly variant="ghost" type="button" className="workspace-icon" aria-label={translate("workspaceNav.profile")} aria-expanded={rightPanelOpen && detailsMode === "friend"} onClick={() => { setDetailsMode("friend"); setRightPanelOpen(true); if (isMobile || viewportWidth < 960) setSidebarOpen(false); }}><IconUser size={20} /></Button>}
           <DeviceSwitcher variant="desktop" directory={deviceDirectory} onNavigate={onDeviceNavigate} />
           <Button iconOnly variant="ghost" type="button" className="workspace-icon" onClick={() => { setSettingsVisible(false); activateChat(); setDetailsMode("files"); setRightPanelOpen(open => detailsMode !== "files" || !open); if (isMobile || viewportWidth < 960) setSidebarOpen(false); }} aria-label={translate("workspaceNav.files")} aria-expanded={rightPanelOpen}><IconFolder size={20} /></Button>
         </header>
@@ -2167,7 +2167,7 @@ export function AppShell({
         ref={element => { rightPanelResizer.panelRef.current = element; detailsFocusRef.current = element; }}
         role={detailsModal ? "dialog" : "complementary"}
         aria-modal={detailsModal || undefined}
-        aria-label={translate(detailsMode === "coworker" ? "workspaceNav.profile" : "workspaceNav.files")}
+        aria-label={translate(detailsMode === "friend" ? "workspaceNav.profile" : "workspaceNav.files")}
         tabIndex={-1}
         id="file-panel"
         inert={!rightPanelOpen || settingsVisible || workspaceView !== "chat"}
@@ -2183,11 +2183,13 @@ export function AppShell({
         } as React.CSSProperties}
       >
         <div className="workspace-details-heading">
-          <Button variant="secondary" type="button" className="workspace-button" onClick={() => { setDetailsMode("files"); setActiveFileTabId(null); }}><IconArrowLeft size={16} />{translate("workspaceNav.files")}</Button>
+          {detailsMode === "friend" && selectedSession?.owner.type === "long-agent"
+            ? <Button variant="secondary" type="button" className="workspace-button" onClick={() => { setDetailsMode("files"); setActiveFileTabId(null); }}><IconArrowLeft size={16} />{translate("workspaceNav.files")}</Button>
+            : <span className="workspace-details-title">{translate("workspaceNav.files")}</span>}
           <Button iconOnly variant="ghost" type="button" className="workspace-icon" onClick={() => setRightPanelOpen(false)} aria-label={translate("files.hidePanel")}><IconX size={20} /></Button>
         </div>
-        {detailsMode === "coworker" && selectedSession?.owner.type === "long-agent" && <CoworkerDetails key={selectedSession.owner.longAgentId} agentId={selectedSession.owner.longAgentId} />}
-        <div className="workspace-file-details" hidden={detailsMode === "coworker" && selectedSession?.owner.type === "long-agent"}>
+        {detailsMode === "friend" && selectedSession?.owner.type === "long-agent" && <FriendInspector key={selectedSession.owner.longAgentId} agentId={selectedSession.owner.longAgentId} sessionId={selectedSession.id} date={new URL(window.location.href).searchParams.get("friendDate")} onOpenSession={handleOpenExistingSession} />}
+        <div className="workspace-file-details" hidden={detailsMode === "friend" && selectedSession?.owner.type === "long-agent"}>
         {!activeFileTab && fileTabs.length > 0 && <Button variant="secondary" type="button" className="workspace-button" onClick={() => setActiveFileTabId(fileTabs.at(-1)?.id ?? null)}>{translate("workspaceNav.lastFile")}</Button>}
         <div ref={setFilesSlot} className="workspace-files-slot" hidden={activeFileTab !== null} />
         {activeFileTab && <div className="workspace-file-source" title={activeFileTab.sourceCwd ?? activeFileTab.filePath}>

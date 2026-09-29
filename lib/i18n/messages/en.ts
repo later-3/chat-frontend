@@ -169,6 +169,13 @@ export const enLocale: LocalePlugin = {
     "friendCalendar.kind.topic": "Topic session",
     "friendCalendar.kind.session": "Session",
     "friendCalendar.untitled": "Untitled session",
+    "friendCalendar.today": "Today",
+    "friendCalendar.open": "Calendar",
+    "friendInspector.todayChat": "Today’s conversation · enter today",
+    "friendInspector.dayChat": "Conversation · {date}",
+    "friendInspector.enterToday": "Open the daily session; empty days stay unlit and run nothing",
+    "friendInspector.tasksTitle": "Tasks, duties & runs",
+    "friendInspector.tasksSummary": "{tasks} tasks · {duties} duties · {running} running · {waiting} waiting",
     "longAgentSettings.memoryUnavailable": "Agent Memory is temporarily unavailable; this does not mean it was deleted. Refresh after the gateway reconnects.",
 
     "topics.details": "Details",

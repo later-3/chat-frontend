@@ -28,6 +28,7 @@
 .workspace-mode-badge { border:1px solid var(--border); border-radius:6px; padding:3px 8px; flex:none; }
 .workspace-details-heading { min-height:56px; display:flex; align-items:center; justify-content:space-between; padding:8px 12px; border-bottom:1px solid var(--border); flex:none; }
 .workspace-details-heading .workspace-button { border:0; }
+.workspace-details-title { font-size:14px; font-weight:600; }
 .workspace-files-slot { display:flex; flex:1; min-height:0; overflow:hidden; }
 .workspace-files-slot[hidden] { display:none; }
 .workspace-file-browser { display:flex; flex:1; min-width:0; min-height:0; flex-direction:column; }

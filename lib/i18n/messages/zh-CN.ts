@@ -169,6 +169,13 @@ export const zhCNLocale: LocalePlugin = {
     "friendCalendar.kind.topic": "主题会话",
     "friendCalendar.kind.session": "会话",
     "friendCalendar.untitled": "未命名会话",
+    "friendCalendar.today": "今天",
+    "friendCalendar.open": "日历",
+    "friendInspector.todayChat": "今日对话 · 进入今天",
+    "friendInspector.dayChat": "当日对话 · {date}",
+    "friendInspector.enterToday": "打开当日日常会话；空日期不点亮、不执行",
+    "friendInspector.tasksTitle": "任务、职责与执行",
+    "friendInspector.tasksSummary": "{tasks} 个任务 · {duties} 个职责 · {running} 运行中 · {waiting} 等待",
     "longAgentSettings.memoryUnavailable": "暂时无法读取助手记忆；这不表示记忆已删除。请在网关连接后刷新。",
 
     "topics.details": "会话资料",
