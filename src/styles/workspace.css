@@ -267,7 +267,7 @@
 /* Shared readers/catalogs: one header, a scroll owner per pane, explicit scope. */
 .surface-dialog { width:min(960px,calc(100vw - 48px)); height:min(800px,calc(100dvh - 48px)); max-width:none; max-height:none; margin:auto; padding:0; color:var(--text); background:var(--bg); border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:0 16px 64px #0003; }
 .surface-dialog[open] { display:flex; flex-direction:column; }
-.surface-dialog-wide { width:min(1440px,calc(100vw - 48px)); height:calc(100dvh - 48px); }
+.surface-dialog-wide { width:min(1440px,calc(100vw - 48px)); height:min(1000px,calc(100dvh - 48px)); }
 .surface-dialog::backdrop { background:#0006; }
 .surface-header { display:flex; align-items:center; gap:12px; padding:12px 20px; flex:none; border-bottom:1px solid var(--border); }
 .surface-header > div { flex:1; min-width:0; }
@@ -418,4 +418,4 @@
 
 /* Shared Radix modal layer: no per-page focus or close implementation. */
 .surface-overlay { position:fixed; inset:0; z-index:1100; background:var(--overlay); }
-.surface-dialog[data-ui-dialog] { position:fixed; inset:0; z-index:1101; display:flex; flex-direction:column; }
+.surface-dialog[data-ui-dialog] { position:fixed; inset:0; z-index:var(--layer-modal); display:flex; flex-direction:column; }

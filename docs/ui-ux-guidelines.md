@@ -1,7 +1,7 @@
 # Chat Frontend UI/UX 规范
 
 - 状态：规范基线
-- 版本：3.11
+- 版本：3.12
 - 适用项目：Chat Pi Web Frontend
 - 最后校正：2026-09-29
 -  art 方向：安静画廊级工具表面（littleplains / aside / resurf / daybridge 取精度不取装饰）；暖灰 + 墨字 + 克制紫品牌不变，深浅双主题同时成立
@@ -706,6 +706,16 @@ skill 内容与本文冲突时以本文为准；skill 中的项目映射（token
 - **状态来自类与 Token**：禁止用 `onMouseEnter/onMouseLeave` 直接改 DOM 样式（历史上 composer 那一排就是这样与工具栏分叉的）；hover/pressed/active 必须是 CSS 类 + 语义 Token。
 - **Compact 例外**：触控没有 hover，底部主导航保留可见名称，仅视觉隐藏标签的既有短横屏规则不变（§7 可发现性优先）。
 - 规范语义见 §15：主导航仍占 64px 栏宽，图标居中；开启文字后恢复图标在上、名称在下的形态。
+
+### 20.6 浮层：一套尺寸、一套动效、一套层级
+
+所有浮层（模态、锚点菜单、气泡、底部 sheet）必须共享同一套语言，禁止每个浮层各写一份：
+
+- **组件**：临时配置/阅读类一律 `SurfaceDialog`（Radix，负责遮罩、焦点、Escape、安全区、动效与层级）；锚点浮层一律 `Popover`/`DropdownMenu`（`ui-popover`/`ui-menu`）；移动端底部 sheet 只允许改**位置**，表面与动效仍取共享样式。组件内不得再出现手写 `role="dialog"`（`lib/motion-contract.test.mjs` 维护已评审的迁移清单，新增即失败）。
+- **尺寸**：两档，用同一个公式（`min(<档位>, <视口 − 48px>)`），只换数字：常规 `960×800`，宽屏阅读 `1440×1000`；Compact 一律全屏。`wide` 只用于需要横向排版或长文阅读（完整历史），其余用常规档——高度规则不许各写各的。
+- **动效**：同一个 modal 家族用 `scrim-in`（遮罩淡入）+ `layer-in`（内容浮现），关闭用 `scrim-out`/`layer-out`；锚点浮层用 `ui-float-in`。禁止私人 `@keyframes`（命令面板曾是唯一例外，已并入 `layer-in`）。一次性揭示与循环指示器仍按 §8.1 白名单。
+- **层级**：只允许使用层级 Token —— `--layer-sheet: 240` < `--layer-modal: 1101` < `--layer-float: 1250` < `--layer-tooltip: 1300` < `--layer-toast: 1500`（锚点浮层高于模态，保证对话框内的选择器不会被埋住）。组件内联 `zIndex` 仅允许组件内部堆叠（≤200），覆盖层级别的数字必须迁到 Token（门禁维护已评审清单）。
+- **iOS 独立模式**：所有模态的遮罩统一使用 `max(59px, var(--safe-area-top))` 等安全区内边距，不再只对某一种对话框生效。
 
 ### 20.6 停靠面板
 

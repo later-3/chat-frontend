@@ -34,6 +34,7 @@ import type { TopicNodeTarget } from "@/lib/topic-node-execution";
 import { MarkdownBody } from "./MarkdownBody";
 import { PlanReviewCard } from "./PlanReviewCard";
 import { SessionMemoryDialog } from "./SessionMemoryDialog";
+import { Button } from "./ui/Button";
 import { ToolbarAction } from "./ui/ToolbarAction";
 import { IconBell, IconBellOff, IconNotebook, IconVolume, IconVolumeOff } from "@tabler/icons-react";
 import { SurfaceDialog } from "./SurfaceDialog";
@@ -895,6 +896,11 @@ function NoticeShelf({ notices, floating = false }: { notices: NoticeItem[]; flo
 
 type ExtensionDialogRequest = Extract<ExtensionUiRequest, { method: "select" | "confirm" | "input" | "editor" }>;
 
+/**
+ * A blocking request from an extension (UI/UX §18.4). It used to be a hand-rolled
+ * overlay with its own scrim alpha, width, radius, shadow and z-index; it is now the
+ * shared modal, so every reader in the app opens the same way and animates alike.
+ */
 function ExtensionDialog({
   request,
   onRespond,
@@ -917,171 +923,55 @@ function ExtensionDialog({
     }
   };
 
-  return (
-    <div
-      style={{
-        position: "absolute",
-        inset: 0,
-        zIndex: 90,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 20,
-        background: "rgba(0,0,0,0.18)",
-      }}
-    >
-      <div
-        className="extension-dialog-surface configuration-dialog"
-        role="dialog"
-        aria-modal="true"
-        style={{
-          width: "min(560px, 100%)",
-          maxHeight: "min(760px, 100%)",
-          display: "flex",
-          flexDirection: "column",
-          border: "1px solid var(--border)",
-          borderRadius: 8,
-          background: "var(--bg)",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.28)",
-          overflow: "hidden",
-        }}
-      >
-        <div style={{ flexShrink: 0, padding: "12px 14px", borderBottom: "1px solid var(--border)" }}>
-          <div style={{ color: "var(--text)", fontSize: 14, fontWeight: 650 }}>{request.title}</div>
-          <div style={{ marginTop: 3, color: "var(--text-dim)", fontSize: 12, fontFamily: "var(--font-mono)" }}>{t("chat.extensionRequest")}</div>
+  return <SurfaceDialog
+    title={request.title}
+    description={t("chat.extensionRequest")}
+    onClose={() => onRespond(request, { cancelled: true })}
+  >
+    <div className="ui-scroll-20 ui-stack-16">
+      {request.method === "confirm" && (
+        <p className="ui-body">{request.message}</p>
+      )}
+      {request.method === "select" && (
+        <div className="ui-stack-8">
+          {request.options.map((option) => (
+            <Button key={option} variant="secondary" type="button" className="workspace-button"
+              onClick={() => onRespond(request, { value: option })}>
+              {option}
+            </Button>
+          ))}
         </div>
-
-        <div
-          style={{
-            padding: 14,
-            ...(request.method === "select"
-              ? { flex: "1 1 auto", minHeight: 0, overflowY: "auto" }
-              : {}),
-          }}
-        >
-          {request.method === "confirm" && (
-            <div style={{ color: "var(--text-muted)", fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{request.message}</div>
-          )}
-          {request.method === "select" && (
-            <div style={{ display: "grid", gap: 8 }}>
-              {request.options.map((option) => (
-                <button
-                  key={option}
-                  onClick={() => onRespond(request, { value: option })}
-                  style={{
-                    width: "100%",
-                    padding: "9px 10px",
-                    borderRadius: 7,
-                    border: "1px solid var(--border)",
-                    background: "var(--bg-panel)",
-                    color: "var(--text)",
-                    cursor: "pointer",
-                    textAlign: "left",
-                    fontSize: 13,
-                    overflowWrap: "anywhere",
-                  }}
-                >
-                  {option}
-                </button>
-              ))}
-            </div>
-          )}
-          {request.method === "input" && (
-            <input
-              autoFocus
-              value={value}
-              placeholder={request.placeholder}
-              onChange={(e) => setValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") submitValue();
-                if (e.key === "Escape") onRespond(request, { cancelled: true });
-              }}
-              style={{
-                width: "100%",
-                padding: "9px 10px",
-                borderRadius: 7,
-                border: "1px solid var(--border)",
-                background: "var(--bg-panel)",
-                color: "var(--text)",
-                outline: "none",
-                fontSize: 13,
-              }}
-            />
-          )}
-          {request.method === "editor" && (
-            <textarea
-              autoFocus
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") onRespond(request, { cancelled: true });
-                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") submitValue();
-              }}
-              style={{
-                width: "100%",
-                minHeight: 220,
-                padding: 10,
-                borderRadius: 7,
-                border: "1px solid var(--border)",
-                background: "var(--bg-panel)",
-                color: "var(--text)",
-                outline: "none",
-                resize: "vertical",
-                fontSize: 13,
-                lineHeight: 1.55,
-                fontFamily: "var(--font-mono)",
-              }}
-            />
-          )}
-        </div>
-
-        <div style={{ flexShrink: 0, display: "flex", justifyContent: "flex-end", gap: 8, padding: "10px 14px", borderTop: "1px solid var(--border)", background: "var(--bg-panel)" }}>
-          <button
-            onClick={() => onRespond(request, { cancelled: true })}
-            style={{
-              padding: "6px 10px",
-              borderRadius: 6,
-              border: "1px solid var(--border)",
-              background: "var(--bg)",
-              color: "var(--text-muted)",
-              cursor: "pointer",
-            }}
-          >
-             {t("chat.cancel")}
-          </button>
-          {request.method === "confirm" ? (
-            <button
-              onClick={submitValue}
-              style={{
-                padding: "6px 10px",
-                borderRadius: 6,
-                border: "1px solid var(--accent)",
-                background: "var(--accent)",
-                color: "var(--on-accent)",
-                cursor: "pointer",
-              }}
-            >
-               {t("chat.confirm")}
-            </button>
-          ) : request.method !== "select" ? (
-            <button
-              onClick={submitValue}
-              style={{
-                padding: "6px 10px",
-                borderRadius: 6,
-                border: "1px solid var(--accent)",
-                background: "var(--accent)",
-                color: "var(--on-accent)",
-                cursor: "pointer",
-              }}
-            >
-               {t("chat.submit")}
-            </button>
-          ) : null}
-        </div>
+      )}
+      {request.method === "input" && (
+        <input
+          autoFocus
+          value={value}
+          placeholder={request.placeholder}
+          onChange={(event) => setValue(event.target.value)}
+          onKeyDown={(event) => { if (event.key === "Enter") submitValue(); }}
+        />
+      )}
+      {request.method === "editor" && (
+        <textarea
+          autoFocus
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === "Enter") submitValue(); }}
+          style={{ minHeight: 220, resize: "vertical", fontFamily: "var(--font-mono)", lineHeight: 1.55 }}
+        />
+      )}
+      <div className="ui-row-6" style={{ justifyContent: "flex-end" }}>
+        <Button variant="secondary" type="button" className="workspace-button" onClick={() => onRespond(request, { cancelled: true })}>
+          {t("chat.cancel")}
+        </Button>
+        {request.method !== "select" && (
+          <Button variant="primary" type="button" className="workspace-button" onClick={submitValue}>
+            {request.method === "confirm" ? t("chat.confirm") : t("chat.submit")}
+          </Button>
+        )}
       </div>
     </div>
-  );
+  </SurfaceDialog>;
 }
 
 type ExtensionCustomRequest = Extract<ExtensionUiRequest, { method: "custom" }>;
@@ -1110,126 +1000,64 @@ function ExtensionCustomPanel({
     inputRef.current?.focus();
   }, [request.id]);
 
-  return (
-    <div
-      className="extension-dialog-backdrop"
-      style={{
-        position: "absolute",
-        inset: 0,
-        zIndex: 95,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 20,
-        background: "rgba(0,0,0,0.18)",
-      }}
-    >
-      <div
-        className="extension-dialog-surface configuration-dialog"
-        role="dialog"
-        aria-modal="true"
-        onClick={(event) => {
-          if (!(event.target as HTMLElement).closest("button")) inputRef.current?.focus();
+  // Terminal-style panel (UI/UX §18.4): the shared modal owns the shell, the backdrop,
+  // the reveal and the layer; only the terminal body itself stays custom.
+  return <SurfaceDialog title={t("chat.extensionPanel")} description={t("chat.extensionRequest")}
+    onClose={() => onInput(request, "\x03")}>
+    <div className="ui-scroll-20 ui-stack-8" onClick={(event) => {
+      if (!(event.target as HTMLElement).closest("button")) inputRef.current?.focus();
+    }}>
+      <textarea
+        ref={inputRef}
+        aria-label={t("chat.extensionInput")}
+        autoCapitalize="off"
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck={false}
+        onKeyDown={(event) => {
+          if (composingRef.current || event.nativeEvent.isComposing) return;
+          const data = toTerminalKeyData(event);
+          if (!data) return;
+          event.preventDefault();
+          event.stopPropagation();
+          onInput(request, data);
         }}
-        style={{
-          position: "relative",
-          width: "min(920px, 100%)",
-          maxHeight: "min(760px, calc(100vh - 40px))",
-          border: "1px solid var(--border)",
-          borderRadius: 8,
-          background: "var(--bg)",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.28)",
-          overflow: "hidden",
-          outline: "none",
+        onInput={(event) => {
+          if (composingRef.current || event.nativeEvent.isComposing) return;
+          const text = event.currentTarget.value;
+          event.currentTarget.value = "";
+          if (text) onInput(request, text);
         }}
-      >
-        <textarea
-          ref={inputRef}
-           aria-label={t("chat.extensionInput")}
-          autoCapitalize="off"
-          autoComplete="off"
-          autoCorrect="off"
-          spellCheck={false}
-          onKeyDown={(event) => {
-            if (composingRef.current || event.nativeEvent.isComposing) return;
-            const data = toTerminalKeyData(event);
-            if (!data) return;
-            event.preventDefault();
-            event.stopPropagation();
-            onInput(request, data);
-          }}
-          onInput={(event) => {
-            if (composingRef.current || event.nativeEvent.isComposing) return;
-            const text = event.currentTarget.value;
-            event.currentTarget.value = "";
+        onCompositionStart={() => { composingRef.current = true; }}
+        onCompositionEnd={(event) => {
+          composingRef.current = false;
+          const input = event.currentTarget;
+          queueMicrotask(() => {
+            const text = input.value;
+            input.value = "";
             if (text) onInput(request, text);
-          }}
-          onCompositionStart={() => {
-            composingRef.current = true;
-          }}
-          onCompositionEnd={(event) => {
-            composingRef.current = false;
-            const input = event.currentTarget;
-            queueMicrotask(() => {
-              const text = input.value;
-              input.value = "";
-              if (text) onInput(request, text);
-            });
-          }}
-          onPaste={(event) => {
-            event.preventDefault();
-            const text = event.clipboardData.getData("text");
-            if (text) onInput(request, asBracketedPaste(text));
-          }}
-          style={{
-            position: "absolute",
-            width: 1,
-            height: 1,
-            padding: 0,
-            border: 0,
-            opacity: 0,
-            pointerEvents: "none",
-          }}
-        />
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
-           <div style={{ color: "var(--text)", fontSize: 13, fontWeight: 650 }}>{t("chat.extensionPanel")}</div>
-          <button
-            onClick={() => onInput(request, "\x03")}
-            style={{
-              padding: "5px 9px",
-              borderRadius: 6,
-              border: "1px solid var(--border)",
-              background: "var(--bg-panel)",
-              color: "var(--text-muted)",
-              cursor: "pointer",
-              fontSize: 12,
-            }}
-          >
-             {t("chat.close")}
-          </button>
-        </div>
-        <pre
-          style={{
-            margin: 0,
-            padding: 14,
-            maxHeight: "calc(min(760px, 100vh - 40px) - 48px)",
-            overflow: "auto",
-            background: "var(--bg-panel)",
-            color: "var(--text)",
-            fontFamily: "var(--font-mono)",
-            fontSize: 13,
-            lineHeight: 1.45,
-            whiteSpace: "pre",
-          }}
-        >
-          {(displayLines.length ? displayLines : [""]).map((line, index, allLines) => (
-            <Fragment key={index}>
-              {renderAnsiLine(line, `line-${index}`)}
-              {index < allLines.length - 1 ? "\n" : null}
-            </Fragment>
-          ))}
-        </pre>
+          });
+        }}
+        onPaste={(event) => {
+          event.preventDefault();
+          const text = event.clipboardData.getData("text");
+          if (text) onInput(request, asBracketedPaste(text));
+        }}
+        style={{ position: "absolute", width: 1, height: 1, padding: 0, border: 0, opacity: 0, pointerEvents: "none" }}
+      />
+      <pre className="ui-body" style={{ margin: 0, padding: 14, background: "var(--bg-panel)", color: "var(--text)", fontFamily: "var(--font-mono)", fontSize: 13, lineHeight: 1.45, whiteSpace: "pre" }}>
+        {(displayLines.length ? displayLines : [""]).map((line, index, allLines) => (
+          <Fragment key={index}>
+            {renderAnsiLine(line, `line-${index}`)}
+            {index < allLines.length - 1 ? "\n" : null}
+          </Fragment>
+        ))}
+      </pre>
+      <div className="ui-row-6" style={{ justifyContent: "flex-end" }}>
+        <Button variant="secondary" type="button" className="workspace-button" onClick={() => onInput(request, "\x03")}>
+          {t("chat.close")}
+        </Button>
       </div>
     </div>
-  );
+  </SurfaceDialog>;
 }

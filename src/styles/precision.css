@@ -181,11 +181,8 @@ pre.shiki code { display: block; counter-reset: source-line; }
   text-align: center;
 }
 @media (prefers-reduced-motion: no-preference) {
-  .command-palette { animation: command-palette-in var(--duration-fast) ease-out; }
-  @keyframes command-palette-in {
-    from { opacity: 0; transform: translateY(-4px) scale(0.99); }
-    to { opacity: 1; transform: none; }
-  }
+  /* Same reveal as every other modal layer (UI/UX §8.2): no private keyframes. */
+  .command-palette { animation: layer-in var(--duration-overlay) var(--ease-out) both; }
 }
 
 /* --- Shared Radix float layer (Tooltip / Popover / DropdownMenu) ---------
@@ -194,7 +191,7 @@ pre.shiki code { display: block; counter-reset: source-line; }
 .ui-tooltip,
 .ui-popover,
 .ui-menu {
-  z-index: 1250;
+  z-index: var(--layer-float);
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -203,7 +200,7 @@ pre.shiki code { display: block; counter-reset: source-line; }
   box-sizing: border-box;
 }
 .ui-tooltip {
-  z-index: 1300;
+  z-index: var(--layer-tooltip);
   max-width: min(320px, calc(100vw - 16px));
   padding: 5px 9px;
   font-size: 12px;
@@ -295,6 +292,13 @@ pre.shiki code { display: block; counter-reset: source-line; }
 }
 
 :root {
+  /* One layer scale (UI/UX §18.4): sheets < modal < anchored floats < tooltip < toast.
+     Floats stay above modals so an in-dialog picker is never buried. */
+  --layer-sheet: 240;
+  --layer-modal: 1101;
+  --layer-float: 1250;
+  --layer-tooltip: 1300;
+  --layer-toast: 1500;
   --measure-prose: 42rem;
   --rhythm-body: 1.7;
   --tracking-body: 0.002em;
