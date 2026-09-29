@@ -418,61 +418,36 @@ span.token.table {
   display: none;
 }
 
+/* One docked-panel behaviour for every side panel (UI/UX §20.7): the width
+   animates with the motion token, the inner content keeps its width so the
+   panel does not reflow while opening, and a closed panel is zero-width with
+   no border. The sidebar, the project-files panel and the Friend tasks &
+   archive region all reuse these classes instead of repeating the values. */
+.workspace-dock {
+  --dock-width: 360px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  transition: width var(--duration-panel) var(--ease-standard), min-width var(--duration-panel) var(--ease-standard);
+}
+.workspace-dock.is-open { width: var(--dock-width); min-width: var(--dock-width); }
+.workspace-dock.is-closed { width: 0; min-width: 0; border: 0 !important; }
+.workspace-dock > * { width: var(--dock-width); min-width: var(--dock-width); }
+.workspace-dock.is-resizing, .workspace-dock.is-resizing > * { transition: none !important; }
+
 /* Desktop sidebar: animate width */
 @media (min-width: 769px) and (min-height: 501px), (min-width: 769px) and (hover: hover) and (pointer: fine) {
   .sidebar-overlay-backdrop {
     display: none !important;
   }
-  .sidebar-container {
-    position: relative;
-    overflow: hidden;
-    transition: width var(--duration-panel) var(--ease-standard), min-width var(--duration-panel) var(--ease-standard);
-  }
-  .sidebar-container.sidebar-open {
-    width: var(--sidebar-width, 260px);
-    min-width: var(--sidebar-width, 260px);
-  }
-  .sidebar-container.sidebar-closed {
-    width: 0;
-    min-width: 0;
-    border-right: none !important;
-  }
-  /* keep inner content at fixed width so it doesn't reflow during animation */
-  .sidebar-container > * {
-    width: var(--sidebar-width, 260px);
-    min-width: var(--sidebar-width, 260px);
-  }
-  .sidebar-container.sidebar-resizing,
-  .sidebar-container.sidebar-resizing > * {
-    transition: none !important;
-  }
+  /* Widths, border handling and the fixed-width inner content come from
+     .workspace-dock; only the width source is panel-specific. */
+  .sidebar-container { position: relative; --dock-width: var(--sidebar-width, 260px); }
 }
 
 /* Wide desktop file panel: participate in the split layout. */
 @media (min-width: 960px) {
-  .right-panel-container {
-    overflow: hidden;
-    transition: width var(--duration-panel) var(--ease-standard), min-width var(--duration-panel) var(--ease-standard);
-    flex-shrink: 0;
-  }
-  .right-panel-container.right-panel-open {
-    width: var(--right-panel-width, clamp(360px, 42vw, 640px));
-    min-width: 300px;
-  }
-  .right-panel-container.right-panel-closed {
-    width: 0;
-    min-width: 0;
-    border-left: none !important;
-  }
-  /* keep inner content at fixed width so it doesn't reflow during animation */
-  .right-panel-container > * {
-    width: var(--right-panel-width, clamp(360px, 42vw, 640px));
-    min-width: 300px;
-  }
-  .right-panel-container.right-panel-resizing,
-  .right-panel-container.right-panel-resizing > * {
-    transition: none !important;
-  }
+  /* Same primitive as the sidebar: only the width source differs. */
+  .right-panel-container { --dock-width: var(--right-panel-width, clamp(360px, 42vw, 640px)); }
 }
 
 /* Compact desktop file panel: overlay the chat instead of collapsing it. */
@@ -506,7 +481,10 @@ span.token.table {
     box-shadow: -12px 0 32px rgba(0, 0, 0, 0.18);
     transition: transform var(--duration-panel) var(--ease-standard);
   }
-  .right-panel-container.right-panel-open {
+  /* The shared dock sizes to --dock-width; this overlay keeps its own dialog width. */
+  .right-panel-container.is-open {
+    width: min(560px, calc(100vw - 48px));
+    min-width: 300px;
     transform: translateX(0);
   }
   .right-panel-container.right-panel-closed {

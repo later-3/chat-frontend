@@ -203,27 +203,20 @@
 @media (prefers-reduced-motion:reduce) { .configuration-toggle-track > span { transition:none; } }
 
 .workspace-conversation-toolbar { display:flex; align-items:center; position:relative; height:48px; flex:none; gap:8px; padding-left:16px; border-bottom:1px solid var(--border); }
-/* Chat area = [tasks & archive region | conversation]. The region is a
-   full-height docked column on the left (same quality as the files panel),
-   never a half-height strip inside the conversation. */
-.workspace-chat-row { flex: 1; min-height: 0; display: flex; min-width: 0; }
+/* Chat area = [tasks & archive region | conversation]. The region reuses the
+   shared docked-panel primitive, so opening it looks exactly like opening the
+   project files panel: same width transition, same fixed-width inner content. */
+.workspace-chat-row { position: relative; flex: 1; min-height: 0; display: flex; min-width: 0; }
 .workspace-chat-column { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; overflow: hidden; position: relative; }
-.workspace-friend-panel {
-  flex: 0 0 auto;
-  width: min(360px, 42%);
-  min-width: 260px;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  border-right: 1px solid var(--border);
-  background: var(--bg-panel);
-}
-@media (max-width: 960px) {
-  .workspace-friend-panel { width: min(320px, 100%); min-width: 0; }
-}
+.workspace-friend-panel { --dock-width: min(360px, 42%); border-right: 1px solid var(--border); background: var(--bg-panel); }
+.workspace-friend-inner { height: 100%; overflow-y: auto; overscroll-behavior: contain; }
+@media (max-width: 960px) { .workspace-friend-panel { --dock-width: min(320px, 100%); } }
 @media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
-  /* Compact keeps one task surface: the region covers the conversation. */
-  .workspace-friend-panel { position: absolute; inset: 0; width: 100%; z-index: 5; background: var(--bg); }
+  /* Compact keeps one task surface: the region covers the conversation and
+     slides in like the sidebar instead of squeezing the column. */
+  .workspace-friend-panel { position: absolute; inset: 0; width: 100%; min-width: 0; border-right: 0; background: var(--bg); transform: translateX(-100%); transition: transform var(--duration-panel) var(--ease-standard); }
+  .workspace-friend-panel.is-open { width: 100%; min-width: 0; transform: none; }
+  .workspace-friend-panel > * { width: 100%; min-width: 0; }
 }
 .workspace-conversation-heading { flex:1; min-width:0; margin:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:14px; line-height:20px; font-weight:600; }
 @media (max-width:768px), (hover:none) and (pointer:coarse) and (max-height:500px) {

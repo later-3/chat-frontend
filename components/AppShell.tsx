@@ -1986,7 +1986,7 @@ export function AppShell({
         id="session-sidebar"
         inert={!sidebarOpen || settingsVisible || workspaceView !== "chat"}
         aria-hidden={!sidebarOpen || settingsVisible || workspaceView !== "chat"}
-        className={`sidebar-container${sidebarOpen ? " sidebar-open" : " sidebar-closed"}${mobileSidebarReady ? "" : " sidebar-mobile-pending"}${sidebarResizer.isResizing ? " sidebar-resizing" : ""}`}
+        className={`workspace-dock sidebar-container${sidebarOpen ? " sidebar-open is-open" : " sidebar-closed is-closed"}${mobileSidebarReady ? "" : " sidebar-mobile-pending"}${sidebarResizer.isResizing ? " sidebar-resizing is-resizing" : ""}`}
         style={{
           "--sidebar-width": `${sidebarResizer.width}px`,
           background: "var(--bg-panel)",
@@ -2020,16 +2020,25 @@ export function AppShell({
       <div ref={chatSurfaceRef} tabIndex={-1} data-workspace-chat hidden={settingsVisible || workspaceView !== "chat"} style={{ flex: 1, display: !settingsVisible && workspaceView === "chat" ? "flex" : "none", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         {/* Chat content */}
         <div className="workspace-chat-row">
-        {friendPanelOpen && selectedSession?.owner.type === "long-agent" && (
-          <aside className="workspace-friend-panel" id="friend-tasks-archive">
-            <FriendInspector
-              key={`${selectedSession.owner.longAgentId}:${selectedSession.id}`}
-              agentId={selectedSession.owner.longAgentId}
-              sessionId={selectedSession.id}
-              date={friendDate}
-              onOpenSession={handleOpenExistingSession}
-              onClose={() => setFriendPanelOpen(false)}
-            />
+        {selectedSession?.owner.type === "long-agent" && (
+          // Stays mounted with an open/closed class so it reveals with the same
+          // width transition as the project files panel (.workspace-dock).
+          <aside
+            className={`workspace-dock workspace-friend-panel ${friendPanelOpen ? "is-open" : "is-closed"}`}
+            id="friend-tasks-archive"
+            inert={!friendPanelOpen}
+            aria-hidden={!friendPanelOpen}
+          >
+            <div className="workspace-friend-inner">
+              <FriendInspector
+                key={`${selectedSession.owner.longAgentId}:${selectedSession.id}`}
+                agentId={selectedSession.owner.longAgentId}
+                sessionId={selectedSession.id}
+                date={friendDate}
+                onOpenSession={handleOpenExistingSession}
+                onClose={() => setFriendPanelOpen(false)}
+              />
+            </div>
           </aside>
         )}
         <div className="workspace-chat-column">
@@ -2135,7 +2144,7 @@ export function AppShell({
         inert={!rightPanelOpen || settingsVisible || workspaceView !== "chat"}
         aria-hidden={!rightPanelOpen || settingsVisible || workspaceView !== "chat"}
         hidden={settingsVisible || workspaceView !== "chat"}
-        className={`right-panel-container${rightPanelOpen ? " right-panel-open" : " right-panel-closed"}${rightPanelResizer.isResizing ? " right-panel-resizing" : ""}`}
+        className={`workspace-dock right-panel-container${rightPanelOpen ? " right-panel-open is-open" : " right-panel-closed is-closed"}${rightPanelResizer.isResizing ? " right-panel-resizing is-resizing" : ""}`}
         style={{
           "--right-panel-width": `${rightPanelResizer.width}px`,
           display: !settingsVisible && workspaceView === "chat" ? "flex" : "none",
