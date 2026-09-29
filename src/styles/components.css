@@ -1375,7 +1375,6 @@ span.token.table {
   align-items: center;
   width: 96px;
   height: 14px;
-  cursor: col-resize;
   touch-action: none;
 }
 .measure-slider-track {
@@ -1405,9 +1404,14 @@ span.token.table {
 /* The Radix thumb is the focusable element, so the ring lives there. */
 .measure-slider-thumb:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .measure-slider.is-dragging .measure-slider-fill { background: var(--accent); opacity: 0.35; }
-/* Hover never changes the slider: the knob stays the same size and colour.
-   While dragging only the filled part picks up the accent, and the thumb keeps
-   no transition so it tracks the pointer exactly. */
+.measure-slider:hover .measure-slider-track { background: var(--bg-hover); }
+.measure-slider:hover .measure-slider-thumb { background: var(--text); }
+.measure-slider:hover .measure-slider-fill { background: var(--text); }
+.measure-slider.is-dragging .measure-slider-thumb { background: var(--accent); }
+.measure-slider.is-dragging .measure-slider-fill { background: var(--accent); opacity: 0.35; }
+/* While dragging the thumb must track the pointer, so it carries no transition.
+   The wrapper keeps the default cursor: the control must not change the pointer. */
+.measure-slider.is-dragging .measure-slider-thumb,
 .measure-slider.is-dragging .measure-slider-fill { transition: none; }
 .measure-slider.is-auto .measure-slider-fill { opacity: 0.25; }
 @media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-height: 500px) {

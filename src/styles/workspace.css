@@ -130,6 +130,10 @@
 }
 .workspace-wide-content .workspace-message-column { max-width: 100%; }
 .workspace-wide-content .workspace-composer-column { max-width: 100%; }
+/* An explicit width from the top bar slider wins over wide content mode,
+   otherwise the control would be dead whenever that mode is on (UI/UX §20.7). */
+[data-workspace-chat][data-conversation-measure="manual"] .workspace-message-column { max-width: var(--conversation-measure); }
+[data-workspace-chat][data-conversation-measure="manual"] .workspace-composer-column { max-width: calc(var(--conversation-measure) + 52px + 16px); }
 .workspace-draft-warning { display:flex; align-items:center; gap:8px; padding:8px 12px; margin-bottom:8px; color:var(--warning); background:var(--warning-bg); border-radius:8px; font-size:13px; }
 .workspace-draft-warning > span { flex:1; min-width:0; }
 

@@ -276,12 +276,8 @@ export function AppShell({
   // The reachable maximum follows the column that exists right now, so the
   // slider can fill it while keeping a margin (never a fixed 960px ceiling).
   const [conversationMeasureMax, setConversationMeasureMax] = useState(CONVERSATION_MEASURE_MAX_WIDTH);
-  const applyConversationMeasure = useCallback((value: number | null) => {
-    const surface = chatSurfaceRef.current;
-    if (!surface) return;
-    const cssValue = conversationMeasureCssValue(value);
-    if (cssValue) surface.style.setProperty("--conversation-measure", cssValue);
-    else surface.style.removeProperty("--conversation-measure");
+  const applyConversationMeasure = useCallback((value: number) => {
+    chatSurfaceRef.current?.style.setProperty("--conversation-measure", conversationMeasureCssValue(value));
   }, []);
   useEffect(() => { setConversationMeasure(readConversationMeasure()); }, []);
   useEffect(() => {
@@ -293,11 +289,14 @@ export function AppShell({
     observer.observe(column);
     return () => observer.disconnect();
   }, []);
-  // A stored preference may exceed the current column: clamp what is applied and
-  // shown, keep the preference itself so a wider window restores it.
-  const effectiveConversationMeasure = conversationMeasure === null
-    ? null
-    : Math.min(conversationMeasure, conversationMeasureMax);
+  // What the slider shows is exactly what the layout gets: auto is the layout
+  // default capped by the reachable width, a manual value is the stored width
+  // capped the same way. The stored preference itself is never rewritten, so a
+  // wider window restores it.
+  const effectiveConversationMeasure = Math.min(
+    conversationMeasure ?? CONVERSATION_MEASURE_DEFAULT_WIDTH,
+    conversationMeasureMax,
+  );
   useEffect(() => {
     applyConversationMeasure(effectiveConversationMeasure);
   }, [applyConversationMeasure, effectiveConversationMeasure]);
@@ -1730,7 +1729,7 @@ export function AppShell({
               {renderChatToolbarActions(false)}
               {renderSessionStatsButton(false)}
               <MeasureSlider
-                value={effectiveConversationMeasure ?? Math.min(CONVERSATION_MEASURE_DEFAULT_WIDTH, conversationMeasureMax)}
+                value={effectiveConversationMeasure}
                 min={CONVERSATION_MEASURE_MIN_WIDTH}
                 max={conversationMeasureMax}
                 step={CONVERSATION_MEASURE_STEP}
@@ -2077,7 +2076,7 @@ export function AppShell({
       {!settingsVisible && workspaceView === "moments" && <LongAgentFeedView onBack={returnToChatView} />}
 
       {/* Keep ChatWindow mounted while browsing Moments: draft, scroll and live Run remain owned by the same Session. */}
-      <div ref={chatSurfaceRef} tabIndex={-1} data-workspace-chat hidden={settingsVisible || workspaceView !== "chat"} style={{ flex: 1, display: !settingsVisible && workspaceView === "chat" ? "flex" : "none", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+      <div ref={chatSurfaceRef} tabIndex={-1} data-workspace-chat hidden={settingsVisible || workspaceView !== "chat"} data-conversation-measure={conversationMeasure === null ? "auto" : "manual"} style={{ flex: 1, display: !settingsVisible && workspaceView === "chat" ? "flex" : "none", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         {/* Chat content */}
         <div className="workspace-chat-row">
         {selectedSession?.owner.type === "long-agent" && (
