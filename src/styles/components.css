@@ -111,11 +111,6 @@
   outline-offset: -2px;
 }
 
-.directory-picker-path:focus-visible {
-  border-color: var(--accent) !important;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
-}
-
 @media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
   .file-viewer-meta {
     display: none;
@@ -560,18 +555,6 @@ span.token.table {
   .panel-resize-handle,
   .right-panel-overlay-backdrop {
     display: none;
-  }
-  .directory-picker-back,
-  .directory-picker-entry,
-  .directory-picker-action {
-    min-height: 44px !important;
-  }
-  .directory-picker-back {
-    min-width: 44px !important;
-  }
-  .directory-picker-footer {
-    flex-wrap: wrap;
-    padding-bottom: max(10px, env(safe-area-inset-bottom)) !important;
   }
   .mobile-workspace-browser-header {
     background: var(--mobile-surface);

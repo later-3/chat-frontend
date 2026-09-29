@@ -347,7 +347,6 @@
   .workspace-settings-nav button { flex:none; min-height:44px; }
   .workspace-settings-content { padding:20px 12px; }
   .configuration-dialog input:not([type=checkbox]):not([type=radio]):not([type=range]),.configuration-dialog textarea,.configuration-dialog select { min-width:0; }
-  .removed-sessions-dialog > div { max-height:calc(100dvh - 16px) !important; }
   .prompt-resource-library { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(120px,30vh) minmax(0,1fr); }
   .prompt-resource-library > header { grid-column:1; }
   .prompt-resource-library > nav { border-right:0; border-bottom:1px solid var(--border); }
