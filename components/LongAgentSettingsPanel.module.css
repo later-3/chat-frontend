@@ -1,3 +1,13 @@
+/* P3: dialog variant renders inside the shared SurfaceDialog. The legacy
+   full-page `.page` shell stays until all callers migrate off it. */
+.dialog {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  color: var(--text);
+  background: var(--bg);
+}
 .page {
   position: fixed;
   inset: 0;
@@ -981,7 +991,17 @@
   font-size: 12px;
 }
 
+/* Dialog body owns its scroll via .main; the flex column keeps nav + content
+   inside the shared SurfaceDialog (Compact falls back to full-screen). */
+.dialog .workspace {
+  flex: 1;
+  min-height: 0;
+}
 @media (max-width: 760px) {
+  .dialog .workspace {
+    display: flex;
+    flex-direction: column;
+  }
   .pageHeader {
     min-height: calc(56px + env(safe-area-inset-top));
     grid-template-columns: auto minmax(0, 1fr);

@@ -1,17 +1,15 @@
 "use client";
 import { LongAgentActivitySettings } from "./LongAgentActivitySettings";
-import { PageHeader } from "./ui/PageHeader";
 import { useConfirmation } from "./ui/Confirmation";
 import { Button } from "./ui/Button";
+import { Hint } from "./ui/Tooltip";
+import { SurfaceDialog } from "./SurfaceDialog";
 
 import { translateWorkflowCopy } from "@/lib/i18n/workflow-copy";
 
 import { InterfaceFeedback } from "./InterfaceFeedback";
 
-import { useDialogFocus } from "@/hooks/useDialogFocus";
-
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import { IconBook2, IconBrain, IconClock, IconRefresh, IconSettings } from "@tabler/icons-react";
 import { useI18n } from "@/hooks/useI18n";
 import { fetchChatModelCatalog, type ChatModelCatalog } from "@/lib/chat-workflows-browser";
@@ -187,7 +185,6 @@ function updateFromDraft(
 export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved }: Props) {
   const confirm = useConfirmation();
   const { t } = useI18n();
-  const pageRef = useDialogFocus<HTMLElement>(() => back());
   const [agentId, setAgentId] = useState(
     initialAgentId && agents.some((agent) => agent.id === initialAgentId)
       ? initialAgentId
@@ -471,49 +468,26 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
     setActiveTab(nextTab);
   };
 
-  return createPortal(
-    <section
-      ref={pageRef}
-      className={`${styles.page} configuration-dialog`}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="long-agent-settings-title"
-    >
-      <PageHeader title={t("longAgentSettings.title")} titleId="long-agent-settings-title"
-        description={t("longAgentSettings.subtitle")} onBack={() => void back()} backLabel={t("interface.back")}>
-        {selectedSummary !== null && (
-          <>
-            <Button variant="secondary"
-              type="button"
-              className={styles.secondaryButton}
-              disabled={saving || lifecycleBusy}
-              onClick={() => void runLifecycle(selectedSummary.status === "archived" ? "restore" : "archive")}
-            >
-              {selectedSummary.status === "archived" ? t("longAgent.restore") : t("longAgent.archive")}
-            </Button>
-            {selectedSummary.status === "archived" && (
-              <Button variant="secondary"
-                type="button"
-                className={styles.secondaryButton}
-                disabled={saving || lifecycleBusy}
-                onClick={() => void runLifecycle("delete")}
-              >
-                {t("longAgent.delete")}
-              </Button>
-            )}
-          </>
-        )}
-        <Button variant="secondary"
-          type="button"
-          className={styles.secondaryButton}
-          onClick={() => void load(agentId)}
-          disabled={loading || saving}
-        >
-          <IconRefresh size={16} stroke={1.8} aria-hidden="true" />
-          {t("common.refresh")}
-        </Button>
-      </PageHeader>
-
+  // P3: temporary config renders in the shared SurfaceDialog (wide). Radix owns
+  // focus + Escape; unsaved-close confirmation runs through `back()`.
+  const requestClose = () => { void back(); };
+  const headerActions = (<>
+      {selectedSummary !== null && (<>
+        <Button variant="secondary" type="button" className={styles.secondaryButton}
+          disabled={saving || lifecycleBusy}
+          onClick={() => void runLifecycle(selectedSummary.status === "archived" ? "restore" : "archive")}>{selectedSummary.status === "archived" ? t("longAgent.restore") : t("longAgent.archive")}</Button>
+        {selectedSummary.status === "archived" && (<Button variant="secondary" type="button" className={styles.secondaryButton}
+          disabled={saving || lifecycleBusy}
+          onClick={() => void runLifecycle("delete")}>{t("longAgent.delete")}</Button>)}
+      </>)}
+      <Button variant="secondary" type="button" className={styles.secondaryButton}
+        onClick={() => void load(agentId)} disabled={loading || saving}>
+        <IconRefresh size={16} stroke={1.8} aria-hidden="true" />{t("common.refresh")}
+      </Button>
+  </>);
+  return (<SurfaceDialog title={t("longAgentSettings.title")} description={t("longAgentSettings.subtitle")}
+    wide onClose={requestClose} actions={headerActions}>
+    <div className={`${styles.dialog} configuration-dialog`}>
       <div className={styles.workspace}>
         <nav className={styles.agentNav} aria-label={t("longAgentSettings.agentList")}>
           <SearchSelect label={t("longAgentSettings.agentList")} value={agentId}
@@ -693,7 +667,8 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                               {group.entries.length === 0
                                 ? <small className={styles.skillTreeOwner}>{t("skillsTree.empty")}</small>
                                 : group.entries.map((entry: SkillTreeEntry) => (
-                                    <label key={entry.filePath} className={styles.checkCard} title={entry.filePath}>
+                                    <Hint key={entry.filePath} label={entry.filePath} side="top">
+                                    <label className={styles.checkCard} title={entry.filePath}>
                                       <input
                                         type="checkbox"
                                         checked={isSkillChecked(entry.filePath)}
@@ -702,6 +677,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                                       />
                                       <span><strong>{entry.name}</strong><code>{entry.description || entry.filePath}</code></span>
                                     </label>
+                                    </Hint>
                                   ))}
                             </div>
                           ))}
@@ -814,7 +790,6 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
           ) : null}
         </main>
       </div>
-    </section>,
-    window.document.body,
-  );
+    </div>
+  </SurfaceDialog>);
 }

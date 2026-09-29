@@ -5,6 +5,7 @@ import { InterfaceFeedback } from "./InterfaceFeedback";
 import { IconAdjustments, IconChevronRight, IconDeviceDesktop, IconMoon, IconSun, IconPalette, IconFolder, IconUser } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
+import { useVisualRefresh } from "@/hooks/useVisualRefresh";
 import type { ThemePreference } from "@/hooks/useTheme";
 import type { Locale } from "@/lib/i18n/types";
 import { SearchSelect, type SelectOption } from "./SearchSelect";
@@ -40,6 +41,7 @@ export function WorkspaceSettings({ items, wideContent, onContentWidth, theme, o
   onSelfCheck?: () => void;
 }) {
   const { t } = useI18n();
+  const { mode: visualMode, setMode: setVisualMode } = useVisualRefresh();
   const [section, setSection] = useState(currentSection);
   const [refreshed, setRefreshed] = useState(false);
   useEffect(() => {
@@ -79,6 +81,9 @@ export function WorkspaceSettings({ items, wideContent, onContentWidth, theme, o
           </section>
           <section className="settings-section"><h3>{t("workspaceNav.language")}</h3><p>{t("design.languageHint")}</p>
             <div className="settings-segments" role="group" aria-label={t("workspaceNav.language")}>{([['en',t('language.en')],['zh-CN',t('language.zh')]] as const).map(([value,label]) => <button key={value} type="button" aria-pressed={language === value} onClick={() => onLanguage(value)}>{label}</button>)}</div>
+          </section>
+          <section className="settings-section"><h3>{t("design.visualRefresh")}</h3><p>{t("design.visualRefreshHint")}</p>
+            <div className="settings-segments" role="group" aria-label={t("design.visualRefresh")}>{(['conservative','aggressive'] as const).map(value => <button key={value} type="button" aria-pressed={visualMode === value} onClick={() => setVisualMode(value)}>{t(`design.visualRefresh.${value}`)}</button>)}</div>
           </section>
         </>}
         {(section === "personal" || section === "project") && <>

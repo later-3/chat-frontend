@@ -1,6 +1,7 @@
 "use client";
 import { useConfirmation } from "./ui/Confirmation";
 import { Button } from "./ui/Button";
+import { SurfaceDialog } from "./SurfaceDialog";
 
 import { InterfaceFeedback } from "./InterfaceFeedback";
 
@@ -144,7 +145,8 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
     if (busy || (editorDirty && !await confirm(t("longAgentSettings.discardConfirm"), t("common.discard")))) return;
     onClose();
   };
-  const managerRef = useDialogFocus<HTMLElement>(closeManager);
+  // P3: outer shell is the shared SurfaceDialog (wide). The nested add/edit
+  // editor keeps its own focus scope while open.
   const editorRef = useDialogFocus(closeEditor, editing !== undefined);
   useEffect(() => {
     if (!editorDirty) return;
@@ -324,21 +326,17 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
     status === "indexed" ? styles.indexed : status === "failed" ? styles.failed : styles.pending
   );
 
+  // P3: outer shell is the shared SurfaceDialog (wide). Radix owns overlay +
+  // focus + Escape; unsaved-close guard stays in closeManager.
+  const headerActions = (<>
+    {!isAgentScope && <details className={styles.maintenance}><summary>{t("design.advancedMaintenance")}</summary><Button type="button" className={styles.button} onClick={() => void rebuild()} disabled={busy}>
+      <IconDatabase size={16} stroke={1.8} aria-hidden="true" /><span>{t("memory.rebuild")}</span>
+    </Button></details>}
+    <Button iconOnly variant="ghost" type="button" className={styles.iconButton} onClick={refresh} disabled={loading || busy} aria-label={t("common.refresh")}><IconRefresh size={17} stroke={1.8} aria-hidden="true" /></Button>
+  </>);
   return (
-    <section ref={managerRef} tabIndex={-1} className={`${styles.overlay} configuration-dialog`} role="dialog" aria-modal="true" aria-label={t("memory.title")}>
-      <header className={styles.header}>
-        <div className={styles.titleGroup}>
-          <IconBrain size={22} stroke={1.7} aria-hidden="true" />
-          <div><h1>{t("memory.title")}</h1><p>{t("memory.subtitle")}</p></div>
-        </div>
-        <div className={styles.headerActions}>
-          {!isAgentScope && <details className={styles.maintenance}><summary>{t("design.advancedMaintenance")}</summary><Button type="button" className={styles.button} onClick={() => void rebuild()} disabled={busy}>
-            <IconDatabase size={16} stroke={1.8} aria-hidden="true" /><span>{t("memory.rebuild")}</span>
-          </Button></details>}
-          <Button iconOnly variant="ghost" type="button" className={styles.iconButton} onClick={refresh} disabled={loading || busy} aria-label={t("common.refresh")}><IconRefresh size={17} stroke={1.8} aria-hidden="true" /></Button>
-          <Button iconOnly variant="ghost" type="button" className={styles.iconButton} onClick={closeManager} aria-label={t("common.close")}><IconX size={19} stroke={1.8} aria-hidden="true" /></Button>
-        </div>
-      </header>
+    <SurfaceDialog title={t("memory.title")} description={t("memory.subtitle")} wide onClose={() => void closeManager()} actions={headerActions}>
+    <div className={`${styles.surfaceBody} configuration-dialog`}>
 
       <div className={styles.content}>
         <div style={{ display: "flex", gap: 0, minHeight: "100%", alignItems: "stretch" }}>
@@ -475,6 +473,7 @@ export function MemoryManager({ currentProjectId, onClose }: MemoryManagerProps)
           </div>
         </div>
       </div>}
-    </section>
+    </div>
+    </SurfaceDialog>
   );
 }

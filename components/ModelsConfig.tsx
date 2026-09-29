@@ -1,6 +1,7 @@
 "use client";
 import { useConfirmation } from "./ui/Confirmation";
 import { Button } from "./ui/Button";
+import { SurfaceDialog } from "./SurfaceDialog";
 
 import { InterfaceFeedback } from "./InterfaceFeedback";
 
@@ -1684,12 +1685,14 @@ function AddProviderPicker({
   };
 
 
+  // P3 nested picker: keep its own focus scope; visually it must sit above the
+  // shared SurfaceDialog overlay (z 1100) + content (z 1101).
   return (
     <div ref={pickerRef} role="dialog" aria-modal="true" aria-label={t("interface.provider")} tabIndex={-1}
-      style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
+      style={{ position: "fixed", inset: 0, zIndex: 1110, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{ width: 820, maxWidth: "calc(100vw - 32px)", maxHeight: "min(72vh, calc(100vh - 32px))", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", overflow: "hidden" }}>
+      <div style={{ width: 820, maxWidth: "calc(100vw - 32px)", maxHeight: "min(72vh, calc(100vh - 32px))", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "var(--radius-dialog)", display: "flex", flexDirection: "column", boxShadow: "var(--shadow-dialog)", overflow: "hidden" }}>
         {/* Search */}
         <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)", flexShrink: 0 }}>
@@ -1788,7 +1791,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
     if (dirty && !await confirm(t("longAgentSettings.discardConfirm"), t("common.discard"))) return;
     onClose();
   };
-  const modalRef = useDialogFocus(requestClose);
+  // P3: Radix SurfaceDialog owns focus + Escape; unsaved-close guard stays in requestClose.
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => event.preventDefault();
@@ -2014,20 +2017,10 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
     );
   })();
 
-  return (
-    <>
-    <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("common.models")} className={`configuration-dialog ${styles.overlay}`} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
-      <div className={styles.dialog}>
-
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-             <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("common.models")}</span>
-<span className={styles.subtitle} title={modelsConfigPath}>{t("design.providerHint")}</span>
-          </div>
-          <Button iconOnly variant="ghost" type="button" aria-label={t("common.close")} className="workspace-icon" onClick={requestClose}><IconX size={20}/></Button>
-        </div>
+  // P3: outer shell is the shared SurfaceDialog (wide). Radix owns overlay +
+  // focus + Escape; the inner body keeps its own navigation/detail layout.
+  return (<SurfaceDialog title={t("common.models")} description={t("design.providerHint")} wide onClose={requestClose}>
+      <div className={`${styles.dialog} ${styles.surfaceBody} configuration-dialog`}>
 
         {/* Body */}
         <div className={styles.body} data-show-list={showProviderList || selection === null || undefined}>
@@ -2185,17 +2178,16 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           </button>
         </div>
       </div>
-    </div>
-    {pickerOpen && (
-      <AddProviderPicker
-        oauthProviders={oauthProviders}
-        apiKeyProviders={apiKeyProviders}
-        onSelectOAuth={(id) => setSelection({ type: "oauth", providerId: id })}
-        onSelectApiKey={(id) => setSelection({ type: "apikey", providerId: id })}
-        onAddCustom={addCustomProvider}
-        onClose={() => setPickerOpen(false)}
-      />
-    )}
-    </>
+      {pickerOpen && (
+        <AddProviderPicker
+          oauthProviders={oauthProviders}
+          apiKeyProviders={apiKeyProviders}
+          onSelectOAuth={(id) => setSelection({ type: "oauth", providerId: id })}
+          onSelectApiKey={(id) => setSelection({ type: "apikey", providerId: id })}
+          onAddCustom={addCustomProvider}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
+    </SurfaceDialog>
   );
 }

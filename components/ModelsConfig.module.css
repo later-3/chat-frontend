@@ -1,3 +1,6 @@
+/* P3: inner body inside the shared SurfaceDialog. The outer shell owns size,
+   border, radius, shadow and overlay; only the content column stays here. */
+.surfaceBody { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; color:var(--text); background:var(--bg); }
 .dialog { width:min(1040px,calc(100vw - 48px)); height:min(820px,calc(100dvh - 48px)); max-height:calc(100dvh - 48px); display:flex; flex-direction:column; overflow:hidden; color:var(--text); background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-dialog); box-shadow:var(--shadow-dialog); }
 .dialog > div:first-child { padding:20px 24px!important; }
 .dialog > div:first-child > div { flex-direction:column; align-items:flex-start!important; gap:6px!important; }
