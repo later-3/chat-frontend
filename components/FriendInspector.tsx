@@ -11,10 +11,12 @@ import { fetchLongAgents, type LongAgentSummary } from "@/lib/long-agents-browse
 import styles from "./FriendInspector.module.css";
 
 /**
- * Right-panel Friend inspector (ui-ux §17.3/§15.2): single-date state with
- * derived sections. selectedDate = friendDate ?? today; everything else
- * derives from it. Tasks/duties/executions stay aggregated here and open
- * the dedicated LongAgentTasksPanel; the inspector never lists works.
+ * Expandable day/task panel anchored to the conversation header (ui-ux
+ * §17.3/§15.2). One state owns the day: `selectedDate` seeded from the URL
+ * filter (friendDate) or resolved to today; every section derives from it.
+ * The header already shows "<agent> · <date>", so this panel has no date
+ * strip. Tasks/duties/executions stay aggregated and open the dedicated
+ * LongAgentTasksPanel; the panel never lists works.
  */
 export function FriendInspector({ agentId, sessionId, date, onOpenSession }: {
   agentId: string; sessionId: string | null; date: string | null;
@@ -22,7 +24,8 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession }: {
 }) {
   const { t, locale } = useI18n();
   const [agent, setAgent] = useState<LongAgentSummary | null>(null);
-  const [dayView, setDayView] = useState<{ date: string; calendar: FriendDailyState } | null>(null);
+  const [calendar, setCalendar] = useState<FriendDailyState | null>(null);
+  const [resolvedDate, setResolvedDate] = useState<string | null>(date);
   const [dayError, setDayError] = useState<string | null>(null);
   const [works, setWorks] = useState<FriendWorkItem[]>([]);
   const [tasks, setTasks] = useState<FriendTasks | null>(null);
@@ -33,6 +36,7 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession }: {
   const [refresh, setRefresh] = useState(0);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useEffect(() => { setResolvedDate(date); }, [date]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -44,16 +48,15 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession }: {
 
   useEffect(() => {
     const controller = new AbortController();
-    setDayView(current => date !== null && current?.date === date ? current : null);
+    setCalendar(null);
     setDayError(null);
     void (async () => {
-      let target = date;
-      if (target === null) {
-        const summary = await fetchFriendDailyState(agentId, controller.signal);
-        target = summary.days.find(day => day.sessionId === sessionId)?.date ?? summary.today;
-      }
-      const calendar = await fetchFriendDailyState(agentId, controller.signal, undefined, Number(target.slice(0, 4)));
-      if (!controller.signal.aborted) setDayView({ date: target, calendar });
+      // The 60-day window resolves today and the current session's day; the annual
+      // read then supplies the real per-day history used by this panel.
+      const summary = await fetchFriendDailyState(agentId, controller.signal);
+      const target = date ?? summary.days.find(day => day.sessionId === sessionId)?.date ?? summary.today;
+      const annual = await fetchFriendDailyState(agentId, controller.signal, undefined, Number(target.slice(0, 4)));
+      if (!controller.signal.aborted) { setCalendar(annual); setResolvedDate(target); }
     })().catch((cause: unknown) => {
       if (!controller.signal.aborted) setDayError(cause instanceof Error ? cause.message : String(cause));
     });
@@ -73,8 +76,7 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession }: {
     return () => controller.abort();
   }, [agentId, refresh]);
 
-  const calendar = dayView?.calendar ?? null;
-  const selectedDate = dayView?.date ?? date ?? calendar?.today ?? null;
+  const selectedDate = resolvedDate ?? calendar?.today ?? null;
   const isToday = selectedDate !== null && calendar !== null && selectedDate === calendar.today;
   const daily = selectedDate !== null ? calendar?.days.find(day => day.date === selectedDate) ?? null : null;
   const sessions = calendar?.sessions ?? [];
@@ -112,56 +114,61 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession }: {
     catch (cause) { if (mounted.current) setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { if (mounted.current) setBusy(false); }
   };
+  const openDate = async (id: string, ownerProjectId: string, nextDate?: string) => {
+    setResolvedDate(nextDate ?? selectedDate);
+    await onOpenSession(id, ownerProjectId, nextDate ?? selectedDate ?? undefined);
+  };
 
   return <section className={styles.inspector} aria-label={t("workspaceNav.profile")}>
-    {agent && <header className={styles.identity}>
-      <LongAgentAvatarView agentId={agent.id} name={agent.name} avatar={agent.avatar} />
-      <div><strong>{agent.name}</strong><span>{agent.description}</span></div>
-    </header>}
-
-    <div className={styles.dateRow}>
-      <h3>{dateLabel}{isToday && <em className={styles.today}>{t("friendCalendar.today")}</em>}</h3>
+    <header className={styles.identity}>
+      {agent && <LongAgentAvatarView agentId={agent.id} name={agent.name} avatar={agent.avatar} />}
       <div>
+        <strong>{agent?.name ?? agentId}</strong>
+        <span>{agent?.description}</span>
+      </div>
+      <div className={styles.identityActions}>
         {calendar && <span className={styles.tz} title={calendar.timeZone} aria-label={calendar.timeZone}>ⓘ</span>}
         <button type="button" onClick={() => setCalendarOpen(true)} aria-label={t("friendCalendar.open")}>{t("friendCalendar.open")}</button>
       </div>
+    </header>
+
+    <div className={styles.dayRow}>
+      {dailySession && <button type="button" className={styles.primary} disabled={busy || selectedDate === null}
+        aria-current={dailySession.sessionId === sessionId ? "page" : undefined}
+        onClick={() => void act(() => openDate(dailySession.sessionId, agentId, selectedDate ?? undefined))}>
+        <strong>{isToday ? t("friendInspector.todayChat") : t("friendInspector.dayChat", { date: dateLabel })}</strong>
+        <span>{t("friendInspector.enterToday")}</span>
+      </button>}
+
+      {others.length > 0 && <ul className={styles.sessions} aria-label={t("friendCalendar.daySessions")}>
+        {others.map(session => <li key={session.sessionId}>
+          <button type="button" disabled={busy} title={timeTitle(session.createdAt)}
+            aria-current={session.sessionId === sessionId ? "page" : undefined}
+            onClick={() => void act(() => openDate(session.sessionId, agentId, selectedDate ?? undefined))}>
+            <strong>{session.title || t("friendCalendar.untitled")}</strong>
+            <span>{t(`friendCalendar.kind.${session.kind}`)}{timeShort(session.createdAt) ? ` · ${timeShort(session.createdAt)}` : ""}</span>
+          </button>
+        </li>)}
+      </ul>}
+
+      <button type="button" className={styles.tasks} onClick={() => setTasksOpen(true)}>
+        <strong>{t("friendInspector.tasksTitle")}</strong>
+        <span>{t("friendInspector.tasksSummary", {
+          tasks: taskCount, duties: dutyCount,
+          running: activeWorks.length, waiting: waitingWorks.length,
+        })}</span>
+      </button>
     </div>
-
-    {dailySession && <button type="button" className={styles.primary} disabled={busy || selectedDate === null}
-      aria-current={dailySession.sessionId === sessionId ? "page" : undefined}
-      onClick={() => void act(() => Promise.resolve(onOpenSession(dailySession.sessionId, agentId, selectedDate!)))}>
-      <strong>{isToday ? t("friendInspector.todayChat") : t("friendInspector.dayChat", { date: dateLabel })}</strong>
-      <span>{t("friendInspector.enterToday")}</span>
-    </button>}
-
-    {others.length > 0 && <ul className={styles.sessions} aria-label={t("friendCalendar.daySessions")}>
-      {others.map(session => <li key={session.sessionId}>
-        <button type="button" disabled={busy} title={timeTitle(session.createdAt)}
-          aria-current={session.sessionId === sessionId ? "page" : undefined}
-          onClick={() => void act(() => Promise.resolve(onOpenSession(session.sessionId, agentId, selectedDate!)))}>
-          <strong>{session.title || t("friendCalendar.untitled")}</strong>
-          <span>{t(`friendCalendar.kind.${session.kind}`)}{timeShort(session.createdAt) ? ` · ${timeShort(session.createdAt)}` : ""}</span>
-        </button>
-      </li>)}
-    </ul>}
-
-    <button type="button" className={styles.tasks} onClick={() => setTasksOpen(true)}>
-      <strong>{t("friendInspector.tasksTitle")}</strong>
-      <span>{t("friendInspector.tasksSummary", {
-        tasks: taskCount, duties: dutyCount,
-        running: activeWorks.length, waiting: waitingWorks.length,
-      })}</span>
-    </button>
 
     {(error || dayError) && <div role="alert" className={styles.error}><p><InterfaceFeedback message={error || dayError} /></p>
       <button type="button" onClick={() => setRefresh(value => value + 1)}>{t("friendWork.retry")}</button></div>}
 
-    {calendarOpen && agent && <FriendCalendar key={`${agent.id}:${selectedDate ?? "today"}`} agentId={agent.id} name={agent.name}
+    {calendarOpen && <FriendCalendar key={`${agentId}:${selectedDate ?? "today"}`} agentId={agentId} name={agent?.name ?? agentId}
       selectedSessionId={sessionId} selectedDate={selectedDate}
       onClose={() => setCalendarOpen(false)}
-      onOpenSession={async (id, ownerProjectId, nextDate) => { await onOpenSession(id, ownerProjectId, nextDate); setCalendarOpen(false); }} />}
+      onOpenSession={async (id, ownerProjectId, nextDate) => { await openDate(id, ownerProjectId, nextDate ?? undefined); setCalendarOpen(false); }} />}
     {tasksOpen && <LongAgentTasksPanel key={agentId} agentId={agentId} name={agent?.name ?? agentId}
       onClose={() => setTasksOpen(false)}
-      onOpenSession={async (id, ownerProjectId, nextDate) => { await onOpenSession(id, ownerProjectId, nextDate); setTasksOpen(false); }} />}
+      onOpenSession={async (id, ownerProjectId, nextDate) => { await openDate(id, ownerProjectId, nextDate ?? undefined); setTasksOpen(false); }} />}
   </section>;
 }

@@ -17,7 +17,6 @@
   .panel button { min-height: 44px; min-width: 44px; }
 }
 
-.dayHeading { padding-bottom:4px; }
 .panel .timeZone { margin:0; }
 
 .panel > header { margin-top: 24px; margin-bottom: 8px; }

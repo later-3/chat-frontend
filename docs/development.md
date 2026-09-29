@@ -254,7 +254,9 @@ Friend 发送只等耐久 202 后清理待确认输入，随后按引用观察�
 
 ## Friend 后台任务（LA1）
 
-后台工作与任务展示分两处：`LongAgentTasksPanel`（每个 Agent 行的清单图标打开）是任务/职责/后台执行的统一面板，`lib/friend-tasks.ts` 的 `buildFriendTaskRows` 为纯视图模型（plan/duty/executions 三组，occurrence 自带 work 不再重复为独立行，最新在前）；`FriendWorkPanel` 只保留当日概览与当日会话导航，不再列出全局 works。`lib/friend-work.ts` 严格校验 HTTP v1 绑定及执行归属；身份、Session、workId、固定项目必须一致；可选 `topicIntegration` 必须验证其 topicId/nodeId/sessionId，不能因已有合法主题关联把整张后台工作列表判成无效。任务面板 5 秒轮询（隐藏页面不轮询，卸载取消），项目 id 经 projects 列表解析为名称，无项目显示"Agent 容器"，绝不裸吐 ID。新建任务通过主聊及真实 `friend_work` Tool；旧创建表单留下的未确认请求仍由 `friend-work-draft.ts` 恢复。
+后台工作与任务展示分两处：`LongAgentTasksPanel`（从 `FriendInspector` 的任务聚合行打开）是任务/职责/后台执行的统一面板，`lib/friend-tasks.ts` 的 `buildFriendTaskRows` 为纯视图模型（plan/duty/executions 三组，occurrence 自带 work 不再重复为独立行，最新在前）；`FriendWorkPanel` 只保留当日会话导航与未确认提交恢复，不再列出全局 works，也不再显示日期标题行（日期由会话标题承载）。
+
+v2.3 日期/任务面板（`FriendInspector`）：Friend 会话的顶栏标题（`<agent> · <date>`）是唯一展开入口，点击在标题下方展开/关闭当天面板（`data-friend-panel`，`aria-expanded` + `aria-controls="friend-day-panel"`）。面板只有一个日期状态 `selectedDate`（URL `friendDate` 优先，否则解析为该 Friend 的今天或当前 Session 所属日），其余区块全部派生：当日日常会话主入口、同日其他会话（精确到分）、任务/职责/执行聚合行（点开 `LongAgentTasksPanel`）、日历入口（点开 `FriendCalendar`）。面板不再自带日期/今天条，因为标题已显示；侧栏 Agent 行的清单/日历小图标已删除，避免同一概念多入口。`lib/friend-work.ts` 严格校验 HTTP v1 绑定及执行归属；身份、Session、workId、固定项目必须一致；可选 `topicIntegration` 必须验证其 topicId/nodeId/sessionId，不能因已有合法主题关联把整张后台工作列表判成无效。任务面板 5 秒轮询（隐藏页面不轮询，卸载取消），项目 id 经 projects 列表解析为名称，无项目显示"Agent 容器"，绝不裸吐 ID。新建任务通过主聊及真实 `friend_work` Tool；旧创建表单留下的未确认请求仍由 `friend-work-draft.ts` 恢复。
 
 工作会话继续使用 `useAgentSession` 和 `friend-execution.ts`，没有单独聊天渲染器。FriendExecution.workId 表示固定项目工作，后续消息/引导使用执行记录的 contextProjectId，不跟随顶部项目选择；日常交流仍按下一条消息选择项目。停止单个执行、执行详情（`TaskRunDetails`）与打开原生 Session 在任务面板操作；点击 Friend 卡片是返回今日主聊的统一入口，不另设返回按钮。新增文案同时覆盖中英文；回归为 `lib/friend-work.test.mjs` 与 `lib/friend-tasks.test.mjs`（含 tasks/duties/works 三类行与去重门禁），浏览器还须验证流式、刷新、跨项目及移动布局。
 
@@ -262,7 +264,7 @@ LA2 任务页区分定义修订、调度应用状态和执行历史；不在浏�
 
 ### Friend 日历与记忆目录（2026-09-27）
 
-Friend 每行日历按钮按需打开 `FriendCalendar`，全年格子与月历共用 `GET /api/long-agents/:id/daily?year=YYYY` 的 `sessions` 原生历史投影；不能用 `days` 生命周期绑定判断有消息。日期和时区来自 Backend，空壳不点亮；点击任意日期直接打开当日日常 Session，侧栏展示该日所有会话与后台工作；点击复用 `onOpenSession(sessionId, projectId)` 和公共 `ChatWindow`，保留目标会话的权限。跨日会话按实际有消息的日期显示，不只取创建或修改日期。加载/切年/失败/空月分别反馈。空日期可点，通过现有 `startProjectLongAgent({date})` 幂等打开/创建该日 Session，再走同一个导航函数；创建不运行模型、不产生任务、不会改掉默认联系人今天的目标。历史可在原会话持续交流，不回退今日。日历不影响联系人暖切换关键路径。未来按真实 Token 用量显示绿色强度，仅有注释，未把会话数量当作 Token。`friendDate` 是 URL 中的导航筛选，随同日条目切换和刷新保留，点击 Friend 清除并返回今天；不能参与接受请求或修改 Session 时间。侧栏只读派生数据，工作按 createdAt 的 Agent 本地日期或实际活动日期归入，显示开始时间区分同名执行。
+Friend 的日期入口位于标题展开面板内的日历按钮，按需打开 `FriendCalendar`；全年格子与月历共用 `GET /api/long-agents/:id/daily?year=YYYY` 的 `sessions` 原生历史投影；不能用 `days` 生命周期绑定判断有消息。日期和时区来自 Backend，空壳不点亮；点击任意日期直接打开当日日常 Session，侧栏展示该日所有会话与后台工作；点击复用 `onOpenSession(sessionId, projectId)` 和公共 `ChatWindow`，保留目标会话的权限。跨日会话按实际有消息的日期显示，不只取创建或修改日期。加载/切年/失败/空月分别反馈。空日期可点，通过现有 `startProjectLongAgent({date})` 幂等打开/创建该日 Session，再走同一个导航函数；创建不运行模型、不产生任务、不会改掉默认联系人今天的目标。历史可在原会话持续交流，不回退今日。日历不影响联系人暖切换关键路径。未来按真实 Token 用量显示绿色强度，仅有注释，未把会话数量当作 Token。`friendDate` 是 URL 中的导航筛选，随同日条目切换和刷新保留，点击 Friend 清除并返回今天；不能参与接受请求或修改 Session 时间。侧栏只读派生数据，工作按 createdAt 的 Agent 本地日期或实际活动日期归入，显示开始时间区分同名执行。
 
 Memory 目录只把 Backend `kind=project` 的实体列为项目记忆，Agent home 只在 Friend 分组出现。新增记忆的目标选择同样过滤 kind，不把当前存储 projectId 兜底塞回选择器。切到 Agent Memory 不发 Personal/Project Catalog 请求；NanoClaw 读取失败显示“暂时无法读取，不表示已删除”，无快照时显示未知数量，不能显示 0 当作已确认空库。列表/health 对非法 Agent home Project Memory 目标返回可理解的 400。
 

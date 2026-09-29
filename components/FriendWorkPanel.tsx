@@ -60,7 +60,6 @@ export function FriendWorkPanel({ agentId, sessionId, date, onOpenSession }: {
     finally { if (mounted.current) setBusy(false); }
   };
   return <section className={styles.panel} data-friend-day={dayView?.date} aria-label={t("friendCalendar.dayWorkspace")}>
-    <h3 className={styles.dayHeading}>{dayView?.date ?? date ?? t("common.loading")}</h3>
     <ul aria-label={t("friendCalendar.daySessions")}>{daySessions.map(session => {
       // P2：时区只留 title 提示，不占一行；时间精确到分；kind 只在非 daily 显示。
       const startedTitle = session.createdAt && dayView ? new Intl.DateTimeFormat(locale, {

@@ -7,7 +7,7 @@ import { useState, useCallback, useRef, useEffect, useLayoutEffect } from "react
 import { FriendInspector } from "./FriendInspector";
 import { WorkspaceNavigation, type WorkspaceSection } from "./WorkspaceNavigation";
 import { WorkspaceSettings } from "./WorkspaceSettings";
-import { IconLayoutSidebar, IconFolder, IconX, IconArrowLeft, IconUser } from "@tabler/icons-react";
+import { IconLayoutSidebar, IconFolder, IconX } from "@tabler/icons-react";
 import { useBrowserRouter } from "@/lib/browser-router";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionSidebar, type MobileWorkspaceView } from "./SessionSidebar";
@@ -40,6 +40,7 @@ import { DeviceSwitcher } from "./DeviceSwitcher";
 import { useAudio } from "@/hooks/useAudio";
 import { copyText } from "@/lib/clipboard";
 import { getFileName } from "@/lib/file-paths";
+import { friendDateFromUrl } from "@/lib/friend-calendar";
 import { fetchChatProjects, openChatProject, type ChatProjectSummary } from "@/lib/projects-contract";
 import { buildAtMentionText, buildFileAtMentionsText, buildFileLineMentionText } from "@/lib/file-fuzzy";
 import {
@@ -474,7 +475,18 @@ export function AppShell({
   const [fileTabs, setFileTabs] = useState<Tab[]>(
     () => initialWorkspaceSnapshot.fileTabs.map((tab) => ({ ...tab })),
   );
-  const [detailsMode, setDetailsMode] = useState<"files" | "friend">("files");
+  // Header-anchored day/task panel: the conversation title is the toggle.
+  const [friendPanelOpen, setFriendPanelOpen] = useState(false);
+  const [friendDate, setFriendDate] = useState(() => friendDateFromUrl(window.location.href));
+  useEffect(() => {
+    const restore = () => setFriendDate(friendDateFromUrl(window.location.href));
+    restore();
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
+  }, [selectedSession?.id]);
+  useEffect(() => {
+    if (selectedSession?.owner.type !== "long-agent") setFriendPanelOpen(false);
+  }, [selectedSession?.owner.type, selectedSession?.id]);
   const [activeFileTabId, setActiveFileTabId] = useState<string | null>(
     () => initialWorkspaceSnapshot.activeFileTabId,
   );
@@ -1056,7 +1068,6 @@ export function AppShell({
       tabId,
     }));
     setActiveFileTabId(tabId);
-    setDetailsMode("files");
     setRightPanelOpen(true);
     // On mobile the file panel is full-screen; close the drawer so it shows.
     if (isMobile) {
@@ -1656,7 +1667,24 @@ export function AppShell({
           style={{ flexShrink: 0, background: "var(--bg-panel)" }}
         >
         <div className="workspace-conversation-toolbar">
-          <h1 className="workspace-conversation-heading" title={selectedSession?.name || undefined}>{contentPanel === "long-agents" ? (selectedSession?.owner.type === "long-agent" ? selectedSession.name || selectedSession.owner.longAgentId : translate("workspaceNav.coworkers")) : selectedSession?.name || translate("i18n.newSession")}</h1>
+          {selectedSession?.owner.type === "long-agent" ? (
+            <button
+              type="button"
+              className="workspace-conversation-heading workspace-conversation-toggle"
+              aria-expanded={friendPanelOpen}
+              aria-controls="friend-day-panel"
+              title={selectedSession.name || undefined}
+              onClick={() => setFriendPanelOpen(open => !open)}
+            >
+              <span>{selectedSession.name || selectedSession.owner.longAgentId}</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+                className={friendPanelOpen ? "workspace-toggle-chevron is-open" : "workspace-toggle-chevron"}>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+          ) : (
+            <h1 className="workspace-conversation-heading" title={selectedSession?.name || undefined}>{contentPanel === "long-agents" ? translate("workspaceNav.coworkers") : selectedSession?.name || translate("i18n.newSession")}</h1>
+          )}
           {isMobile && (
             <div
               ref={mobileToolbarRef}
@@ -2007,9 +2035,8 @@ export function AppShell({
         </div>
         </div>
 
-          {selectedSession?.owner.type === "long-agent" && <Button iconOnly variant="ghost" type="button" className="workspace-icon" aria-label={translate("workspaceNav.profile")} aria-expanded={rightPanelOpen && detailsMode === "friend"} onClick={() => { setDetailsMode("friend"); setRightPanelOpen(true); if (isMobile || viewportWidth < 960) setSidebarOpen(false); }}><IconUser size={20} /></Button>}
           <DeviceSwitcher variant="desktop" directory={deviceDirectory} onNavigate={onDeviceNavigate} />
-          <Button iconOnly variant="ghost" type="button" className="workspace-icon" onClick={() => { setSettingsVisible(false); activateChat(); setDetailsMode("files"); setRightPanelOpen(open => detailsMode !== "files" || !open); if (isMobile || viewportWidth < 960) setSidebarOpen(false); }} aria-label={translate("workspaceNav.files")} aria-expanded={rightPanelOpen}><IconFolder size={20} /></Button>
+          <Button iconOnly variant="ghost" type="button" className="workspace-icon" onClick={() => { setSettingsVisible(false); activateChat(); setRightPanelOpen(open => !open); if (isMobile || viewportWidth < 960) setSidebarOpen(false); }} aria-label={translate("workspaceNav.files")} aria-expanded={rightPanelOpen}><IconFolder size={20} /></Button>
         </header>
     <div className={`app-shell-root workspace-body${viewportWidth < 960 && !isMobile ? " workspace-medium" : ""}${rightPanelOverlay ? " workspace-right-overlay" : ""}${settingsVisible || workspaceView !== "chat" ? " workspace-global-view" : ""}`}>
 
@@ -2072,6 +2099,17 @@ export function AppShell({
       <div ref={chatSurfaceRef} tabIndex={-1} data-workspace-chat hidden={settingsVisible || workspaceView !== "chat"} style={{ flex: 1, display: !settingsVisible && workspaceView === "chat" ? "flex" : "none", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         {/* Chat content */}
         <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
+          {friendPanelOpen && selectedSession?.owner.type === "long-agent" && (
+            <div className="workspace-friend-panel" id="friend-day-panel" data-friend-panel={selectedSession.owner.longAgentId}>
+              <FriendInspector
+                key={`${selectedSession.owner.longAgentId}:${selectedSession.id}`}
+                agentId={selectedSession.owner.longAgentId}
+                sessionId={selectedSession.id}
+                date={friendDate}
+                onOpenSession={handleOpenExistingSession}
+              />
+            </div>
+          )}
           {navigationError ? <div className="workspace-navigation-error" role="alert"><InterfaceFeedback message={navigationError} /></div> : showChat && currentProjectId && (contentPanel === "sessions" || selectedSession?.owner.type === "long-agent") ? (
             <>
             <ChatWindow
@@ -2167,7 +2205,7 @@ export function AppShell({
         ref={element => { rightPanelResizer.panelRef.current = element; detailsFocusRef.current = element; }}
         role={detailsModal ? "dialog" : "complementary"}
         aria-modal={detailsModal || undefined}
-        aria-label={translate(detailsMode === "friend" ? "workspaceNav.profile" : "workspaceNav.files")}
+        aria-label={translate("workspaceNav.files")}
         tabIndex={-1}
         id="file-panel"
         inert={!rightPanelOpen || settingsVisible || workspaceView !== "chat"}
@@ -2183,13 +2221,10 @@ export function AppShell({
         } as React.CSSProperties}
       >
         <div className="workspace-details-heading">
-          {detailsMode === "friend" && selectedSession?.owner.type === "long-agent"
-            ? <Button variant="secondary" type="button" className="workspace-button" onClick={() => { setDetailsMode("files"); setActiveFileTabId(null); }}><IconArrowLeft size={16} />{translate("workspaceNav.files")}</Button>
-            : <span className="workspace-details-title">{translate("workspaceNav.files")}</span>}
+          <span className="workspace-details-title">{translate("workspaceNav.files")}</span>
           <Button iconOnly variant="ghost" type="button" className="workspace-icon" onClick={() => setRightPanelOpen(false)} aria-label={translate("files.hidePanel")}><IconX size={20} /></Button>
         </div>
-        {detailsMode === "friend" && selectedSession?.owner.type === "long-agent" && <FriendInspector key={selectedSession.owner.longAgentId} agentId={selectedSession.owner.longAgentId} sessionId={selectedSession.id} date={new URL(window.location.href).searchParams.get("friendDate")} onOpenSession={handleOpenExistingSession} />}
-        <div className="workspace-file-details" hidden={detailsMode === "friend" && selectedSession?.owner.type === "long-agent"}>
+        <div className="workspace-file-details">
         {!activeFileTab && fileTabs.length > 0 && <Button variant="secondary" type="button" className="workspace-button" onClick={() => setActiveFileTabId(fileTabs.at(-1)?.id ?? null)}>{translate("workspaceNav.lastFile")}</Button>}
         <div ref={setFilesSlot} className="workspace-files-slot" hidden={activeFileTab !== null} />
         {activeFileTab && <div className="workspace-file-source" title={activeFileTab.sourceCwd ?? activeFileTab.filePath}>
