@@ -723,7 +723,7 @@ skill 内容与本文冲突时以本文为准；skill 中的项目映射（token
 - **范围**：`30rem–60rem`（480–960px，常量在 `lib/conversation-measure.ts`）；窄窗口由 `max-width` 自然收窄，不溢出、不挤压左右栏。
 - **自适应**：默认自适应（不写像素覆盖、跟随 `--measure-prose` 与窗口）；拖动即进入手动并按设备持久化（`chat:conversation-measure`，`auto` 表示自适应）。不按 Session/Project 存储。
 - **样式**：轨道 96×3px、圆角 999px、`--border`；滑块 14px 圆、`--text-muted`，hover 提到 `--text`，拖动中 `--accent`；命中区桌面 36px 高、Compact 44px；无边框无阴影，轨道 `cursor: col-resize`；动效只做颜色，用 `--duration-fast` + `--ease-standard`，拖动期间圆点与填充不带过渡。
-- **可达性**：滑杆根节点 `aria-label` 为「会话宽度」并由 Radix 输出 `aria-valuemin/max/now`；`Hint` 显示同一读数（`会话宽度 · 48rem`，自适应时后缀「自适应」）；键盘可达。
+- **可达性**：滑杆 `aria-label` 为「会话宽度」，`aria-valuemin/max/now` 由 Radix 输出；`Hint` 显示读数（`会话宽度 · 48rem`，自适应时后缀「自适应」），拖动中 Tooltip 按 Radix 默认收起、不额外加浮层；键盘可达，焦点环画在滑块上。
 - **Compact**：不渲染滑杆（宽度按屏宽），只有桌面/平板入口。
 
 ### 20.8 门禁
