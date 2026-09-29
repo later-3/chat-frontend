@@ -21,6 +21,8 @@ import { ExtensionStatusBar } from "./ExtensionStatusBar";
 import { useI18n } from "@/hooks/useI18n";
 import { useAgentSession, type NoticeItem } from "@/hooks/useAgentSession";
 import { useTopicMemoryControl } from "@/hooks/useTopicMemoryControl";
+import { useSessionMemoryCount } from "@/hooks/useSessionMemoryCount";
+import { sessionMemoryCountKey } from "@/lib/session-memory-count";
 import { useDragDrop } from "@/hooks/useDragDrop";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -138,7 +140,6 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, topicNode: r
   const { t, locale } = useI18n();
   // The session-memory bar: one view button and the ONE switch the owner sets before sending.
   const [memoryOpen, setMemoryOpen] = useState(false);
-  const [memoryCount, setMemoryCount] = useState(0);
   const { pushStatus, onPushToggle } = usePushNotifications(locale);
   const isMobile = useIsMobile();
   const readOnly = session?.readOnly === true;
@@ -346,6 +347,13 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, topicNode: r
 
   const memoryStorageProjectId = longAgentId ?? projectId;
   const memorySessionId = session?.id ?? sessionIdRef.current ?? null;
+  // The badge reads the memory API itself; the dialog no longer has to be open for
+  // it to be correct (see hooks/useSessionMemoryCount).
+  const memoryCountKey = sessionMemoryCountKey({ messageCount: messages.length, phase: activity?.phase ?? null });
+  const sessionMemoryCount = useSessionMemoryCount({
+    storageProjectId: memoryStorageProjectId, sessionId: memorySessionId, refreshKey: memoryCountKey,
+  });
+  const memoryCount = sessionMemoryCount.count;
   const memoryAction = !readOnly && memorySessionId !== null ? (
     <Hint label={t("topics.memoryPanel")}>
       <button type="button" className="composer-memory-action" data-session-memory-open data-memory-enabled={memoryEnabled}
@@ -461,7 +469,7 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, topicNode: r
             {t("friendCalendar.recordMemory")}
           </label>}
           {sessionMemoryControl?.error && <p role="alert" className="text-[var(--danger)]"><InterfaceFeedback message={sessionMemoryControl.error} /></p>}
-          <SessionMemoryPanel storageProjectId={memoryStorageProjectId} sessionId={memorySessionId} onCount={setMemoryCount} />
+          <SessionMemoryPanel storageProjectId={memoryStorageProjectId} sessionId={memorySessionId} onCount={sessionMemoryCount.setCount} />
         </SurfaceDialog>
       )}
       {isDragOver && (
