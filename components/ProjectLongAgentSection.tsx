@@ -13,8 +13,6 @@ import {
   startProjectLongAgent,
   type LongAgentSummary,
 } from "@/lib/long-agents-browser";
-import { friendDateFromUrl } from "@/lib/friend-calendar";
-import { FriendWorkPanel } from "./FriendWorkPanel";
 import styles from "./ProjectLongAgentSection.module.css";
 import { LongAgentAvatarView } from "./LongAgentAvatar";
 import { LongAgentSettingsPanel } from "./LongAgentSettingsPanel";
@@ -55,15 +53,6 @@ export function ProjectLongAgentSection({
     return () => window.clearTimeout(timer);
   }, [openingAgentId]);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  // v2.3: date state lives in the FriendInspector (friendDate ?? today).
-  // The sidebar only needs the live friendDate for the day projection.
-  const [friendDate, setFriendDate] = useState(() => friendDateFromUrl(window.location.href));
-  useEffect(() => {
-    const restore = () => setFriendDate(friendDateFromUrl(window.location.href));
-    restore();
-    window.addEventListener("popstate", restore);
-    return () => window.removeEventListener("popstate", restore);
-  }, [selectedSessionId]);
   const [createOpen, setCreateOpen] = useState(false);
   const [createDraft, setCreateDraft] = useState({ id: "", name: "", description: "" });
   const [creating, setCreating] = useState(false);
@@ -166,7 +155,6 @@ export function ProjectLongAgentSection({
     }
   }, [closeAfterOpen, onOpenSession, onRequestClose, openingAgentId, projectId]);
 
-  const activeAgent = agents.find(agent => agent.id === selectedLongAgentId || agent.project?.primarySessionId === selectedSessionId);
   if (!visible) return null;
 
   return (
@@ -316,12 +304,6 @@ export function ProjectLongAgentSection({
           </ul>
         </nav>
       )}
-
-      {activeAgent && selectedSessionId && <FriendWorkPanel key={activeAgent.id} agentId={activeAgent.id}
-        sessionId={selectedSessionId} date={friendDate} onOpenSession={async (id, ownerProjectId, date) => {
-          await onOpenSession(id, ownerProjectId, date);
-          if (closeAfterOpen) onRequestClose?.();
-        }} />}
 
       {error && agents.length > 0 && <p className={styles.inlineError} role="status"><InterfaceFeedback message={error} /></p>}
     </section>

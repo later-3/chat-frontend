@@ -235,7 +235,6 @@ export const enLocale: LocalePlugin = {
 
     "friendWork.unconfirmed": "The last submission is unconfirmed. Retry uses the same request without creating a duplicate.",
     "friendWork.confirm": "Confirm last submission",
-    "friendWork.heading": "Today",
     "friendWork.stop": "Stop “{title}”",
     "friendWork.retry": "Refresh",
     "friendWork.status.pending": "Not accepted; retry creation",

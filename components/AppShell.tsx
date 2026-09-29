@@ -1673,6 +1673,7 @@ export function AppShell({
               className="workspace-conversation-heading workspace-conversation-toggle"
               aria-expanded={friendPanelOpen}
               aria-controls="friend-day-panel"
+              data-friend-panel-toggle={selectedSession.owner.longAgentId}
               title={selectedSession.name || undefined}
               onClick={() => setFriendPanelOpen(open => !open)}
             >

@@ -2,7 +2,8 @@ import { InterfaceFeedback } from "./InterfaceFeedback";
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { fetchFriendDailyState, type FriendDailyState, type FriendCalendarSession } from "@/lib/friend-daily-browser";
-import { fetchFriendWork, type FriendWorkItem } from "@/lib/friend-work";
+import { fetchFriendWork, startFriendWork, type FriendWorkItem } from "@/lib/friend-work";
+import { readFriendWorkSubmission, saveFriendWorkSubmission, type FriendWorkSubmission } from "@/lib/friend-work-draft";
 import { requestFriendTasks, type FriendTasks } from "@/lib/friend-tasks";
 import { FriendCalendar } from "./FriendCalendar";
 import { LongAgentTasksPanel } from "./LongAgentTasksPanel";
@@ -29,6 +30,8 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession }: {
   const [dayError, setDayError] = useState<string | null>(null);
   const [works, setWorks] = useState<FriendWorkItem[]>([]);
   const [tasks, setTasks] = useState<FriendTasks | null>(null);
+  // Unconfirmed background-task submission recovery moved here from the removed sidebar day panel.
+  const [pending, setPending] = useState<FriendWorkSubmission | null>(() => readFriendWorkSubmission(agentId));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -120,7 +123,7 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession }: {
   };
 
   return <section className={styles.inspector} aria-label={t("workspaceNav.profile")}>
-    <header className={styles.identity}>
+    <header className={styles.identity} data-friend-panel-header={agentId}>
       {agent && <LongAgentAvatarView agentId={agent.id} name={agent.name} avatar={agent.avatar} />}
       <div>
         <strong>{agent?.name ?? agentId}</strong>
@@ -128,12 +131,13 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession }: {
       </div>
       <div className={styles.identityActions}>
         {calendar && <span className={styles.tz} title={calendar.timeZone} aria-label={calendar.timeZone}>ⓘ</span>}
-        <button type="button" onClick={() => setCalendarOpen(true)} aria-label={t("friendCalendar.open")}>{t("friendCalendar.open")}</button>
+        <button type="button" data-friend-calendar-open={agentId} onClick={() => setCalendarOpen(true)} aria-label={t("friendCalendar.open")}>{t("friendCalendar.open")}</button>
       </div>
     </header>
 
-    <div className={styles.dayRow}>
+    <div className={styles.dayRow} data-friend-day={selectedDate ?? undefined}>
       {dailySession && <button type="button" className={styles.primary} disabled={busy || selectedDate === null}
+        data-day-session={dailySession.sessionId}
         aria-current={dailySession.sessionId === sessionId ? "page" : undefined}
         onClick={() => void act(() => openDate(dailySession.sessionId, agentId, selectedDate ?? undefined))}>
         <strong>{isToday ? t("friendInspector.todayChat") : t("friendInspector.dayChat", { date: dateLabel })}</strong>
@@ -143,6 +147,7 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession }: {
       {others.length > 0 && <ul className={styles.sessions} aria-label={t("friendCalendar.daySessions")}>
         {others.map(session => <li key={session.sessionId}>
           <button type="button" disabled={busy} title={timeTitle(session.createdAt)}
+            data-day-session={session.sessionId}
             aria-current={session.sessionId === sessionId ? "page" : undefined}
             onClick={() => void act(() => openDate(session.sessionId, agentId, selectedDate ?? undefined))}>
             <strong>{session.title || t("friendCalendar.untitled")}</strong>
@@ -151,7 +156,7 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession }: {
         </li>)}
       </ul>}
 
-      <button type="button" className={styles.tasks} onClick={() => setTasksOpen(true)}>
+      <button type="button" className={styles.tasks} data-friend-tasks-open={agentId} onClick={() => setTasksOpen(true)}>
         <strong>{t("friendInspector.tasksTitle")}</strong>
         <span>{t("friendInspector.tasksSummary", {
           tasks: taskCount, duties: dutyCount,
@@ -159,6 +164,16 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession }: {
         })}</span>
       </button>
     </div>
+
+    {pending && <div className={styles.pending} role="status" data-friend-work-pending>
+      <p>{t("friendWork.unconfirmed")}</p>
+      <button type="button" data-friend-work-confirm disabled={busy}
+        onClick={() => void act(async () => {
+          await startFriendWork(agentId, pending);
+          saveFriendWorkSubmission(agentId, null);
+          if (mounted.current) setPending(null);
+        })}>{t("friendWork.confirm")}</button>
+    </div>}
 
     {(error || dayError) && <div role="alert" className={styles.error}><p><InterfaceFeedback message={error || dayError} /></p>
       <button type="button" onClick={() => setRefresh(value => value + 1)}>{t("friendWork.retry")}</button></div>}

@@ -582,7 +582,7 @@ Agent 或开发者必须：
 | 需求 | 使用机制 | 禁止 |
 |---|---|---|
 | 全局任务面（Friends/Projects/动态/群聊/话题/设置） | 全屏页 + `PageHeader` 返回；左侧 rail 可直接切换，不强制先点返回；返回时恢复进入前的侧栏状态 | 再套 Dialog、强制先点返回才能切换 |
-| Friend 当天与任务（`FriendInspector`） | 会话标题（`<agent> · <date>`）即开关：点击在标题下展开/关闭面板（`aria-expanded`）；面板单日期状态派生当日会话/任务聚合/日历入口；任务聚合点开 `LongAgentTasksPanel` | 侧栏行内再放清单/日历图标、面板自带第二份日期/今天条、把 work 行混进当天导航 |
+| Friend 当天与任务（`FriendInspector`） | 会话标题（`<agent> · <date>`）即开关：点击在标题下展开/关闭面板（`aria-expanded`）；面板单日期状态派生当日会话/任务聚合/日历入口/未确认提交恢复；任务聚合点开 `LongAgentTasksPanel` | 侧栏再放“今日概览”或当天会话区、行内清单/日历图标、面板自带第二份日期/今天条、把 work 行混进当天导航 |
 | 临时配置（单个 Friend/资源/模型/记忆/Tools） | `SurfaceDialog`（`wide` 按需），Compact 自动全屏 Sheet；右上 X + Escape 关闭，不用 `Back` | 全屏 portal 页、自制 overlay、自制焦点陷阱 |
 | 模态确认 | Radix AlertDialog + `ConfirmationProvider` | `window.confirm`、自制遮罩 |
 | 只读目录/历史弹层 | `SurfaceDialog` / `useDialogFocus` | 手写焦点陷阱 |

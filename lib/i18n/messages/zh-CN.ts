@@ -235,7 +235,6 @@ export const zhCNLocale: LocalePlugin = {
 
     "friendWork.unconfirmed": "上次提交尚未确认。重试会使用同一请求，不重复创建。",
     "friendWork.confirm": "确认上次提交",
-    "friendWork.heading": "今日概览",
     "friendWork.stop": "停止「{title}」",
     "friendWork.retry": "刷新",
     "friendWork.status.pending": "尚未接受，请重试创建",
