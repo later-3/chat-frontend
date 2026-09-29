@@ -38,12 +38,13 @@ import { useIsMobile, useIsNarrowMobile } from "@/hooks/useIsMobile";
 import { useVisualViewport } from "@/hooks/useVisualViewport";
 import { useResizablePanel } from "@/hooks/useResizablePanel";
 import {
-  CONVERSATION_MEASURE_AUTO_SENTINEL,
   CONVERSATION_MEASURE_DEFAULT_WIDTH,
   CONVERSATION_MEASURE_MAX_WIDTH,
   CONVERSATION_MEASURE_MIN_WIDTH,
-  CONVERSATION_MEASURE_STORAGE_KEY,
-  formatConversationMeasure,
+  CONVERSATION_MEASURE_STEP,
+  conversationMeasureCssValue,
+  readConversationMeasure,
+  writeConversationMeasure,
 } from "@/lib/conversation-measure";
 import { MobileDebugOverlay } from "./MobileDebugOverlay";
 import { DeviceSwitcher } from "./DeviceSwitcher";
@@ -209,7 +210,6 @@ export function AppShell({
   // P1：进入全局任务页前记住侧栏状态，返回 chat 时恢复，避免默认折叠。
   const sidebarOpenBeforeGlobalRef = useRef<boolean | null>(null);
   const chatSurfaceRef = useRef<HTMLDivElement>(null);
-  const conversationMeasureWidthRef = useRef(CONVERSATION_MEASURE_DEFAULT_WIDTH);
   const momentsTriggerRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     if (workspaceView !== "chat" || !momentsTriggerRef.current) return;
@@ -268,19 +268,26 @@ export function AppShell({
     widthRef: sidebarWidthRef,
   });
   // Conversation reading width (UI/UX §20.7): messages, run status and the
-  // composer share this one value; "auto" removes the override entirely.
-  const conversationMeasureResizer = useResizablePanel({
-    ariaLabel: translate("layout.conversationWidth"),
-    autoSentinel: CONVERSATION_MEASURE_AUTO_SENTINEL,
-    cssVariable: "--conversation-measure",
-    defaultWidth: CONVERSATION_MEASURE_DEFAULT_WIDTH,
-    getMaxWidth: () => CONVERSATION_MEASURE_MAX_WIDTH,
-    growthDirection: "right",
-    maxWidth: CONVERSATION_MEASURE_MAX_WIDTH,
-    minWidth: CONVERSATION_MEASURE_MIN_WIDTH,
-    storageKey: CONVERSATION_MEASURE_STORAGE_KEY,
-    widthRef: conversationMeasureWidthRef,
-  });
+  // composer share this one value, and the top bar slider is its only writer.
+  // `null` means auto, which leaves the custom property unset.
+  const [conversationMeasure, setConversationMeasure] = useState<number | null>(null);
+  const applyConversationMeasure = useCallback((value: number | null) => {
+    const surface = chatSurfaceRef.current;
+    if (!surface) return;
+    const cssValue = conversationMeasureCssValue(value);
+    if (cssValue) surface.style.setProperty("--conversation-measure", cssValue);
+    else surface.style.removeProperty("--conversation-measure");
+  }, []);
+  useEffect(() => {
+    const stored = readConversationMeasure();
+    setConversationMeasure(stored);
+    applyConversationMeasure(stored);
+  }, [applyConversationMeasure]);
+  const commitConversationMeasure = useCallback((value: number | null) => {
+    setConversationMeasure(value);
+    writeConversationMeasure(value);
+    applyConversationMeasure(value);
+  }, [applyConversationMeasure]);
   const rightPanelResizer = useResizablePanel({
     ariaLabel: translate("layout.resizeFilePanel"),
     cssVariable: "--right-panel-width",
@@ -1706,14 +1713,15 @@ export function AppShell({
               {renderChatToolbarActions(false)}
               {renderSessionStatsButton(false)}
               <MeasureSlider
-                {...conversationMeasureResizer.separatorProps}
-                value={conversationMeasureResizer.width}
+                value={conversationMeasure ?? CONVERSATION_MEASURE_DEFAULT_WIDTH}
                 min={CONVERSATION_MEASURE_MIN_WIDTH}
                 max={CONVERSATION_MEASURE_MAX_WIDTH}
-                isAuto={conversationMeasureResizer.isAuto}
-                dragging={conversationMeasureResizer.isResizing}
+                step={CONVERSATION_MEASURE_STEP}
+                isAuto={conversationMeasure === null}
+                onLive={applyConversationMeasure}
+                onCommit={commitConversationMeasure}
+                onReset={() => commitConversationMeasure(null)}
                 label={translate("layout.conversationWidth")}
-                valueLabel={formatConversationMeasure(conversationMeasureResizer.width)}
                 autoLabel={translate("layout.conversationWidthAuto")}
               />
             </>
@@ -2052,7 +2060,7 @@ export function AppShell({
       {!settingsVisible && workspaceView === "moments" && <LongAgentFeedView onBack={returnToChatView} />}
 
       {/* Keep ChatWindow mounted while browsing Moments: draft, scroll and live Run remain owned by the same Session. */}
-      <div ref={element => { chatSurfaceRef.current = element; conversationMeasureResizer.panelRef.current = element; }} tabIndex={-1} data-workspace-chat hidden={settingsVisible || workspaceView !== "chat"} style={{ flex: 1, display: !settingsVisible && workspaceView === "chat" ? "flex" : "none", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
+      <div ref={chatSurfaceRef} tabIndex={-1} data-workspace-chat hidden={settingsVisible || workspaceView !== "chat"} style={{ flex: 1, display: !settingsVisible && workspaceView === "chat" ? "flex" : "none", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         {/* Chat content */}
         <div className="workspace-chat-row">
         {selectedSession?.owner.type === "long-agent" && (

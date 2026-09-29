@@ -1352,9 +1352,9 @@ span.token.table {
 
 /* ---------------------------------------------------------------------------
    Conversation width slider (UI/UX §20.7): a quiet scrollbar-like control in
-   the conversation top bar. Right widens, left narrows; the value feeds
-   --conversation-measure, which the message column, the run status and the
-   composer all share.
+   the conversation top bar, built on the Radix slider primitive. Right widens,
+   left narrows; the value feeds --conversation-measure, which the message
+   column, the run status and the composer all share.
    --------------------------------------------------------------------------- */
 .measure-slider {
   display: inline-flex;
@@ -1368,15 +1368,20 @@ span.token.table {
   border: 0;
   border-left: 1px solid var(--border);
   background: none;
-  cursor: col-resize;
-  touch-action: none;
   transition: opacity var(--duration-fast) var(--ease-standard);
 }
-.measure-slider:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; border-radius: 6px; }
+.measure-slider-root {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 96px;
+  height: 14px;
+  cursor: col-resize;
+  touch-action: none;
+}
 .measure-slider-track {
   position: relative;
-  display: block;
-  width: 96px;
+  flex-grow: 1;
   height: 3px;
   border-radius: 999px;
   background: var(--border);
@@ -1384,31 +1389,30 @@ span.token.table {
 }
 .measure-slider-fill {
   position: absolute;
-  inset: 0 auto 0 0;
+  height: 100%;
   border-radius: inherit;
   background: var(--text-muted);
   opacity: 0.55;
-  transition: width var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard), opacity var(--duration-fast) var(--ease-standard);
+  transition: background-color var(--duration-fast) var(--ease-standard), opacity var(--duration-fast) var(--ease-standard);
 }
 .measure-slider-thumb {
-  position: absolute;
-  top: 50%;
+  display: block;
   width: 14px;
   height: 14px;
-  margin: -7px 0 0 -7px;
   border-radius: 999px;
   background: var(--text-muted);
   transition: background-color var(--duration-fast) var(--ease-standard);
 }
+/* The Radix thumb is the focusable element, so the ring lives there. */
+.measure-slider-thumb:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .measure-slider:hover .measure-slider-track { background: var(--bg-hover); }
 .measure-slider:hover .measure-slider-thumb { background: var(--text); }
 .measure-slider:hover .measure-slider-fill { background: var(--text); }
 .measure-slider.is-dragging .measure-slider-thumb { background: var(--accent); }
 .measure-slider.is-dragging .measure-slider-fill { background: var(--accent); opacity: 0.35; }
-/* Dragging must track the pointer, so the reveal has no transition of its own. */
-.measure-slider.is-dragging .measure-slider-track,
-.measure-slider.is-dragging .measure-slider-fill,
-.measure-slider.is-dragging .measure-slider-thumb { transition: none; }
+/* While dragging the thumb must track the pointer, so it carries no transition. */
+.measure-slider.is-dragging .measure-slider-thumb,
+.measure-slider.is-dragging .measure-slider-fill { transition: none; }
 .measure-slider.is-auto .measure-slider-fill { opacity: 0.25; }
 @media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
   .measure-slider { min-height: 44px; }

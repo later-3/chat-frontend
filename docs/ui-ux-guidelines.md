@@ -1,7 +1,7 @@
 # Chat Frontend UI/UX 规范
 
 - 状态：规范基线
-- 版本：3.3
+- 版本：3.4
 - 适用项目：Chat Pi Web Frontend
 - 最后校正：2026-09-29
 -  art 方向：安静画廊级工具表面（littleplains / aside / resurf / daybridge 取精度不取装饰）；暖灰 + 墨字 + 克制紫品牌不变，深浅双主题同时成立
@@ -717,16 +717,17 @@ skill 内容与本文冲突时以本文为准；skill 中的项目映射（token
 
 会话列的阅读宽度由顶栏右侧的宽度滑杆控制（`components/ui/MeasureSlider.tsx`）：
 
+- **组件来源**：用既有原语 `@radix-ui/react-slider`（Root/Track/Range/Thumb），不手写轨道。拖拽跟随、点击定位、pointer capture、触控与 `role="slider"` 语义都由原语提供；自造分隔条实现过一版，拖动时圆点不跟随指针，已废弃。面板边缘拖拽仍用 `useResizablePanel`（分隔条与值控件是两类交互，各自唯一）。
 - **一个值**：滑杆只改 `--conversation-measure`（写在 chat surface 上），消息列、运行状态、输入框都读 `var(--conversation-measure, var(--measure-prose, 42rem))`。任何元素都不得再写自己的宽度上限——消息区与输入框错位就是各自硬编码像素宽度造成的（§7 阅读面）。
-- **交互**：右滑扩宽、左滑缩短；`←/→` 步进 12px、`Shift` 32px、`Home/End` 到端值、`Enter` 或双击恢复自适应；拖动中 `Esc` 放弃本次改动（回到拖动前的值与状态）。拖动必须走 `useResizablePanel` 的 `separatorProps`（pointer capture、失焦/取消处理、body 光标与 `user-select`），不得另写一套拖拽。
-- **范围**：`30rem–60rem`（480–960px，常量在 `lib/conversation-measure.ts`）；窄窗口由 `max-width` 自然收窄，不溢出、不挤压侧栏。
+- **交互**：拖动时圆点与列宽实时跟随指针；`←/→` 12px、`PageUp/PageDown` 120px、`Home/End` 到 30rem/60rem；轨道任意位置按下即定位；`Enter` 或双击恢复自适应。拖动中只在滑杆内部更新值，松手才提交并持久化（避免整页重渲染）。
+- **范围**：`30rem–60rem`（480–960px，常量在 `lib/conversation-measure.ts`）；窄窗口由 `max-width` 自然收窄，不溢出、不挤压左右栏。
 - **自适应**：默认自适应（不写像素覆盖、跟随 `--measure-prose` 与窗口）；拖动即进入手动并按设备持久化（`chat:conversation-measure`，`auto` 表示自适应）。不按 Session/Project 存储。
-- **样式**：轨道 96×3px、圆角 999px、`--border`；滑块 14px 圆、`--text-muted`，hover 提到 `--text`，拖动中 `--accent`；命中区桌面 36px 高、Compact 44px；无边框无阴影，`cursor: col-resize`；动效只做颜色与位置，用 `--duration-fast` + `--ease-standard`，拖动期间关过渡。
-- **可达性**：`role="separator"` + `aria-label`（`会话宽度 · 48rem`，自适应时后缀「自适应」）+ `aria-valuemin/max/now/valuetext`，`Hint` 同步显示同一读数；键盘可达焦点。
+- **样式**：轨道 96×3px、圆角 999px、`--border`；滑块 14px 圆、`--text-muted`，hover 提到 `--text`，拖动中 `--accent`；命中区桌面 36px 高、Compact 44px；无边框无阴影，轨道 `cursor: col-resize`；动效只做颜色，用 `--duration-fast` + `--ease-standard`，拖动期间圆点与填充不带过渡。
+- **可达性**：滑杆根节点 `aria-label` 为「会话宽度」并由 Radix 输出 `aria-valuemin/max/now`；`Hint` 显示同一读数（`会话宽度 · 48rem`，自适应时后缀「自适应」）；键盘可达。
 - **Compact**：不渲染滑杆（宽度按屏宽），只有桌面/平板入口。
 
 ### 20.8 门禁
 
 `lib/motion-contract.test.mjs` 守住：侧面板必须复用 `.workspace-dock`（含 class 开合与固定内宽）、工具栏动作只能由 `ToolbarAction` 声明（页面不得自造带文字的工具栏按钮）；动效时长与缓动必须来自 Token、pressed 不使用 `filter: brightness()`、每个遮罩必须淡入（Radix 还需淡出）、按钮与模态保持唯一原语、手写模态清单不得无声扩张、组件用到的每个 `ui-*` 类必须在样式表中有对应规则（防拼写漂移）。
 
-`lib/measure-contract.test.mjs` 守住会话列只有一个宽度来源：`--conversation-measure` 只能由滑杆写入、滑杆不得自带拖拽/存储实现、消息列与输入框必须读同一变量、Compact 必须归零 `--composer-gutter`；`lib/conversation-measure.test.mjs` 覆盖夹取、步进、读数格式与 `auto` 哨兵。
+`lib/measure-contract.test.mjs` 守住会话列只有一个宽度来源：`--conversation-measure` 只能由滑杆写入、滑杆必须用 Radix 原语且不得自带拖拽/存储实现、实时值与提交值分别走 `onValueChange`/`onValueCommit`、消息列与输入框必须读同一变量、Compact 必须归零 `--composer-gutter`；`lib/conversation-measure.test.mjs` 覆盖夹取、步进、读数格式与 `auto` 哨兵。
