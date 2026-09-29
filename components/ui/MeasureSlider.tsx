@@ -32,7 +32,7 @@ export function MeasureSlider({
   const range = max - min;
   const ratio = range > 0 ? Math.min(1, Math.max(0, (value - min) / range)) : 0;
   const percent = `${(ratio * 100).toFixed(2)}%`;
-  const readout = `${label} · ${valueLabel}${isAuto ? `（${autoLabel}）` : ""}`;
+  const readout = `${label} · ${valueLabel}${isAuto ? ` · ${autoLabel}` : ""}`;
 
   return <Hint label={readout}>
     <div
