@@ -127,6 +127,7 @@ export function AppShell({
     try { localStorage.setItem("chat:wide-content", String(!current)); } catch { /* Layout remains usable without storage. */ }
     return !current;
   });
+  const [chatActionsSlot, setChatActionsSlot] = useState<HTMLDivElement | null>(null);
   const [projectSlot, setProjectSlot] = useState<HTMLDivElement | null>(null);
   const [filesSlot, setFilesSlot] = useState<HTMLDivElement | null>(null);
   const lastCoworkerRef = useRef<SessionInfo | null>(null);
@@ -1653,6 +1654,8 @@ export function AppShell({
           ) : (
             <h1 className="workspace-conversation-heading" title={selectedSession?.name || undefined}>{contentPanel === "long-agents" ? translate("workspaceNav.coworkers") : selectedSession?.name || translate("i18n.newSession")}</h1>
           )}
+          {/* This session's actions are portalled here (UI/UX §20.5). */}
+          <div ref={setChatActionsSlot} className="workspace-chat-actions-slot" />
           {isMobile && (
             <div
               ref={mobileToolbarRef}
@@ -2106,6 +2109,7 @@ export function AppShell({
             <>
             <ChatWindow
               key={sessionKey}
+              chatActionsSlot={chatActionsSlot}
               projectId={currentProjectId}
               deviceId={deviceId}
               contextProjectId={activeProjectId}

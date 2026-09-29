@@ -5,6 +5,7 @@ import { InterfaceFeedback } from "./InterfaceFeedback";
 import { composerDraftKey } from "@/lib/composer-context";
 import { registerAbortHandler } from "@/hooks/useKeyboardShortcuts";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { AgentMessage, AssistantContentBlock, AssistantMessage, BashExecutionMessage, BlockingExtensionUiRequest, CustomMessage, ExtensionUiRequest, SessionInfo, SessionTreeNode, ToolResultMessage, UserMessage } from "@/lib/types";
 import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
@@ -32,7 +33,8 @@ import type { PlanReviewDecisionInput } from "@/lib/chat-workflow-browser";
 import type { TopicNodeTarget } from "@/lib/topic-node-execution";
 import { MarkdownBody } from "./MarkdownBody";
 import { PlanReviewCard } from "./PlanReviewCard";
-import { SessionMemoryPanel } from "./SessionMemoryPanel";
+import { SessionMemoryDialog } from "./SessionMemoryDialog";
+import { ToolbarAction } from "./ui/ToolbarAction";
 import { IconNotebook } from "@tabler/icons-react";
 import { SurfaceDialog } from "./SurfaceDialog";
 import { TopicCreationRequests } from "./TopicCreationRequests";
@@ -56,6 +58,8 @@ interface Props {
   onSessionMemoryChanged?: () => void;
   session: SessionInfo | null;
   sessionRunning?: boolean;
+  /** DOM slot in the conversation top bar that hosts this session's actions. */
+  chatActionsSlot?: HTMLElement | null;
   newSessionCwd: string | null;
   newSessionDraftKey: string | null;
   onAgentEnd?: () => void;
@@ -134,7 +138,7 @@ function withAssistantBlocks(
   return next;
 }
 
-export function ChatWindow({ projectId, deviceId, contextProjectId, topicNode: requestedTopicNode, onSessionMemoryChanged, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onConnectionFailure, soundEnabled = true, onSoundToggle, playDoneSound = () => {}, unlockAudio }: Props) {
+export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjectId, topicNode: requestedTopicNode, onSessionMemoryChanged, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onConnectionFailure, soundEnabled = true, onSoundToggle, playDoneSound = () => {}, unlockAudio }: Props) {
   const topicNode = requestedTopicNode ?? session?.topicNode;
   const sessionMemoryControl = useTopicMemoryControl(topicNode, onSessionMemoryChanged);
   const { t, locale } = useI18n();
@@ -354,14 +358,30 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, topicNode: r
     storageProjectId: memoryStorageProjectId, sessionId: memorySessionId, refreshKey: memoryCountKey,
   });
   const memoryCount = sessionMemoryCount.count;
-  const memoryAction = !readOnly && memorySessionId !== null ? (
-    <Hint label={t("topics.memoryPanel")}>
-      <button type="button" className="composer-memory-action" data-session-memory-open data-memory-enabled={memoryEnabled}
-        aria-label={t("topics.memoryPanel")} onClick={() => setMemoryOpen(true)}>
-        <IconNotebook size={18} aria-hidden="true" />
-        {memoryCount > 0 && <span>{memoryCount}</span>}
-      </button>
-    </Hint>
+  // Session-level actions live in the conversation top bar (UI/UX §20.5): this
+  // one opens the session-memory reader and shows how many active entries it has.
+  const sessionMemoryAction = !readOnly && memorySessionId !== null ? (
+    <ToolbarAction
+      label={t("topics.memoryPanel")}
+      icon={<IconNotebook size={18} aria-hidden="true" />}
+      badge={memoryCount}
+      active={memoryOpen}
+      aria-expanded={memoryOpen}
+      aria-controls="session-memory-dialog"
+      data-session-memory-open
+      onClick={() => setMemoryOpen(true)}
+    />
+  ) : null;
+  const compactAction = canCompact && (!sessionBusy || isCompacting) ? (
+    <ToolbarAction
+      label={isCompacting ? t("chat.stopCompaction") : t("chat.compactContext")}
+      active={isCompacting}
+      data-session-compact={isCompacting ? "running" : "idle"}
+      onClick={() => { void (isCompacting ? handleAbortCompaction() : handleCompact()); }}
+      icon={isCompacting
+        ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><rect x="2" y="2" width="6" height="6" rx="1" fill="currentColor" /></svg>
+        : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" /><line x1="10" y1="14" x2="3" y2="21" /><line x1="21" y1="3" x2="14" y2="10" /></svg>}
+    />
   ) : null;
 
   const chatInputElement = <>{readOnly ? (
@@ -388,7 +408,6 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, topicNode: r
     <ChatInput
       key={session?.owner.type === "long-agent" ? composerDraftKey(session.id, true, contextProjectId) : "ordinary-composer"}
       ref={chatInputRef}
-      toolbarAction={memoryAction}
       projectId={projectId}
       onSend={handleSend}
       onAbort={isCompacting ? handleAbortCompaction : handleAbort}
@@ -456,21 +475,22 @@ export function ChatWindow({ projectId, deviceId, contextProjectId, topicNode: r
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {chatActionsSlot !== null && chatActionsSlot !== undefined && createPortal(
+        <>{sessionMemoryAction}{compactAction}</>, chatActionsSlot,
+      )}
       {memoryOpen && memorySessionId !== null && (
-        <SurfaceDialog title={t("topics.memoryPanel")} onClose={() => setMemoryOpen(false)}>
-          {sessionMemoryControl && !sessionMemoryControl.ready ? <div role="status">
-            {sessionMemoryControl.error
-              ? <button type="button" onClick={sessionMemoryControl.retry}>{t("longAgentSettings.retry")}</button>
-              : t("common.loading")}
-          </div> : <label className="session-memory-setting">
-            <input type="checkbox" checked={memoryEnabled} data-session-memory-toggle
-              disabled={sessionMemoryControl?.busy}
-              onChange={(event) => (sessionMemoryControl?.onChange ?? setMemoryEnabled)(event.target.checked)} />
-            {t("friendCalendar.recordMemory")}
-          </label>}
-          {sessionMemoryControl?.error && <p role="alert" className="text-[var(--danger)]"><InterfaceFeedback message={sessionMemoryControl.error} /></p>}
-          <SessionMemoryPanel storageProjectId={memoryStorageProjectId} sessionId={memorySessionId} onCount={sessionMemoryCount.setCount} />
-        </SurfaceDialog>
+        <SessionMemoryDialog
+          enabled={sessionMemoryControl?.enabled ?? memoryEnabled}
+          onEnabledChange={sessionMemoryControl?.onChange ?? setMemoryEnabled}
+          busy={sessionMemoryControl?.busy ?? false}
+          ready={sessionMemoryControl?.ready ?? true}
+          error={sessionMemoryControl?.error ?? null}
+          retry={sessionMemoryControl?.retry ?? null}
+          onCount={sessionMemoryCount.setCount}
+          onClose={() => setMemoryOpen(false)}
+          sessionId={memorySessionId}
+          storageProjectId={memoryStorageProjectId}
+        />
       )}
       {isDragOver && (
         <div className="pointer-events-none absolute inset-0 z-50 flex animate-[drop-zone-in_0.15s_ease_both] items-center justify-center bg-[var(--accent-wash)] backdrop-blur-[1px]">

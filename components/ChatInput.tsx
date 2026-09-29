@@ -30,6 +30,7 @@ import {
 import { FolderIcon, getFileIcon } from "./FileIcons";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
+import { ToolbarAction } from "./ui/ToolbarAction";
 import type { PushNotificationStatus } from "@/hooks/usePushNotifications";
 import {
   IconAdjustmentsHorizontal,
@@ -60,7 +61,6 @@ export interface AttachedImage {
 
 interface Props {
   projectId: string;
-  toolbarAction?: React.ReactNode;
   onSend: (message: string, images?: AttachedImage[]) => void;
   onAbort: () => void;
   stopLabel?: string;
@@ -359,7 +359,7 @@ function QueuedMessageRow({ kind, text }: { kind: "steer" | "follow-up"; text: s
 
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
-  projectId, toolbarAction,
+  projectId,
   onSend, onAbort, stopLabel, stopping, onSteer, onFollowUp, isStreaming, workflowId, onWorkflowChange, workflowAgentConfigs, promptResourceProposals, onWorkflowAgentConfigsChange,
   longAgentId, friendImages = false,
   onCompact, onAbortCompaction, isCompacting, compactError, compactResult,
@@ -1409,6 +1409,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               </span>
               {onRecallQueue && (
                 <button
+                  className="composer-recover"
                   onClick={onRecallQueue}
                    title={t("chat.recallTitle")}
                   style={{
@@ -1424,14 +1425,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                     cursor: "pointer",
                     transition: "background var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard)",
                     whiteSpace: "nowrap",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "var(--bg-hover)";
-                    e.currentTarget.style.borderColor = "color-mix(in srgb, var(--accent) 45%, var(--border))";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "transparent";
-                    e.currentTarget.style.borderColor = "var(--border)";
                   }}
                 >
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -2053,36 +2046,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
           {/* LEFT: attach + model selector (idle) or steer/followup toggle (streaming) */}
           <div style={{ flex: isMobile ? "1 1 auto" : "0 0 auto", minWidth: 0, display: "flex", alignItems: "center", gap: 2 }}>
-            <button
-              onClick={() => fileInputRef.current?.click()}
+            <ToolbarAction
+              shape="frame"
+              label={attachImageTitle}
+              active={attachedImages.length > 0}
               disabled={!imagesAllowed}
-              aria-label={attachImageTitle}
-              title={attachImageTitle}
-              style={{
-                flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-                width: isMobile ? 44 : 32, height: isMobile ? 44 : 32, padding: 0,
-                background: "none", border: "none",
-                borderRadius: 9,
-                color: attachedImages.length ? "var(--accent)" : "var(--text-muted)",
-                cursor: imagesAllowed ? "pointer" : "not-allowed",
-                opacity: imagesAllowed ? 1 : 0.5,
-                transition: "background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard)",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "var(--bg-hover)";
-                e.currentTarget.style.color = attachedImages.length ? "var(--accent)" : "var(--text)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "none";
-                e.currentTarget.style.color = attachedImages.length ? "var(--accent)" : "var(--text-muted)";
-              }}
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <polyline points="21 15 16 10 5 21" />
-              </svg>
-            </button>
+              iconOnly
+              onClick={() => fileInputRef.current?.click()}
+              icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>}
+            />
             {/* Long Agent identity lives in the sidebar coworker panel; the composer never repeats it. */}
             {(
               <select
@@ -2112,31 +2084,14 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 ))}
               </select>
             )}
-            {toolbarAction}
-            {!isMobile && longAgentId === null && <button
-              type="button"
+            {longAgentId === null && <ToolbarAction
+              shape="frame"
+              label={t("interface.configure.workflow.agents")}
+              iconOnly
               onClick={() => setWorkflowAgentDialogOpen(true)}
-              disabled={isStreaming || longAgentId !== null || !cwd || selectedWorkflow?.agents.length === 0}
-              aria-label={t("interface.configure.workflow.agents")}
-              title={t("interface.view.and.configure.this.workflow.s.agents")}
-              style={{
-                flexShrink: 0,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 32,
-                height: 32,
-                padding: 0,
-                border: "none",
-                borderRadius: 9,
-                background: "transparent",
-                color: "var(--text-muted)",
-                cursor: isStreaming || longAgentId !== null || !cwd ? "not-allowed" : "pointer",
-                opacity: isStreaming || longAgentId !== null || !cwd ? 0.5 : 1,
-              }}
-            >
-              <IconAdjustmentsHorizontal size={16} stroke={1.8} />
-            </button>}
+              disabled={isStreaming || !cwd || selectedWorkflow?.agents.length === 0}
+              icon={<IconAdjustmentsHorizontal size={16} stroke={1.8} />}
+            />}
           </div>
 
           {/* spacer */}
@@ -2146,6 +2101,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             {isStreaming && (
               <button
                 data-chat-stop
+                className="composer-stop"
                 onClick={onAbort}
                 disabled={stopping}
                  title={stopLabel ?? t("chat.stopAgent")}
@@ -2162,8 +2118,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   whiteSpace: "nowrap", letterSpacing: "-0.01em",
                   transition: "background var(--duration-fast) var(--ease-standard)",
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(239,68,68,0.16)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(239,68,68,0.08)"; }}
               >
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                   <rect x="1.5" y="1.5" width="7" height="7" rx="1.5" fill="currentColor" />
@@ -2183,6 +2137,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             {isMobile && (
               <button
                 type="button"
+                className="composer-settings-trigger"
                  title={t("chat.runtimeSettings")}
                  aria-label={t("chat.runtimeSettings")}
                 aria-expanded={controlsMenuOpen}
@@ -2203,14 +2158,6 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   color: controlsMenuOpen ? "var(--text)" : "var(--text-muted)",
                   cursor: "pointer",
                   transition: "background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard)",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                  e.currentTarget.style.color = "var(--text)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = controlsMenuOpen ? "var(--bg-selected)" : "none";
-                  e.currentTarget.style.color = controlsMenuOpen ? "var(--text)" : "var(--text-muted)";
                 }}
               >
                 <IconAdjustmentsHorizontal size={19} stroke={1.8} />
@@ -2299,145 +2246,23 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 <span>{t("interface.workflow.agents")}</span>
               </button>
             )}
-            {(!isStreaming || isCompacting) && onCompact && (
-              <div className={isMobile ? "mobile-settings-tile-wrapper" : undefined} style={{ position: "relative" }}>
-                <button
-                  onClick={isCompacting ? onAbortCompaction : onCompact}
-                  data-session-compact={isCompacting ? "running" : "idle"}
-                  disabled={isStreaming && !isCompacting}
-                  style={{
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                    padding: isMobile ? "0 6px" : "8px 12px",
-                    width: isMobile ? "auto" : undefined,
-                    height: isMobile ? 44 : 32,
-                    background: isCompacting ? "rgba(239,68,68,0.08)" : "none",
-                    border: "none",
-                    borderRadius: 9,
-                    color: isCompacting ? "var(--danger)" : "var(--text-muted)",
-                    cursor: (isStreaming && !isCompacting) ? "not-allowed" : "pointer",
-                    fontSize: 12, opacity: (isStreaming && !isCompacting) ? 0.5 : 1,
-                    transition: "background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard)",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (isStreaming && !isCompacting) return;
-                    e.currentTarget.style.background = isCompacting ? "rgba(239,68,68,0.16)" : "var(--bg-hover)";
-                    e.currentTarget.style.color = isCompacting ? "var(--danger)" : "var(--text)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = isCompacting ? "rgba(239,68,68,0.08)" : "none";
-                    e.currentTarget.style.color = isCompacting ? "var(--danger)" : "var(--text-muted)";
-                  }}
-                   title={isCompacting ? t("chat.stopCompaction") : t("chat.compactContext")}
-                   aria-label={isCompacting ? t("chat.stopCompaction") : t("chat.compactContext")}
-                >
-                  {isCompacting ? (
-                    <><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="2" y="2" width="6" height="6" rx="1" fill="currentColor" /></svg>{(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{t("chat.compacting")}</span>}</>
-                  ) : (
-                    <><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" />
-                      <line x1="10" y1="14" x2="3" y2="21" /><line x1="21" y1="3" x2="14" y2="10" />
-                    </svg>{(!isMobile || controlsMenuOpen) && <span style={{ whiteSpace: "nowrap" }}>{t("chat.compact")}</span>}</>
-                  )}
-                </button>
-              </div>
-            )}
-
-            {onSoundToggle !== undefined && (
-              <button
-                className={isMobile ? "mobile-settings-tile" : undefined}
-                onClick={onSoundToggle}
-                 title={soundEnabled ? t("chat.disableSound") : t("chat.enableSound")}
-                 aria-label={soundEnabled ? t("chat.disableSound") : t("chat.enableSound")}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: isMobile ? "flex-start" : "center", gap: 8,
-                  width: isMobile ? "100%" : 32,
-                  height: isMobile ? 44 : 32,
-                  padding: isMobile ? "0 12px" : 0,
-                  background: "none",
-                  border: "none",
-                  borderRadius: 9,
-                  color: soundEnabled ? "var(--text-muted)" : "var(--text-dim)",
-                  cursor: "pointer",
-                  opacity: soundEnabled ? 1 : 0.55,
-                  transition: "background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard), opacity var(--duration-fast) var(--ease-standard)",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                  e.currentTarget.style.color = "var(--text)";
-                  e.currentTarget.style.opacity = "1";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "none";
-                  e.currentTarget.style.color = soundEnabled ? "var(--text-muted)" : "var(--text-dim)";
-                  e.currentTarget.style.opacity = soundEnabled ? "1" : "0.55";
-                }}
-              >
-                {soundEnabled ? (
-                  <IconVolume size={16} stroke={1.8} />
-                ) : (
-                  <IconVolumeOff size={16} stroke={1.8} />
-                )}
-                {isMobile && <span>{soundEnabled ? t("chat.soundStatusOn") : t("chat.soundStatusOff")}</span>}
-              </button>
-            )}
-            {pushStatus !== undefined && onPushToggle !== undefined && (
-              <button
-                className={isMobile ? "mobile-settings-tile mobile-settings-push" : undefined}
-                onClick={onPushToggle}
-                disabled={["checking", "unsupported", "enabling", "disabling", "denied"].includes(pushStatus)}
-                title={pushStatus === "on"
-                  ? t("chat.disablePush")
-                  : pushStatus === "unsupported"
-                    ? t("chat.pushUnsupported")
-                    : pushStatus === "denied"
-                      ? t("chat.pushDenied")
-                      : pushStatus === "enabling"
-                        ? t("chat.pushEnabling")
-                        : pushStatus === "disabling"
-                          ? t("chat.pushDisabling")
-                          : pushStatus === "checking"
-                            ? t("chat.pushChecking")
-                            : pushStatus === "error"
-                              ? t("chat.pushRetry")
-                              : t("chat.enablePush")}
-                aria-label={pushStatus === "on" ? t("chat.disablePush") : t("chat.enablePush")}
-                aria-pressed={pushStatus === "on"}
-                style={{
-                  gridColumn: isMobile ? "1 / -1" : undefined,
-                  display: "flex", alignItems: "center", justifyContent: isMobile ? "flex-start" : "center", gap: 8,
-                  width: isMobile ? "100%" : 32,
-                  height: isMobile ? 44 : 32,
-                  padding: isMobile ? "0 12px" : 0,
-                  background: "none",
-                  border: "none",
-                  borderRadius: 9,
-                  color: pushStatus === "on"
-                    ? "var(--success)"
-                    : pushStatus === "unverified"
-                      ? "var(--warning)"
-                    : pushStatus === "error" || pushStatus === "denied"
-                      ? "var(--danger)"
-                      : "var(--text-dim)",
-                  cursor: ["checking", "unsupported", "enabling", "disabling", "denied"].includes(pushStatus) ? "not-allowed" : "pointer",
-                  opacity: pushStatus === "on" ? 1 : 0.6,
-                  transition: "background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard), opacity var(--duration-fast) var(--ease-standard)",
-                }}
-                onMouseEnter={(e) => {
-                  if (e.currentTarget.disabled) return;
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                  e.currentTarget.style.opacity = "1";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "none";
-                  e.currentTarget.style.opacity = pushStatus === "on" ? "1" : "0.6";
-                }}
-              >
-                {pushStatus === "on"
-                  ? <IconBell size={16} stroke={1.8} />
-                  : <IconBellOff size={16} stroke={1.8} />}
-                {isMobile && <span>{pushStatusLabel}</span>}
-              </button>
-            )}
+            {onSoundToggle !== undefined && <ToolbarAction
+              shape="frame"
+              label={soundEnabled ? t("chat.disableSound") : t("chat.enableSound")}
+              active={soundEnabled}
+              iconOnly
+              onClick={onSoundToggle}
+              icon={soundEnabled ? <IconVolume size={16} stroke={1.8} /> : <IconVolumeOff size={16} stroke={1.8} />}
+            />}
+            {pushStatus !== undefined && onPushToggle !== undefined && <ToolbarAction
+              shape="frame"
+              label={pushStatus === "on" ? t("chat.disablePush") : t("chat.enablePush")}
+              active={pushStatus === "on"}
+              disabled={["checking", "unsupported", "enabling", "disabling", "denied"].includes(pushStatus)}
+              iconOnly
+              onClick={onPushToggle}
+              icon={pushStatus === "on" ? <IconBell size={16} stroke={1.8} /> : <IconBellOff size={16} stroke={1.8} />}
+            />}
             {isMobile && pushStatusHint && (
               <div className="mobile-settings-note" role="status">
                 {pushStatusHint}
