@@ -1,7 +1,7 @@
 # Chat Frontend UI/UX 规范
 
 - 状态：规范基线
-- 版本：3.2
+- 版本：3.3
 - 适用项目：Chat Pi Web Frontend
 - 最后校正：2026-09-29
 -  art 方向：安静画廊级工具表面（littleplains / aside / resurf / daybridge 取精度不取装饰）；暖灰 + 墨字 + 克制紫品牌不变，深浅双主题同时成立
@@ -503,7 +503,7 @@ Agent 或开发者必须：
 | 选中背景 | `#EEEAF9` | `#363047` |
 | 控件边界 | `#898290` | `#817889` |
 
-全局 `--radius-control:10px`、`--radius-panel:14px`、`--radius-dialog:20px`（v2.3 起为唯一圆角体系；工具栏图标、按钮、输入、浮层全部对齐，禁止 5/6/8/9px 自创值）。列表可保留紧凑圆角；浮层使用共享阴影，普通内容不逐卡加投影。消息列 `workspace-message-column`、运行状态与输入框 `workspace-composer-column` 共用同一个 `var(--measure-prose,42rem)` 和同一条居中轴（右侧 `--composer-gutter:36px` 为 ChatMinimap 预留，Compact 置 0）。只改一侧、或给输入框硬编码像素宽度，会让消息区与下方输入框出现两条宽度和中心都不同的边（本轮缺陷）。宽屏模式仍是显式 opt-in，打开时消息列与输入框一起放宽。普通表单输入 40px、按钮至少 36px；Compact 主要触控 44px，输入字 16px。隐藏 radio 不继承可见输入的最小高度。
+全局 `--radius-control:10px`、`--radius-panel:14px`、`--radius-dialog:20px`（v2.3 起为唯一圆角体系；工具栏图标、按钮、输入、浮层全部对齐，禁止 5/6/8/9px 自创值）。列表可保留紧凑圆角；浮层使用共享阴影，普通内容不逐卡加投影。消息列 `workspace-message-column`、运行状态与输入框 `workspace-composer-column` 共用同一个 `var(--conversation-measure,var(--measure-prose,42rem))` 和同一条居中轴（右侧 `--composer-gutter:36px` 为 ChatMinimap 预留，Compact 置 0）；`--conversation-measure` 只由顶栏宽度滑杆写入（§20.7），默认自适应。只改一侧、或给输入框硬编码像素宽度，会让消息区与下方输入框出现两条宽度和中心都不同的边（本轮缺陷）。宽屏模式仍是显式 opt-in，打开时消息列与输入框一起放宽。普通表单输入 40px、按钮至少 36px；Compact 主要触控 44px，输入字 16px。隐藏 radio 不继承可见输入的最小高度。
 
 离线页、Manifest 启动画面与应用采用同一基础色。状态颜色使用已有 success/warning/danger 角色；diff、工具错误与成功反馈同样遵守明暗主题。品牌标记、用户头像、图片、代码高亮保留其内容语义，不能机械替换。
 
@@ -623,7 +623,7 @@ Friend 会话的顶栏用“任务与归档”动作取代会话名标题（后�
 
 | 需求 | 使用机制 | 禁止 |
 |---|---|---|
-| 阅读行长与节奏 | `--measure-prose:42rem`、`--rhythm-body:1.7`、`--tracking-body:0.002em`（`precision.css`）；`.markdown-body`、设置正文、目录详情共享；消息列、运行状态与输入框（`workspace-composer-column`）严格共用同一 token、同一居中轴与同一 `--composer-gutter` | 逐页自定行长、连续 1px 字号微调、只给消息列或输入框单独设宽度、给输入框再写一个像素上限 |
+| 阅读行长与节奏 | `--measure-prose:42rem` 为默认值，`--conversation-measure` 为顶栏滑杆写入的用户值（§20.7）、`--rhythm-body:1.7`、`--tracking-body:0.002em`（`precision.css`）；`.markdown-body`、设置正文、目录详情共享；消息列、运行状态与输入框（`workspace-composer-column`）严格共用同一变量、同一居中轴与同一 `--composer-gutter` | 逐页自定行长、连续 1px 字号微调、只给消息列或输入框单独设宽度、给输入框再写一个像素上限、绕开滑杆直接写会话宽度 |
 | 表面分层 | 常驻面板背景 + `--surface-fine` 细边；浮层才用 `--shadow-popover` / `--shadow-dialog` 两档 | 常驻内容逐卡加投影、自造单层阴影 |
 | 圆角 | `--radius-control:10px` / `--radius-panel:14px` / `--radius-dialog:20px` 唯一体系 | 5/6/8/9px 自创值 |
 | 语义色 | `--on-accent`、`--danger`、`--success`、`--warning`、`--accent`；t/s 徽标用 `--bg-selected` + `--text-muted` | `v2.3 §4.1` 所列硬编码色直写 |
@@ -713,6 +713,20 @@ skill 内容与本文冲突时以本文为准；skill 中的项目映射（token
 
 新增任何侧面板必须复用该原语，不允许再写一套宽度过渡或条件渲染的“瞬现”区域（本轮修的就是任务与归档区域瞬现、与项目资料开合不一致）。
 
-### 20.7 门禁
+### 20.7 会话宽度
+
+会话列的阅读宽度由顶栏右侧的宽度滑杆控制（`components/ui/MeasureSlider.tsx`）：
+
+- **一个值**：滑杆只改 `--conversation-measure`（写在 chat surface 上），消息列、运行状态、输入框都读 `var(--conversation-measure, var(--measure-prose, 42rem))`。任何元素都不得再写自己的宽度上限——消息区与输入框错位就是各自硬编码像素宽度造成的（§7 阅读面）。
+- **交互**：右滑扩宽、左滑缩短；`←/→` 步进 12px、`Shift` 32px、`Home/End` 到端值、`Enter` 或双击恢复自适应；拖动中 `Esc` 放弃本次改动（回到拖动前的值与状态）。拖动必须走 `useResizablePanel` 的 `separatorProps`（pointer capture、失焦/取消处理、body 光标与 `user-select`），不得另写一套拖拽。
+- **范围**：`30rem–60rem`（480–960px，常量在 `lib/conversation-measure.ts`）；窄窗口由 `max-width` 自然收窄，不溢出、不挤压侧栏。
+- **自适应**：默认自适应（不写像素覆盖、跟随 `--measure-prose` 与窗口）；拖动即进入手动并按设备持久化（`chat:conversation-measure`，`auto` 表示自适应）。不按 Session/Project 存储。
+- **样式**：轨道 96×3px、圆角 999px、`--border`；滑块 14px 圆、`--text-muted`，hover 提到 `--text`，拖动中 `--accent`；命中区桌面 36px 高、Compact 44px；无边框无阴影，`cursor: col-resize`；动效只做颜色与位置，用 `--duration-fast` + `--ease-standard`，拖动期间关过渡。
+- **可达性**：`role="separator"` + `aria-label`（`会话宽度 · 48rem`，自适应时后缀「自适应」）+ `aria-valuemin/max/now/valuetext`，`Hint` 同步显示同一读数；键盘可达焦点。
+- **Compact**：不渲染滑杆（宽度按屏宽），只有桌面/平板入口。
+
+### 20.8 门禁
 
 `lib/motion-contract.test.mjs` 守住：侧面板必须复用 `.workspace-dock`（含 class 开合与固定内宽）、工具栏动作只能由 `ToolbarAction` 声明（页面不得自造带文字的工具栏按钮）；动效时长与缓动必须来自 Token、pressed 不使用 `filter: brightness()`、每个遮罩必须淡入（Radix 还需淡出）、按钮与模态保持唯一原语、手写模态清单不得无声扩张、组件用到的每个 `ui-*` 类必须在样式表中有对应规则（防拼写漂移）。
+
+`lib/measure-contract.test.mjs` 守住会话列只有一个宽度来源：`--conversation-measure` 只能由滑杆写入、滑杆不得自带拖拽/存储实现、消息列与输入框必须读同一变量、Compact 必须归零 `--composer-gutter`；`lib/conversation-measure.test.mjs` 覆盖夹取、步进、读数格式与 `auto` 哨兵。

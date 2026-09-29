@@ -113,14 +113,16 @@
 
 /* Standard prose and expanded technical content share the same composer alignment.
    Art direction: gallery measure (42rem) with prose rhythm; wide mode stays opt-in.
-   Messages, run status and the composer are one column: same --measure-prose, same
-   centre. The 36px right gutter keeps room for the ChatMinimap, which takes layout
-   space out of the message area; without it the composer would centre 18px to the
-   right of the messages above it (a hardcoded width there was the reported bug). */
-.workspace-message-column { max-width: var(--measure-prose, 42rem); }
+   Messages, run status and the composer are one column: same measure, same centre.
+   The value comes from --conversation-measure (the top bar slider, UI/UX §20.7) and
+   falls back to --measure-prose. The 36px right gutter keeps room for the
+   ChatMinimap, which takes layout space out of the message area; without it the
+   composer would centre 18px right of the messages above it (a hardcoded width
+   here was the reported bug). */
+.workspace-message-column { max-width: var(--conversation-measure, var(--measure-prose, 42rem)); }
 .workspace-composer-column {
   width: 100%;
-  max-width: calc(var(--measure-prose, 42rem) + 52px + 16px);
+  max-width: calc(var(--conversation-measure, var(--measure-prose, 42rem)) + 52px + 16px);
   margin: 0 auto;
   padding: 0 16px 8px;
   padding-right: calc(16px + var(--composer-gutter, 36px));

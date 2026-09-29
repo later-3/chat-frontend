@@ -15,6 +15,8 @@ interface DragState {
   pointerId: number;
   startX: number;
   startWidth: number;
+  /** Auto state before the drag, so Escape can put it back. */
+  wasAuto: boolean;
   target: HTMLDivElement;
   previousCursor: string;
   previousUserSelect: string;
@@ -22,6 +24,12 @@ interface DragState {
 
 interface UseResizablePanelOptions {
   ariaLabel: string;
+  /**
+   * Optional: lets the preference also be "auto" (UI/UX §20.7 会话宽度).
+   * The sentinel is what storage keeps for auto; the CSS variable is then
+   * removed instead of set, and resetWidth() returns to auto.
+   */
+  autoSentinel?: string;
   cssVariable: `--${string}`;
   defaultWidth: number;
   getDefaultWidth?: () => number;
@@ -39,18 +47,22 @@ interface CommitOptions {
   persist?: boolean;
 }
 
-function readStoredWidth(storageKey: string): number | null {
+function readStoredValue(storageKey: string): string | null {
   try {
-    const stored = window.localStorage.getItem(storageKey);
-    if (stored === null) return null;
-    const parsed = Number.parseInt(stored, 10);
-    return Number.isFinite(parsed) ? parsed : null;
+    return window.localStorage.getItem(storageKey);
   } catch {
     return null;
   }
 }
 
-function writeStoredWidth(storageKey: string, width: number): void {
+function readStoredWidth(storageKey: string): number | null {
+  const stored = readStoredValue(storageKey);
+  if (stored === null) return null;
+  const parsed = Number.parseInt(stored, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function writeStoredWidth(storageKey: string, width: number | string): void {
   try {
     window.localStorage.setItem(storageKey, String(width));
   } catch {
@@ -61,6 +73,7 @@ function writeStoredWidth(storageKey: string, width: number): void {
 export function useResizablePanel(options: UseResizablePanelOptions) {
   const {
     ariaLabel,
+    autoSentinel,
     cssVariable,
     defaultWidth,
     getDefaultWidth,
@@ -76,7 +89,9 @@ export function useResizablePanel(options: UseResizablePanelOptions) {
   const dragRef = useRef<DragState | null>(null);
   const restoredRef = useRef(false);
   const preferredWidthRef = useRef(defaultWidth);
+  const autoRef = useRef(false);
   const [width, setWidth] = useState(defaultWidth);
+  const [isAuto, setIsAuto] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
@@ -97,12 +112,20 @@ export function useResizablePanel(options: UseResizablePanelOptions) {
 
   const applyLiveWidth = useCallback((nextWidth: number) => {
     widthRef.current = nextWidth;
-    panelRef.current?.style.setProperty(cssVariable, `${nextWidth}px`);
+    const panel = panelRef.current;
+    if (!panel) return;
+    // Auto keeps no pixel override, so the column falls back to --measure-prose.
+    if (autoRef.current) panel.style.removeProperty(cssVariable);
+    else panel.style.setProperty(cssVariable, `${nextWidth}px`);
   }, [cssVariable, widthRef]);
 
   const commitWidth = useCallback((candidate: number, commitOptions: CommitOptions = {}) => {
     const { forcePersist = false, persist = true } = commitOptions;
-    if (persist) preferredWidthRef.current = clampPanelWidth(candidate, minWidth, maxWidth);
+    if (persist) {
+      preferredWidthRef.current = clampPanelWidth(candidate, minWidth, maxWidth);
+      autoRef.current = false;
+      setIsAuto(false);
+    }
     const nextWidth = clampWidth(candidate);
     const changed = nextWidth !== widthRef.current;
     applyLiveWidth(nextWidth);
@@ -116,13 +139,12 @@ export function useResizablePanel(options: UseResizablePanelOptions) {
     document.body.style.userSelect = drag.previousUserSelect;
   }, []);
 
-  const finishResize = useCallback((pointerId: number) => {
+  const releaseDrag = useCallback((pointerId: number): DragState | null => {
     const drag = dragRef.current;
-    if (!drag || drag.pointerId !== pointerId) return;
+    if (!drag || drag.pointerId !== pointerId) return null;
     dragRef.current = null;
     restoreBodyState(drag);
     setIsResizing(false);
-    commitWidth(widthRef.current, { forcePersist: true });
 
     try {
       if (drag.target.hasPointerCapture(pointerId)) {
@@ -131,7 +153,24 @@ export function useResizablePanel(options: UseResizablePanelOptions) {
     } catch {
       // The browser may have already released capture after pointer cancellation.
     }
-  }, [commitWidth, restoreBodyState, widthRef]);
+    return drag;
+  }, [restoreBodyState]);
+
+  const finishResize = useCallback((pointerId: number) => {
+    const drag = releaseDrag(pointerId);
+    if (!drag) return;
+    commitWidth(widthRef.current, { forcePersist: true });
+  }, [commitWidth, releaseDrag, widthRef]);
+
+  /** Escape during a drag gives up on the change and restores the previous value. */
+  const cancelResize = useCallback((pointerId: number) => {
+    const drag = releaseDrag(pointerId);
+    if (!drag) return;
+    autoRef.current = drag.wasAuto;
+    setIsAuto(drag.wasAuto);
+    applyLiveWidth(drag.startWidth);
+    setWidth(drag.startWidth);
+  }, [applyLiveWidth, releaseDrag]);
 
   const onPointerDown = useCallback((event: PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
@@ -140,6 +179,10 @@ export function useResizablePanel(options: UseResizablePanelOptions) {
 
     const activeDrag = dragRef.current;
     if (activeDrag) finishResize(activeDrag.pointerId);
+    // Dragging is a manual choice; the value it lands on gets persisted.
+    const wasAuto = autoRef.current;
+    autoRef.current = false;
+    setIsAuto(false);
 
     const target = event.currentTarget;
     target.focus({ preventScroll: true });
@@ -148,6 +191,7 @@ export function useResizablePanel(options: UseResizablePanelOptions) {
       pointerId: event.pointerId,
       startX: event.clientX,
       startWidth: widthRef.current,
+      wasAuto,
       target,
       previousCursor: document.body.style.cursor,
       previousUserSelect: document.body.style.userSelect,
@@ -187,8 +231,16 @@ export function useResizablePanel(options: UseResizablePanelOptions) {
 
   const resetWidth = useCallback(() => {
     const nextDefault = getDefaultWidth?.() ?? defaultWidth;
+    if (autoSentinel !== undefined) {
+      autoRef.current = true;
+      setIsAuto(true);
+      preferredWidthRef.current = clampPanelWidth(nextDefault, minWidth, maxWidth);
+      writeStoredWidth(storageKey, autoSentinel);
+      commitWidth(nextDefault, { persist: false });
+      return;
+    }
     commitWidth(nextDefault, { forcePersist: true });
-  }, [commitWidth, defaultWidth, getDefaultWidth]);
+  }, [autoSentinel, commitWidth, defaultWidth, getDefaultWidth, minWidth, maxWidth, storageKey]);
 
   const reclampWidth = useCallback(() => {
     commitWidth(preferredWidthRef.current, { persist: false });
@@ -199,7 +251,12 @@ export function useResizablePanel(options: UseResizablePanelOptions) {
     const growKey = growthDirection === "right" ? "ArrowRight" : "ArrowLeft";
     const shrinkKey = growthDirection === "right" ? "ArrowLeft" : "ArrowRight";
 
-    if (event.key === growKey) {
+    if (event.key === "Escape") {
+      const drag = dragRef.current;
+      if (!drag) return;
+      event.preventDefault();
+      cancelResize(drag.pointerId);
+    } else if (event.key === growKey) {
       event.preventDefault();
       commitWidth(clampDragWidth(widthRef.current + step), { forcePersist: true });
     } else if (event.key === shrinkKey) {
@@ -215,17 +272,25 @@ export function useResizablePanel(options: UseResizablePanelOptions) {
       event.preventDefault();
       resetWidth();
     }
-  }, [commitWidth, clampDragWidth, effectiveMaxWidth, growthDirection, minWidth, maxWidth, resetWidth, widthRef]);
+  }, [cancelResize, commitWidth, clampDragWidth, effectiveMaxWidth, growthDirection, minWidth, maxWidth, resetWidth, widthRef]);
 
   useEffect(() => {
     if (restoredRef.current) return;
     restoredRef.current = true;
 
+    if (autoSentinel !== undefined && readStoredValue(storageKey) === autoSentinel) {
+      autoRef.current = true;
+      setIsAuto(true);
+      preferredWidthRef.current = clampPanelWidth(getDefaultWidth?.() ?? defaultWidth, minWidth, maxWidth);
+      commitWidth(preferredWidthRef.current, { persist: false });
+      return;
+    }
+
     const storedWidth = readStoredWidth(storageKey);
     const candidate = storedWidth ?? getDefaultWidth?.() ?? defaultWidth;
     preferredWidthRef.current = clampPanelWidth(candidate, minWidth, maxWidth);
     commitWidth(preferredWidthRef.current, { persist: false });
-  }, [commitWidth, defaultWidth, getDefaultWidth, storageKey]);
+  }, [autoSentinel, commitWidth, defaultWidth, getDefaultWidth, maxWidth, minWidth, storageKey]);
 
   useEffect(() => {
     if (!restoredRef.current) return;
@@ -265,6 +330,7 @@ export function useResizablePanel(options: UseResizablePanelOptions) {
   }, [restoreBodyState]);
 
   return {
+    isAuto,
     isResizing,
     panelRef,
     reclampWidth,

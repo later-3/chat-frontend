@@ -636,6 +636,8 @@ export const zhCNLocale: LocalePlugin = {
     "layout.resizeSidebar": "调整侧边栏宽度",
     "layout.resizeFilePanel": "调整文件面板宽度",
     "layout.resizeHint": "拖动调整宽度。双击或按 Enter 恢复默认值。",
+    "layout.conversationWidth": "会话宽度",
+    "layout.conversationWidthAuto": "自适应",
     "sidebar.new": "新建",
     "sidebar.newSessionTitle": "在 {path} 中新建会话",
     "sidebar.refresh": "刷新",

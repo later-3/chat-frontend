@@ -636,6 +636,8 @@ export const enLocale: LocalePlugin = {
     "layout.resizeSidebar": "Resize sidebar",
     "layout.resizeFilePanel": "Resize file panel",
     "layout.resizeHint": "Drag to resize. Double-click or press Enter to reset.",
+    "layout.conversationWidth": "Conversation width",
+    "layout.conversationWidthAuto": "Fits the window",
     "sidebar.new": "New",
     "sidebar.newSessionTitle": "New session in {path}",
     "sidebar.refresh": "Refresh",
