@@ -73,6 +73,7 @@ Agent Group与Agent Memory通过Backend的安全投影进入浏览器。Frontend
 |---|---|
 | `src/` | 应用入口和全局样式 |
 | `components/` | 页面区域和可复用 React 组件 |
+| `components/models/` | Models 设置页的独立模块（`ProviderIcon`、`ProviderPicker`、共享 provider 合同）；页面本体只保留目录树与详情编排 |
 | `hooks/` | React 状态编排、生命周期和浏览器能力 |
 | `lib/` | HTTP 合同、解析器和不依赖视图的业务逻辑 |
 | `lib/i18n/` | 文案注册、格式化和中英文消息 |
