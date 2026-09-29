@@ -3,7 +3,7 @@
 import { InterfaceFeedback } from "./InterfaceFeedback";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { IconCalendar, IconChecklist, IconPlus, IconRefresh, IconSettings } from "@tabler/icons-react";
+import { IconPlus, IconRefresh, IconSettings } from "@tabler/icons-react";
 import { useLongAgentPresence } from "@/hooks/useLongAgentPresence";
 import { useI18n } from "@/hooks/useI18n";
 import {
@@ -15,8 +15,6 @@ import {
 } from "@/lib/long-agents-browser";
 import { friendDateFromUrl } from "@/lib/friend-calendar";
 import { FriendWorkPanel } from "./FriendWorkPanel";
-import { FriendCalendar } from "./FriendCalendar";
-import { LongAgentTasksPanel } from "./LongAgentTasksPanel";
 import styles from "./ProjectLongAgentSection.module.css";
 import { LongAgentAvatarView } from "./LongAgentAvatar";
 import { LongAgentSettingsPanel } from "./LongAgentSettingsPanel";
@@ -57,15 +55,15 @@ export function ProjectLongAgentSection({
     return () => window.clearTimeout(timer);
   }, [openingAgentId]);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(() => friendDateFromUrl(window.location.href));
+  // v2.3: date state lives in the FriendInspector (friendDate ?? today).
+  // The sidebar only needs the live friendDate for the day projection.
+  const [friendDate, setFriendDate] = useState(() => friendDateFromUrl(window.location.href));
   useEffect(() => {
-    const restore = () => setSelectedDate(friendDateFromUrl(window.location.href));
+    const restore = () => setFriendDate(friendDateFromUrl(window.location.href));
     restore();
     window.addEventListener("popstate", restore);
     return () => window.removeEventListener("popstate", restore);
   }, [selectedSessionId]);
-  const [calendarAgent, setCalendarAgent] = useState<LongAgentSummary | null>(null);
-  const [tasksAgent, setTasksAgent] = useState<LongAgentSummary | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createDraft, setCreateDraft] = useState({ id: "", name: "", description: "" });
   const [creating, setCreating] = useState(false);
@@ -160,7 +158,6 @@ export function ProjectLongAgentSection({
           }
         : item));
       await onOpenSession(started.primarySessionId, sessionProjectId);
-      setSelectedDate(null);
       if (closeAfterOpen) onRequestClose?.();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -313,12 +310,6 @@ export function ProjectLongAgentSection({
                       {showOpening ? t("sidebar.longAgentOpening") : action}
                     </span>
                   </button>
-                  <button type="button" className={styles.iconButton} data-friend-tasks-open={agent.id}
-                    aria-label={t("taskPanel.title", { name: agent.name })} title={t("taskPanel.title", { name: agent.name })}
-                    onClick={() => setTasksAgent(agent)}><IconChecklist size={18} aria-hidden="true" /></button>
-                  <button type="button" className={styles.iconButton} data-friend-calendar-open={agent.id}
-                    aria-label={t("friendCalendar.title", { name: agent.name })} title={t("friendCalendar.title", { name: agent.name })}
-                    onClick={() => setCalendarAgent(agent)}><IconCalendar size={18} aria-hidden="true" /></button>
                 </li>
               );
             })}
@@ -327,25 +318,13 @@ export function ProjectLongAgentSection({
       )}
 
       {activeAgent && selectedSessionId && <FriendWorkPanel key={activeAgent.id} agentId={activeAgent.id}
-        sessionId={selectedSessionId} date={selectedDate} onOpenSession={async (id, ownerProjectId, date) => {
+        sessionId={selectedSessionId} date={friendDate} onOpenSession={async (id, ownerProjectId, date) => {
           await onOpenSession(id, ownerProjectId, date);
           if (closeAfterOpen) onRequestClose?.();
         }} />}
 
       {error && agents.length > 0 && <p className={styles.inlineError} role="status"><InterfaceFeedback message={error} /></p>}
     </section>
-    {tasksAgent && <LongAgentTasksPanel key={tasksAgent.id} agentId={tasksAgent.id} name={tasksAgent.name}
-      onClose={() => setTasksAgent(null)} onOpenSession={async (id, ownerProjectId, date) => {
-        await onOpenSession(id, ownerProjectId, date);
-        if (date !== undefined) setSelectedDate(date);
-        if (closeAfterOpen) onRequestClose?.();
-      }} />}
-    {calendarAgent && <FriendCalendar key={calendarAgent.id} agentId={calendarAgent.id} name={calendarAgent.name}
-      selectedSessionId={selectedSessionId} selectedDate={selectedDate} onClose={() => setCalendarAgent(null)} onOpenSession={async (id, ownerProjectId, date) => {
-        await onOpenSession(id, ownerProjectId, date);
-        setSelectedDate(date ?? null);
-        if (closeAfterOpen) onRequestClose?.();
-      }} />}
     {settingsOpen && agents.length > 0 && (
       <LongAgentSettingsPanel
         agents={agents}
