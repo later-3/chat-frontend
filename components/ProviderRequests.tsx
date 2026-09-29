@@ -158,7 +158,7 @@ function TextPart({ text }: { text: string }) {
   const long = text.length > 600;
   const shown = expanded || !long ? text : text.slice(0, 600);
   return (
-    <div style={{ minWidth: 0 }}>
+    <div className="ui-minw">
       <pre
         style={{
           margin: 0,
@@ -213,8 +213,8 @@ function MessagePart({ part }: { part: unknown }) {
   if (norm === "tool_use" || norm === "function_call") {
     const name = (p as { name?: string }).name ?? tr("request.unknown");
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <div style={{ fontSize: 12, color: "var(--warning)", fontFamily: "var(--font-mono)" }}>
+      <div className="ui-stack-4">
+        <div className="ui-mono-warning">
           {tr("request.toolCall")}: {name}
         </div>
         <JsonBlock value={parseMaybeJson(p.input ?? p.arguments)} maxHeight={240} />
@@ -223,8 +223,8 @@ function MessagePart({ part }: { part: unknown }) {
   }
   if (norm === "tool_result" || norm === "function_call_output") {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <div style={{ fontSize: 12, color: "var(--warning)", fontFamily: "var(--font-mono)" }}>
+      <div className="ui-stack-4">
+        <div className="ui-mono-warning">
           {tr("request.toolResult")}
         </div>
         <JsonBlock value={parseMaybeJson(p.content ?? p.output)} maxHeight={240} />
@@ -284,8 +284,8 @@ function MessageView({ message }: { message: unknown }) {
           const fn = (t.function ?? {}) as Record<string, unknown>;
           const name = typeof fn.name === "string" ? fn.name : tr("request.unknown");
           return (
-            <div key={i} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <div style={{ fontSize: 12, color: "var(--warning)", fontFamily: "var(--font-mono)" }}>
+            <div key={i} className="ui-stack-4">
+              <div className="ui-mono-warning">
                 {tr("request.toolCall")}: {name}
               </div>
               <JsonBlock value={parseMaybeJson(fn.arguments)} maxHeight={240} />
@@ -309,7 +309,7 @@ function ToolView({ tool }: { tool: unknown }) {
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", fontFamily: "var(--font-mono)" }}>{name}</span>
         {typeof t.type === "string" && (
-          <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{t.type}</span>
+          <span className="ui-dim-12">{t.type}</span>
         )}
       </div>
       {desc && <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>{desc}</div>}
@@ -345,7 +345,7 @@ function Detail({ detail }: { detail: ProviderRequestDetail }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
       <div>
-        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 8 }}>{tr("interface.summary")}</div>
+        <div className="ui-subheading">{tr("interface.summary")}</div>
         <div
           style={{
             display: "grid",
@@ -357,13 +357,13 @@ function Detail({ detail }: { detail: ProviderRequestDetail }) {
         >
           {summaryRows.map(([label, value]) => (
             <div key={String(label)} style={{ display: "contents" }}>
-              <div style={{ color: "var(--text-dim)" }}>{label}</div>
-              <div style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", overflowWrap: "anywhere" }}>{value}</div>
+              <div className="ui-dim">{label}</div>
+              <div className="ui-mono-muted">{value}</div>
             </div>
           ))}
           {roles.length > 0 && (
             <>
-              <div style={{ color: "var(--text-dim)" }}>{tr("interface.by.role")}</div>
+              <div className="ui-dim">{tr("interface.by.role")}</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {roles.map(([role, count]) => (
                   <span
@@ -387,23 +387,23 @@ function Detail({ detail }: { detail: ProviderRequestDetail }) {
       </div>
 
       <div>
-        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 8 }}>{tr("request.messageCount", { count: messages.length })}
+        <div className="ui-subheading">{tr("request.messageCount", { count: messages.length })}
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div className="ui-stack-6">
           {messages.map((m, i) => (
             <MessageView key={i} message={m} />
           ))}
           {messages.length === 0 && (
-            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>{tr("interface.no.messages.in.this.request")}</div>
+            <div className="ui-dim-12">{tr("interface.no.messages.in.this.request")}</div>
           )}
         </div>
       </div>
 
       {tools.length > 0 && (
         <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", marginBottom: 8 }}>{tr("request.toolCount", { count: tools.length })}
+          <div className="ui-subheading">{tr("request.toolCount", { count: tools.length })}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div className="ui-stack-6">
             {tools.map((t, i) => (
               <ToolView key={i} tool={t} />
             ))}
@@ -561,7 +561,7 @@ export function ProviderRequests({ cwd, onClose }: { cwd: string; onClose: () =>
       {/* Backdrop (window mode only) */}
       {!fullscreen && (
         <div
-          style={{ position: "fixed", inset: 0, zIndex: 1099, background: "rgba(0,0,0,0.45)" }}
+          className="ui-scrim"
           onClick={onClose}
         />
       )}
@@ -714,9 +714,9 @@ export function ProviderRequests({ cwd, onClose }: { cwd: string; onClose: () =>
                             {r.model}
                           </span>
                         )}
-                        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{r.messageCount}{tr("interface.messages.2")}</span>
-                        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{r.toolCount}{tr("interface.tools.3")}</span>
-                        <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{fmtSize(r.size)}</span>
+                        <span className="ui-dim-12">{r.messageCount}{tr("interface.messages.2")}</span>
+                        <span className="ui-dim-12">{r.toolCount}{tr("interface.tools.3")}</span>
+                        <span className="ui-dim-12">{fmtSize(r.size)}</span>
                       </div>
                       <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 3 }}>
                         {fmtTime(r.mtime)}

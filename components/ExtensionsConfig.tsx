@@ -91,8 +91,8 @@ function ExtensionDetail({
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, minWidth: 0, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 180, flex: 1 }}>
           {ext.canToggle ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div className="ui-stack-5">
+              <div className="ui-row-center-6">
                 <span style={{ fontSize: 12, color: "var(--text-dim)", width: 52, flexShrink: 0 }}>{t("design.persistentSetting")}</span>
                 <Toggle
                   enabled={enabled}
@@ -102,7 +102,7 @@ function ExtensionDetail({
                 />
               </div>
               {sessionId && enabled && (
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div className="ui-row-center-6">
                   <span style={{ fontSize: 12, color: "var(--text-dim)", width: 52, flexShrink: 0 }}>{t("design.thisSession")}</span>
                   <Toggle
                     enabled={!sessionDisabled}
@@ -171,17 +171,17 @@ function ExtensionDetail({
           lineHeight: 1.45,
         }}
       >
-        <div style={{ color: "var(--text-dim)" }}>{t("design.resourcePath")}</div>
-        <div style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", overflowWrap: "anywhere" }}>
+        <div className="ui-dim">{t("design.resourcePath")}</div>
+        <div className="ui-mono-muted">
           {shortenPath(ext.enabled ? ext.path : ext.disabledPath ?? ext.path)}
         </div>
-        <div style={{ color: "var(--text-dim)" }}>{t("design.resourceOrigin")}</div>
-        <div style={{ color: "var(--text-muted)" }}>
+        <div className="ui-dim">{t("design.resourceOrigin")}</div>
+        <div className="ui-muted">
           {t(ext.origin === "package" ? "design.packageOrigin" : "design.fileOrigin")}
         </div>
-        <div style={{ color: "var(--text-dim)" }}>{t("design.resourceSource")}</div>
+        <div className="ui-dim">{t("design.resourceSource")}</div>
         <div style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>{ext.source}</div>
-        <div style={{ color: "var(--text-dim)" }}>{t("design.workingDirectory")}</div>
+        <div className="ui-dim">{t("design.workingDirectory")}</div>
         <div style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", overflowWrap: "anywhere" }}>
           {shortenPath(cwd)}
         </div>
@@ -199,7 +199,7 @@ function ExtensionDetail({
       )}
 
       {actionMessage && <div style={{ fontSize: 12, color: "var(--success)" }}>{actionMessage}</div>}
-      {actionError && <div style={{ fontSize: 12, color: "var(--danger)", whiteSpace: "pre-wrap" }}><InterfaceFeedback message={actionError} /></div>}
+      {actionError && <div className="ui-error-12"><InterfaceFeedback message={actionError} /></div>}
     </div>
   );
 }
@@ -320,16 +320,8 @@ export function ExtensionsConfig({
   }
 
   return (
-    <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("interface.extensions")} className="configuration-dialog"
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 1000,
-        background: "rgba(0,0,0,0.35)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
+    <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("interface.extensions")} className="configuration-dialog ui-scrim-center"
+
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -361,7 +353,7 @@ export function ExtensionsConfig({
           }}
         >
           <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>{t("interface.extensions")}</span>
+            <span className="ui-title-15">{t("interface.extensions")}</span>
             <code
               style={{
                 fontSize: 12,
@@ -407,7 +399,7 @@ export function ExtensionsConfig({
               }}
             >
               {loading ? (
-                <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>{t("i18n.loading")}</div>
+                <div className="ui-list-note">{t("i18n.loading")}</div>
               ) : error ? (
                 <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--danger)" }}><InterfaceFeedback message={error} /></div>
               ) : extensions.length === 0 ? (
@@ -416,7 +408,7 @@ export function ExtensionsConfig({
                 </div>
               ) : (
                 grouped.map((group) => (
-                  <div key={group.scope} style={{ marginBottom: 6 }}>
+                  <div key={group.scope} className="ui-mb-6">
                     <div
                       style={{
                         padding: "4px 8px 3px",
@@ -463,7 +455,7 @@ export function ExtensionsConfig({
                               background: statusColor(ext),
                             }}
                           />
-                          <div style={{ minWidth: 0, flex: 1 }}>
+                          <div className="ui-grow">
                             <div
                               style={{
                                 fontSize: 12,
@@ -498,7 +490,7 @@ export function ExtensionsConfig({
               )}
             </div>
 
-            <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+            <div className="ui-scroll-20">
               {loading ? null : selectedExt ? (
                 <ExtensionDetail
                   ext={selectedExt}

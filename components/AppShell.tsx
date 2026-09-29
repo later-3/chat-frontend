@@ -7,7 +7,8 @@ import { useState, useCallback, useRef, useEffect, useLayoutEffect } from "react
 import { FriendInspector } from "./FriendInspector";
 import { WorkspaceNavigation, type WorkspaceSection } from "./WorkspaceNavigation";
 import { WorkspaceSettings } from "./WorkspaceSettings";
-import { IconLayoutSidebar, IconFolder, IconX } from "@tabler/icons-react";
+import { IconLayoutSidebar, IconFolder, IconX, IconCalendarStats } from "@tabler/icons-react";
+import { Hint } from "./ui/Tooltip";
 import { useBrowserRouter } from "@/lib/browser-router";
 import { useGlobalKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionSidebar, type MobileWorkspaceView } from "./SessionSidebar";
@@ -1667,24 +1668,20 @@ export function AppShell({
           style={{ flexShrink: 0, background: "var(--bg-panel)" }}
         >
         <div className="workspace-conversation-toolbar">
-          {selectedSession?.owner.type === "long-agent" ? (
-            <button
-              type="button"
-              className="workspace-conversation-heading workspace-conversation-toggle"
-              aria-expanded={friendPanelOpen}
-              aria-controls="friend-day-panel"
-              data-friend-panel-toggle={selectedSession.owner.longAgentId}
-              title={selectedSession.name || undefined}
-              onClick={() => setFriendPanelOpen(open => !open)}
-            >
-              <span>{selectedSession.name || selectedSession.owner.longAgentId}</span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
-                className={friendPanelOpen ? "workspace-toggle-chevron is-open" : "workspace-toggle-chevron"}>
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </button>
-          ) : (
-            <h1 className="workspace-conversation-heading" title={selectedSession?.name || undefined}>{contentPanel === "long-agents" ? translate("workspaceNav.coworkers") : selectedSession?.name || translate("i18n.newSession")}</h1>
+          <h1 className="workspace-conversation-heading" title={selectedSession?.name || undefined}>{contentPanel === "long-agents" ? (selectedSession?.owner.type === "long-agent" ? selectedSession.name || selectedSession.owner.longAgentId : translate("workspaceNav.coworkers")) : selectedSession?.name || translate("i18n.newSession")}</h1>
+          {selectedSession?.owner.type === "long-agent" && (
+            // The control names its purpose (tasks + date archive); the Session title
+            // stays a title and never doubles as a button label.
+            <Hint label={translate("friendInspector.heading")}>
+              <Button iconOnly variant="ghost" type="button" className="workspace-icon"
+                aria-label={translate("friendInspector.heading")}
+                aria-expanded={friendPanelOpen}
+                aria-controls="friend-day-panel"
+                data-friend-panel-toggle={selectedSession.owner.longAgentId}
+                onClick={() => setFriendPanelOpen(open => !open)}>
+                <IconCalendarStats size={20} />
+              </Button>
+            </Hint>
           )}
           {isMobile && (
             <div
@@ -2108,6 +2105,7 @@ export function AppShell({
                 sessionId={selectedSession.id}
                 date={friendDate}
                 onOpenSession={handleOpenExistingSession}
+                onClose={() => setFriendPanelOpen(false)}
               />
             </div>
           )}

@@ -413,8 +413,8 @@ function ProviderDetail({ name, provider, apiOptions, onChange, onRename, onDele
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+    <div className="ui-stack-16">
+      <div className="ui-row-between">
          <SectionTitle>{t("i18n.provider")}</SectionTitle>
         <button onClick={onDelete}
           style={{ padding: "3px 8px", background: "none", border: "1px solid var(--danger)", borderRadius: 4, color: "var(--danger)", cursor: "pointer", fontSize: 11 }}>
@@ -440,7 +440,7 @@ function ProviderDetail({ name, provider, apiOptions, onChange, onRename, onDele
       <Field label={t("interface.api.key")}>
         <SecretTextInput value={provider.apiKey ?? ""} onChange={(v) => set("apiKey", v || undefined)}
           placeholder={t("interface.env.var.name.shell.command.or.a.key")} mono />
-        <span style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2 }}>
+        <span className="ui-dim-12-spaced">
           {t("design.keySourceHint")}
         </span>
       </Field>
@@ -454,7 +454,7 @@ function ProviderDetail({ name, provider, apiOptions, onChange, onRename, onDele
           headers={provider.headers}
           onChange={(headers) => set("headers", headers)}
         />
-        <span style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2 }}>
+        <span className="ui-dim-12-spaced">
           {t("design.headersHint")}
         </span>
       </Field>
@@ -530,7 +530,7 @@ function ProviderDetail({ name, provider, apiOptions, onChange, onRename, onDele
                       onChange={() => toggleDiscoveredModel(model.id)}
                       style={{ width: 13, height: 13, accentColor: "var(--accent)", flexShrink: 0 }}
                     />
-                    <span style={{ minWidth: 0, flex: 1 }}>
+                    <span className="ui-grow">
                       <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text)", fontSize: 11 }}>{model.name ?? model.id}</span>
                       {model.name && <code style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text-dim)", fontSize: 12, fontFamily: "var(--font-mono)" }}>{model.id}</code>}
                     </span>
@@ -650,9 +650,9 @@ function HeaderListEditor({ headers, onChange }: {
     lineHeight: 1,
   } satisfies React.CSSProperties;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div className="ui-stack-6">
       {rows.map((row) => (
-        <div key={row.id} style={{ display: "flex", gap: 6 }}>
+        <div key={row.id} className="ui-row-6">
           <input value={row.name} onChange={(e) => setEntry(row.id, { name: e.target.value })}
             aria-label={t("design.headerName")} placeholder={t("interface.header.name")} style={{ ...inputStyle, fontFamily: "var(--font-mono)", flex: 1 }} />
           <input value={row.value} onChange={(e) => setEntry(row.id, { value: e.target.value })}
@@ -937,8 +937,8 @@ function ModelDetail({
     : t("models.providerDefaults");
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+    <div className="ui-stack-16">
+      <div className="ui-row-between">
          <SectionTitle>{t("i18n.model")}</SectionTitle>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {testSummary && (
@@ -1109,7 +1109,7 @@ function ModelDetail({
               {costFields.map(({ key, label }) => {
                 const missing = model.cost?.[key] === undefined;
                 return (
-                  <div key={key} style={{ minWidth: 0 }}>
+                  <div key={key} className="ui-minw">
                     <div style={{ fontSize: 12, color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</div>
                     <div style={{ marginTop: 3, color: missing ? "var(--text-dim)" : "var(--text)", fontSize: 12, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
                       {formatCost(key)}
@@ -1134,7 +1134,7 @@ function ModelDetail({
             color: "var(--text)", cursor: "pointer", textAlign: "left",
           }}
         >
-          <span style={{ minWidth: 0 }}>
+          <span className="ui-minw">
             <span style={{ display: "block", fontSize: 12, fontWeight: 600 }}>{t("models.advancedSettings")}</span>
             <span style={{ display: "block", marginTop: 3, color: "var(--text-dim)", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {advancedSummary}
@@ -1167,7 +1167,7 @@ function ModelDetail({
                 headers={model.headers}
                 onChange={(headers) => set("headers", headers)}
               />
-              <span style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2 }}>
+              <span className="ui-dim-12-spaced">
                 {t("models.headersHelp")}
               </span>
             </Field>
@@ -1340,10 +1340,10 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
     loginState.phase === "prompt" || loginState.phase === "select";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+    <div className="ui-stack-16">
+      <div className="ui-row-between">
            <SectionTitle>{t("i18n.subscription")}</SectionTitle>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <div className="ui-row-center-6">
           <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.loggedIn ? "var(--success)" : "var(--border)", display: "inline-block" }} />
           <span style={{ fontSize: 12, color: provider.loggedIn ? "var(--success)" : "var(--text-dim)" }}>
              {provider.loggedIn ? t("i18n.connected") : t("i18n.notConnected")}
@@ -1354,7 +1354,7 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
       {/* Status */}
       <div style={{ minHeight: 48 }}>
         {loginState.phase === "idle" && (
-          <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+          <p className="ui-note">
              {provider.loggedIn ? t("interface.already.connected.sign.in.again.or.disconnect") : `Connect your ${provider.name} account.`}
           </p>
         )}
@@ -1362,11 +1362,11 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
             <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)" }}>{t("i18n.openingBrowser")}</p>
         )}
         {loginState.phase === "select" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+          <div className="ui-stack-10">
+            <p className="ui-note">
               {loginState.message}
             </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div className="ui-stack-6">
               {loginState.options.map((option) => (
                 <button
                   key={option.id}
@@ -1380,8 +1380,8 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
           </div>
         )}
         {(loginState.phase === "auth" || loginState.phase === "prompt") && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+          <div className="ui-stack-10">
+            <p className="ui-note">
               {loginState.phase === "auth"
                 ? t("interface.complete.sign.in.in.the.browser.then.paste.the.redirect.url.below")
                 : loginState.message}
@@ -1392,7 +1392,7 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
                 .
               </p>
             )}
-            <div style={{ display: "flex", gap: 6 }}>
+            <div className="ui-row-6">
               <input
                 ref={inputRef}
                 value={inputValue}
@@ -1412,8 +1412,8 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
           </div>
         )}
         {loginState.phase === "device_code" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>{t("interface.open.the.verification.page.and.enter.this.code")}</p>
+          <div className="ui-stack-10">
+            <p className="ui-note">{t("interface.open.the.verification.page.and.enter.this.code")}</p>
             <div style={{ padding: "8px 10px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text)", fontSize: 16, fontWeight: 700, fontFamily: "var(--font-mono)", letterSpacing: 0 }}>
               {loginState.userCode}
             </div>
@@ -1528,10 +1528,10 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
   }, [provider.id, onRefresh]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+    <div className="ui-stack-16">
+      <div className="ui-row-between">
          <SectionTitle>{t("interface.api.key")}</SectionTitle>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <div className="ui-row-center-6">
           <span style={{ width: 7, height: 7, borderRadius: "50%", background: provider.configured ? "var(--success)" : "var(--border)", display: "inline-block" }} />
           <span style={{ fontSize: 12, color: provider.configured ? "var(--success)" : "var(--text-dim)" }}>
              {provider.configured ? t("i18n.configured") : t("i18n.notConfigured")}
@@ -1539,14 +1539,14 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
         </div>
       </div>
 
-      <p style={{ margin: 0, fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
+      <p className="ui-note">
         {provider.configured
           ? t("interface.an.api.key.is.saved.replace.it.below.or.disconnect.to.remove.it")
           : `Enter your ${provider.displayName} API key to enable ${provider.modelCount} model${provider.modelCount !== 1 ? "s" : ""}.`}
       </p>
 
       <Field label={t("interface.api.key")}>
-        <div style={{ display: "flex", gap: 6 }}>
+        <div className="ui-row-6">
           <SecretTextInput
             value={apiKey}
             onChange={setApiKey}
@@ -1636,7 +1636,8 @@ function ProviderIcon({ id, size }: { id: string; size: number }) {
   }
   // Color icons: self-colored SVG, no wrapper needed
   if (pi.hasColor) return <pi.Icon size={size} />;
-  // Mono icons: use currentColor so they adapt to light/dark theme
+  // Mono icons: use currentColor so they adapt to light/dark theme.
+  // `pi.Icon` only accepts `style`, so this stays inline instead of a shared class.
   return <pi.Icon size={size} style={{ color: "var(--text-muted)" }} />;
 }
 
@@ -1724,12 +1725,12 @@ function AddProviderPicker({
                   onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-panel)"; }}
                 >
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="ui-grow">
                     <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t("interface.openai.anthropic.compatible")}</div>
-                     <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2 }}>{t("i18n.customEndpoint")}</div>
+                     <div className="ui-dim-12-spaced">{t("i18n.customEndpoint")}</div>
                   </div>
                   <span style={{ width: 26, height: 26, borderRadius: 5, background: "var(--bg-hover)", border: "1px dashed var(--border)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-dim)" }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ui-dim">
                       <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
                     </svg>
                   </span>
@@ -1745,9 +1746,9 @@ function AddProviderPicker({
                   onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-panel)"; }}
                 >
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="ui-grow">
                     <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
-                    <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2 }}>OAuth</div>
+                    <div className="ui-dim-12-spaced">OAuth</div>
                   </div>
                   <ProviderIcon id={p.id} size={28} />
                 </button>
@@ -1762,9 +1763,9 @@ function AddProviderPicker({
                   onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.background = "var(--bg-hover)"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-panel)"; }}
                 >
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="ui-grow">
                     <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.displayName}</div>
-                    <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2 }}>{p.modelCount}{t("interface.models")}</div>
+                    <div className="ui-dim-12-spaced">{p.modelCount}{t("interface.models")}</div>
                   </div>
                   <ProviderIcon id={p.id} size={28} />
                 </button>
@@ -2027,7 +2028,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
           {/* Left: tree */}
           <div className={styles.navigation} aria-label={t("design.providerList")}>
-            <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
+            <div className="ui-list-scroll">
               {/* Active OAuth subscriptions */}
               {activeOAuth.map((p) => {
                 const isSelected = selection?.type === "oauth" && selection.providerId === p.id;
@@ -2067,7 +2068,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
               {/* Custom providers */}
               {loading ? (
-                 <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>{t("i18n.loading")}</div>
+                 <div className="ui-list-note">{t("i18n.loading")}</div>
               ) : providers.map(([pName, pData]) => {
                 const isProviderSelected = selection?.type === "provider" && selection.name === pName;
                 const models = pData.models ?? [];

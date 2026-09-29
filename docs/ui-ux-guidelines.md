@@ -1,7 +1,7 @@
 # Chat Frontend UI/UX 规范
 
 - 状态：规范基线
-- 版本：2.4
+- 版本：2.5
 - 适用项目：Chat Pi Web Frontend
 - 最后校正：2026-09-29
 -  art 方向：安静画廊级工具表面（littleplains / aside / resurf / daybridge 取精度不取装饰）；暖灰 + 墨字 + 克制紫品牌不变，深浅双主题同时成立
@@ -591,7 +591,7 @@ Agent 或开发者必须：
 | 需求 | 使用机制 | 禁止 |
 |---|---|---|
 | 全局任务面（Friends/Projects/动态/群聊/话题/设置） | 全屏页 + `PageHeader` 返回；左侧 rail 可直接切换，不强制先点返回；返回时恢复进入前的侧栏状态 | 再套 Dialog、强制先点返回才能切换 |
-| Friend 当天与任务（`FriendInspector`） | 会话标题（`<agent> · <date>`）即开关：点击在标题下展开/关闭面板（`aria-expanded`）；面板单日期状态派生当日会话/任务聚合/日历入口/未确认提交恢复；任务聚合点开 `LongAgentTasksPanel` | 侧栏再放“今日概览”或当天会话区、行内清单/日历图标、面板自带第二份日期/今天条、把 work 行混进当天导航 |
+| Friend 任务与归档（`FriendInspector`） | 顶栏一个**按用途命名**的图标按钮（“任务与归档”，`Hint` + `aria-expanded`）展开/收起一个**竖向下拉区域**：当天会话 → 任务（唯一 view model）→ 日期归档，各自成列；完整任务与完整日历分别进入 `LongAgentTasksPanel` / `FriendCalendar` | 用会话标题当按钮名、重复左侧已有的头像/名称/简介、横排平铺成条带、面板自带日期条、侧栏再放当天区或行内图标 |
 | 临时配置（单个 Friend/资源/模型/记忆/Tools） | `SurfaceDialog`（`wide` 按需），Compact 自动全屏 Sheet；右上 X + Escape 关闭，不用 `Back` | 全屏 portal 页、自制 overlay、自制焦点陷阱 |
 | 模态确认 | Radix AlertDialog + `ConfirmationProvider` | `window.confirm`、自制遮罩 |
 | 只读目录/历史弹层 | `SurfaceDialog` / `useDialogFocus` | 手写焦点陷阱 |
@@ -610,7 +610,7 @@ Agent 或开发者必须：
 
 判定方法：实现一个新界面时，若上表中的需求出现了**第三种实现方式**，先停下来——要么复用既有机制，要么在本文新增合同并迁移旧实现，不允许并存。
 
-Friend 当天面板的唯一入口是会话标题；同一日期信息（标题里的 `<date>`）不得在面板或侧栏再出现一份独立的日期/“今天”条。`LongAgentTasksPanel` 仍是任务/职责/执行的唯一列表，当天面板只给出聚合计数并跳转。
+Friend 任务与归档区域的唯一入口是顶栏那个按钮；标题仍是标题，不兼任按钮。面板不得重复左侧已有的身份信息，也不得再放第二份日期/“今天”条。`LongAgentTasksPanel` 仍是任务/职责/执行的唯一列表，面板只给最近的少数行并跳转；日期归档只列真实产生过消息的日期。
 
 ### 18.5 视觉精度合同（v2.3 art 方向）
 
@@ -684,6 +684,10 @@ skill 内容与本文冲突时以本文为准；skill 中的项目映射（token
 - 同一硬编码值第三次出现，或同一布局数值在多个文件各写一遍。
 - 同一动作在两个入口产生不同的结果、反馈或恢复路径。
 
-### 20.4 门禁
+### 20.4 共享布局类
 
-`lib/motion-contract.test.mjs` 守住：动效时长与缓动必须来自 Token、pressed 不使用 `filter: brightness()`、每个遮罩必须淡入（Radix 还需淡出）、按钮与模态保持唯一原语、手写模态清单不得无声扩张。
+资源对话框（Models / Skills / Plugins / Extensions / Provider requests）的重复排版收敛为 `src/styles/components.css` 的 `ui-*` 布局类（`ui-stack-*`、`ui-row-*`、`ui-grow`、`ui-list-scroll`、`ui-dim*`、`ui-muted*`、`ui-note`、`ui-scrim*` 等）：**布局进类、语义进组件**。新增一个值要在这里命名，而不是再写一个 inline `style={{…}}`。`ui-scrim`/`ui-scrim-center` 同时承担这些对话框遮罩的淡入（§8.2），不允许再写 `rgba(0,0,0,…)`。
+
+### 20.5 门禁
+
+`lib/motion-contract.test.mjs` 守住：动效时长与缓动必须来自 Token、pressed 不使用 `filter: brightness()`、每个遮罩必须淡入（Radix 还需淡出）、按钮与模态保持唯一原语、手写模态清单不得无声扩张、组件用到的每个 `ui-*` 类必须在样式表中有对应规则（防拼写漂移）。

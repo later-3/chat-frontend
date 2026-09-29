@@ -104,7 +104,7 @@ function SkillDetail({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Path + tag + toggle, with a stable status row below. */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div className="ui-stack-4">
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
           <span
             style={{
@@ -154,7 +154,7 @@ function SkillDetail({
           }}
         >
           {!enabled && (
-            <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
+            <span className="ui-dim-12">
               {t("i18n.hiddenButInvocable")}
             </span>
           )}
@@ -167,9 +167,9 @@ function SkillDetail({
       </div>
 
       {skill.install?.skillsShUrl && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+        <div className="ui-stack-5">
           <span
-            style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500 }}
+            className="ui-muted-12-medium"
           >{t("interface.source")}</span>
           <a
             href={skill.install.skillsShUrl}
@@ -202,9 +202,9 @@ function SkillDetail({
       )}
 
       {skill.install && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+        <div className="ui-stack-7">
           <span
-            style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500 }}
+            className="ui-muted-12-medium"
           >{t("interface.version")}</span>
           <div
             style={{
@@ -301,9 +301,9 @@ function SkillDetail({
         </div>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+      <div className="ui-stack-5">
         <span
-          style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500 }}
+          className="ui-muted-12-medium"
         >
           {t("design.resourceName")}
         </span>
@@ -318,9 +318,9 @@ function SkillDetail({
         </span>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+      <div className="ui-stack-5">
         <span
-          style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500 }}
+          className="ui-muted-12-medium"
         >
           {t("design.resourceDescription")}
         </span>
@@ -557,7 +557,7 @@ function AddSkillPanel({
                   borderBottom: "1px solid var(--border)",
                 }}
               >
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="ui-grow">
                   {/* skill name prominent */}
                   <div
                     style={{
@@ -588,11 +588,7 @@ function AddSkillPanel({
                       {repopart}
                     </span>
                     <span
-                      style={{
-                        fontSize: 12,
-                        color: "var(--text-muted)",
-                        fontWeight: 500,
-                      }}
+                      className="ui-muted-12-medium"
                     >
                       {r.installs}
                     </span>
@@ -995,7 +991,7 @@ export function SkillsConfig({
             userSelect: "none",
           }}
         >
-          <span style={{ fontSize: 8 }}>{open ? "▾" : "▸"}</span>
+          <span className="ui-micro">{open ? "▾" : "▸"}</span>
           <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayGroupLabel(label, t)}</span>
           {options.badge && <span style={{ color: "var(--accent)", textTransform: "none" }}>{options.badge}</span>}
           <span>({entries.length})</span>
@@ -1046,7 +1042,7 @@ export function SkillsConfig({
                   userSelect: "none",
                 }}
               >
-                <span style={{ fontSize: 8 }}>{open ? "▾" : "▸"}</span>
+                <span className="ui-micro">{open ? "▾" : "▸"}</span>
                 <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {t("skillsTree.workflow")} · {translateWorkflowCopy(workflow.workflowId, workflow.name, t)}
                 </span>
@@ -1077,16 +1073,8 @@ export function SkillsConfig({
   };
 
   return (
-    <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("interface.skills")} className="configuration-dialog"
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 1000,
-        background: "rgba(0,0,0,0.35)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
+    <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("interface.skills")} className="configuration-dialog ui-scrim-center"
+
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -1119,7 +1107,7 @@ export function SkillsConfig({
         >
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
             <span
-              style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}
+              className="ui-title-15"
             >
                {t("common.skills")}
             </span>
@@ -1168,17 +1156,13 @@ export function SkillsConfig({
               background: "var(--bg-panel)",
             }}
           >
-            <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
+            <div className="ui-list-scroll">
               {treeError !== null && (
                 <div style={{ padding: "4px 8px", fontSize: 12, color: "var(--danger)" }}><InterfaceFeedback message={treeError} /></div>
               )}
               {skillTree !== null ? renderSkillTreeView() : loading ? (
                 <div
-                  style={{
-                    padding: "10px 8px",
-                    fontSize: 12,
-                    color: "var(--text-muted)",
-                  }}
+                  className="ui-list-note"
                 >
                    {t("i18n.loading")}
                 </div>
@@ -1335,7 +1319,7 @@ export function SkillsConfig({
                       );
                       const dormantOpen = dormantGroupsOpen[grpLabel] ?? false;
                       return (
-                        <div key={displayGroupLabel(grpLabel, t)} style={{ marginBottom: 6 }}>
+                        <div key={displayGroupLabel(grpLabel, t)} className="ui-mb-6">
                           <div
                             style={{
                               padding: "4px 8px 3px",
@@ -1372,7 +1356,7 @@ export function SkillsConfig({
                                   userSelect: "none",
                                 }}
                               >
-                                <span style={{ fontSize: 8 }}>
+                                <span className="ui-micro">
                                   {dormantOpen ? "▾" : "▸"}
                                 </span>
                                 {t("i18n.dormant")} ({dormantSkills.length})
@@ -1435,7 +1419,7 @@ export function SkillsConfig({
           </div>
 
           {/* Right: detail or add panel */}
-          <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+          <div className="ui-scroll-20">
             {addMode ? (
               <AddSkillPanel
                 cwd={cwd}
@@ -1479,7 +1463,7 @@ export function SkillsConfig({
                 onUpdate={() => void updateInstalledSkill(selectedSkill)}
               />
             ) : selectedTreeEntry !== null ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div className="ui-stack-10">
                 <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
                   {selectedTreeEntry.owner}
                 </div>

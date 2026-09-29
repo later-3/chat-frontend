@@ -82,7 +82,7 @@ function ResourceList({ pkg }: { pkg: PluginPackageInfo }) {
 
   if (groups.length === 0) {
     return (
-      <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
+      <div className="ui-dim-12">
         {pkg.disabled ? t("i18n.packageDisabled") : t("i18n.noResolvedResources")}
       </div>
     );
@@ -115,9 +115,9 @@ function ResourceList({ pkg }: { pkg: PluginPackageInfo }) {
           >
             {group.label}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div className="ui-stack-6">
             {group.resources.map((resource) => (
-              <div key={`${resource.kind}:${resource.path}`} style={{ minWidth: 0 }}>
+              <div key={`${resource.kind}:${resource.path}`} className="ui-minw">
                 <div
                   style={{
                     fontSize: 12,
@@ -257,7 +257,7 @@ function AddPluginPanel({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18, maxWidth: 660, minHeight: "100%" }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+      <div className="ui-stack-5">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>
             {t("i18n.addPlugin")}
@@ -292,7 +292,7 @@ function AddPluginPanel({
         </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+      <div className="ui-stack-7">
         <label htmlFor="plugin-source" style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
           {t("design.resourceSource")}
         </label>
@@ -348,11 +348,11 @@ function AddPluginPanel({
         </button>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+      <div className="ui-stack-7">
         <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-muted)" }}>
           {t("design.examples")}
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div className="ui-stack-6">
           {examples.map((example) => (
             <button
               key={example}
@@ -387,7 +387,7 @@ function AddPluginPanel({
       </div>
 
       {actionError && (
-        <div style={{ fontSize: 12, color: "var(--danger)", whiteSpace: "pre-wrap" }}>
+        <div className="ui-error-12">
           <InterfaceFeedback message={actionError} />
         </div>
       )}
@@ -505,17 +505,17 @@ function PackageDetail({
           lineHeight: 1.45,
         }}
       >
-        <div style={{ color: "var(--text-dim)" }}>{t("i18n.status")}</div>
+        <div className="ui-dim">{t("i18n.status")}</div>
         <div style={{ color: statusColor(pkg.status), textTransform: "capitalize" }}>{pkg.status}</div>
-        <div style={{ color: "var(--text-dim)" }}>{t("i18n.version")}</div>
+        <div className="ui-dim">{t("i18n.version")}</div>
          <div style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>{versionSummary(pkg, t)}</div>
-        <div style={{ color: "var(--text-dim)" }}>{t("i18n.package")}</div>
-        <div style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", overflowWrap: "anywhere" }}>
+        <div className="ui-dim">{t("i18n.package")}</div>
+        <div className="ui-mono-muted">
           {pkg.packageName ?? t("i18n.unknown")}
         </div>
-        <div style={{ color: "var(--text-dim)" }}>{t("i18n.resources")}</div>
-         <div style={{ color: "var(--text-muted)" }}>{resourceSummary(pkg, t)}</div>
-        <div style={{ color: "var(--text-dim)" }}>{t("i18n.installedPath")}</div>
+        <div className="ui-dim">{t("i18n.resources")}</div>
+         <div className="ui-muted">{resourceSummary(pkg, t)}</div>
+        <div className="ui-dim">{t("i18n.installedPath")}</div>
         <div
           style={{
             color: pkg.installedPath ? "var(--text-muted)" : "var(--danger)",
@@ -525,7 +525,7 @@ function PackageDetail({
         >
           {pkg.installedPath ? shortenPath(pkg.installedPath) : t("i18n.notFound")}
         </div>
-        <div style={{ color: "var(--text-dim)" }}>{t("i18n.cwd")}</div>
+        <div className="ui-dim">{t("i18n.cwd")}</div>
         <div style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", overflowWrap: "anywhere" }}>
           {shortenPath(cwd)}
         </div>
@@ -544,7 +544,7 @@ function PackageDetail({
         </div>
       )}
       {actionError && (
-        <div style={{ fontSize: 12, color: "var(--danger)", whiteSpace: "pre-wrap" }}>
+        <div className="ui-error-12">
           <InterfaceFeedback message={actionError} />
         </div>
       )}
@@ -687,16 +687,8 @@ export function PluginsConfig({
   const addBusy = busyKey?.startsWith("install:") ?? false;
 
   return (
-    <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("interface.plugins")} className="configuration-dialog"
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 1000,
-        background: "rgba(0,0,0,0.35)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
+    <div ref={modalRef} role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("interface.plugins")} className="configuration-dialog ui-scrim-center"
+
       onClick={(e) => {
         if (e.target === e.currentTarget) requestClose();
       }}
@@ -727,7 +719,7 @@ export function PluginsConfig({
           }}
         >
           <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>
+            <span className="ui-title-15">
               {t("common.plugins")}
             </span>
             <code
@@ -772,9 +764,9 @@ export function PluginsConfig({
               background: "var(--bg-panel)",
             }}
           >
-            <div style={{ flex: 1, overflowY: "auto", padding: "8px 6px" }}>
+            <div className="ui-list-scroll">
               {loading ? (
-                <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--text-muted)" }}>{t("interface.loading")}</div>
+                <div className="ui-list-note">{t("interface.loading")}</div>
               ) : error ? (
                 <div style={{ padding: "10px 8px", fontSize: 12, color: "var(--danger)" }}>
                   <InterfaceFeedback message={error} />
@@ -785,7 +777,7 @@ export function PluginsConfig({
                 </div>
               ) : (
                 groupedPackages.map((group) => (
-                  <div key={group.scope} style={{ marginBottom: 6 }}>
+                  <div key={group.scope} className="ui-mb-6">
                     <div
                       style={{
                         padding: "4px 8px 3px",
@@ -834,7 +826,7 @@ export function PluginsConfig({
                               background: statusColor(pkg.status),
                             }}
                           />
-                          <div style={{ minWidth: 0, flex: 1 }}>
+                          <div className="ui-grow">
                             <div
                               style={{
                                 fontSize: 12,
@@ -928,7 +920,7 @@ export function PluginsConfig({
             </div>
           </div>
 
-          <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+          <div className="ui-scroll-20">
             {addMode ? (
               <AddPluginPanel
                 cwd={cwd}

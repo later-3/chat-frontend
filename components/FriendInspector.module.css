@@ -1,35 +1,37 @@
-/* Expandable day/task panel anchored under the conversation header. */
-.inspector { display: flex; flex-direction: column; gap: 12px; color: var(--text); font-size: 13px; min-width: 0; }
-.identity { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.identity > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; flex: 1; }
-.identity strong { font-size: 14px; font-weight: 600; }
-.identity span { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.identityActions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
-.tz { color: var(--text-dim); font-size: 12px; cursor: help; }
-.identityActions button, .primary, .tasks { border: 1px solid var(--border-control); border-radius: var(--radius-control); background: var(--bg-panel); color: var(--text); cursor: pointer; }
-.identityActions button { min-height: 32px; padding: 4px 10px; font-size: 12px; }
-.dayRow { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; min-width: 0; }
-.primary { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 12px; background: var(--bg-selected); border-color: var(--accent); text-align: left; flex: 1 1 220px; min-width: 0; }
-.primary strong { font-size: 13px; font-weight: 600; }
-.primary span { font-size: 12px; color: var(--text-muted); }
-.primary[aria-current="page"] { outline: 2px solid var(--accent); outline-offset: -2px; }
-.sessions { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
-.sessions button { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; text-align: left; border: 1px solid transparent; border-radius: var(--radius-control); background: transparent; color: var(--text); cursor: pointer; }
-.sessions button:hover { background: var(--bg-hover); }
-.sessions button[aria-current="page"] { background: var(--bg-selected); border-color: var(--accent); }
-.sessions strong { font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
-.sessions span { font-size: 12px; color: var(--text-muted); }
-.tasks { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 12px; text-align: left; flex: 1 1 220px; min-width: 0; }
-.tasks strong { font-size: 13px; font-weight: 600; }
-.tasks span { font-size: 12px; color: var(--text-muted); }
-.error { color: var(--danger); font-size: 12px; }
-.error button { margin-top: 6px; min-height: 32px; }
-.inspector button:disabled { opacity: 0.5; cursor: default; }
-.inspector :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
-  .inspector button { min-height: 44px; }
-  .primary, .tasks { flex-basis: 100%; }
-}
+/* Vertical day/task/archive area for one Friend. Identity stays in the rail,
+   so this column starts with the section that answers a question. */
+.panel { display: flex; flex-direction: column; gap: 16px; padding: 14px 16px 18px; color: var(--text); font-size: 13px; min-width: 0; }
+.panelHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.panelHeader h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.panelHeader p { margin: 2px 0 0; font-size: 12px; color: var(--text-muted); }
+.section { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.section h3 { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--text-dim); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.section > button { align-self: flex-start; }
+.count { font-size: 11px; font-weight: 600; color: var(--accent); background: var(--bg-selected); border-radius: 999px; padding: 1px 8px; letter-spacing: 0; text-transform: none; }
+.rows { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius-panel); overflow: hidden; }
+.row, .taskRow { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 8px 12px; text-align: left; border: 0; border-bottom: 1px solid var(--border); background: var(--bg); color: var(--text); }
+.row:last-child, .taskRow:last-child { border-bottom: 0; }
+.row { cursor: pointer; }
+.row:hover:not(:disabled) { background: var(--bg-hover); }
+.row[aria-current="page"] { background: var(--bg-selected); }
+.row:disabled { opacity: 0.55; cursor: default; }
+.rowPrimary { background: var(--bg-panel); }
+.rowText { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.rowText strong { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.rowText small { color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
+.today { font-style: normal; font-size: 11px; font-weight: 600; color: var(--accent); background: var(--bg-selected); border-radius: 999px; padding: 1px 7px; }
+.badge { flex: 0 0 auto; min-width: 44px; text-align: center; font-size: 11px; padding: 2px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-muted); background: var(--bg-panel); }
+.badge[data-kind="duty"] { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+.badge[data-kind="exec"], .badge[data-kind="work"] { color: var(--text-dim); }
+.empty { margin: 0; font-size: 12px; color: var(--text-muted); }
 .pending { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--warning); border-radius: var(--radius-control); background: var(--warning-bg); }
 .pending p { margin: 0; font-size: 12px; color: var(--warning); }
 .pending button { align-self: flex-start; }
+.error { display: flex; flex-direction: column; gap: 6px; color: var(--danger); font-size: 12px; }
+.error p { margin: 0; }
+.error button { align-self: flex-start; }
+.panel :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  .row, .taskRow { min-height: 52px; }
+  .section > button { align-self: stretch; }
+}

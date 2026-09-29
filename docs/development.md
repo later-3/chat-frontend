@@ -256,7 +256,9 @@ Friend 发送只等耐久 202 后清理待确认输入，随后按引用观察�
 
 后台工作与任务展示分两处：`LongAgentTasksPanel`（从 `FriendInspector` 的任务聚合行打开）是任务/职责/后台执行的统一面板，`lib/friend-tasks.ts` 的 `buildFriendTaskRows` 为纯视图模型（plan/duty/executions 三组，occurrence 自带 work 不再重复为独立行，最新在前）；当天面板只投影会话导航，不列 works，也不显示日期标题行（日期由会话标题承载）。栏下已删除，未确认提交恢复搬进面板。
 
-v2.3 日期/任务面板（`FriendInspector`）：Friend 会话的顶栏标题（`<agent> · <date>`）是唯一展开入口，点击在标题下方展开/关闭当天面板（`data-friend-panel`，`data-friend-panel-toggle`，`aria-expanded` + `aria-controls="friend-day-panel"`）。面板只有一个日期状态 `selectedDate`（URL `friendDate` 优先，否则解析为该 Friend 的今天或当前 Session 所属日），其余区块全部派生：当日日常会话主入口（`data-day-session`）、同日其他会话（精确到分，`data-day-session`）、任务/职责/执行聚合行（`data-friend-tasks-open` → `LongAgentTasksPanel`）、日历入口（`data-friend-calendar-open` → `FriendCalendar`）、未确认提交恢复（`data-friend-work-pending`/`data-friend-work-confirm`）。面板不再自带日期/今天条，因为标题已显示；侧栏 Agent 行的清单/日历小图标已删除，页面也不再有“今日概览”区。`lib/friend-work.ts` 严格校验 HTTP v1 绑定及执行归属；身份、Session、workId、固定项目必须一致；可选 `topicIntegration` 必须验证其 topicId/nodeId/sessionId，不能因已有合法主题关联把整张后台工作列表判成无效。任务面板 5 秒轮询（隐藏页面不轮询，卸载取消），项目 id 经 projects 列表解析为名称，无项目显示"Agent 容器"，绝不裸吐 ID。新建任务通过主聊及真实 `friend_work` Tool；旧创建表单留下的未确认请求仍由 `friend-work-draft.ts` 恢复。
+v2.5 任务与归档区域（`FriendInspector`）：顶栏一个按用途命名的图标按钮（`data-friend-panel-toggle`，“任务与归档”）展开一个**竖向下拉列**（`data-friend-panel`），三节自上而下：当天（`data-friend-day` + `data-day-session`）、任务（复用 `buildFriendTaskRows`，最多 5 行，`data-friend-tasks-open` 进 `LongAgentTasksPanel`）、日期归档（`data-friend-archive-day`，只列真实产生过消息的日期，点击按现有 `/start` 幂等打开该日；`data-friend-calendar-open` 进完整日历）。面板不重复左侧已有的头像/名称/简介，也不再自带日期条；未确认提交恢复保留（`data-friend-work-pending` / `data-friend-work-confirm`）。侧栏 Agent 行不提供当天区或行内图标。
+
+资源对话框的重复排版使用 `src/styles/components.css` 的 `ui-*` 共享布局类（见 UI/UX §20.4）；这些类只承担布局，颜色与表面仍走 Token 与原语。
 
 工作会话继续使用 `useAgentSession` 和 `friend-execution.ts`，没有单独聊天渲染器。FriendExecution.workId 表示固定项目工作，后续消息/引导使用执行记录的 contextProjectId，不跟随顶部项目选择；日常交流仍按下一条消息选择项目。停止单个执行、执行详情（`TaskRunDetails`）与打开原生 Session 在任务面板操作；点击 Friend 卡片是返回今日主聊的统一入口，不另设返回按钮。新增文案同时覆盖中英文；回归为 `lib/friend-work.test.mjs` 与 `lib/friend-tasks.test.mjs`（含 tasks/duties/works 三类行与去重门禁），浏览器还须验证流式、刷新、跨项目及移动布局。
 
