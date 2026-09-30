@@ -42,7 +42,7 @@ import { PlanReviewCard } from "./PlanReviewCard";
 import { SessionMemoryDialog } from "./SessionMemoryDialog";
 import { Button } from "./ui/Button";
 import { ToolbarAction } from "./ui/ToolbarAction";
-import { IconBell, IconCircleDot, IconNotebook, IconVolume, IconAdjustmentsHorizontal, IconArrowsMinimize, IconPlayerStop } from "@tabler/icons-react";
+import { IconMessageCircle, IconBell, IconCircleDot, IconNotebook, IconVolume, IconAdjustmentsHorizontal, IconArrowsMinimize, IconPlayerStop } from "@tabler/icons-react";
 import { SurfaceDialog } from "./SurfaceDialog";
 import { TopicCreationRequests } from "./TopicCreationRequests";
 import {
@@ -317,7 +317,7 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
     setVisibleCount((current) => Math.max(current, messages.length * 2));
   }, [messages.length]);
 
-  const isEmptyNew = isNew && messages.length === 0 && !streamState.isStreaming && !sessionBusy;
+  const isEmptyChat = messages.length === 0 && !streamState.isStreaming && !sessionBusy && !browsingHistory && !readOnly;
   const hasStreamingContent = Boolean(streamState.streamingMessage?.content.length);
   const messageCwd = session?.cwd ?? newSessionCwd ?? undefined;
   const messageContentRef = useRef<HTMLDivElement | null>(null);
@@ -341,11 +341,11 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
       autoScroll.dispose();
       autoScrollRef.current = null;
     };
-  }, [isEmptyNew, loading, error]);
+  }, [isEmptyChat, loading, error]);
 
   useLayoutEffect(() => {
     autoScrollRef.current?.update(activityKey);
-  }, [activityKey, isEmptyNew, loading, error]);
+  }, [activityKey, isEmptyChat, loading, error]);
 
   const memoryStorageProjectId = longAgentId ?? projectId;
   const memorySessionId = session?.id ?? sessionIdRef.current ?? null;
@@ -572,22 +572,14 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
         <NoticeShelf notices={notices} floating />
       </div>
 
-      {isEmptyNew ? (
+      {isEmptyChat ? (
         <div className={`chat-empty${isMobile ? " is-mobile" : ""}`}>
           <div className="w-full workspace-message-column chat-empty-column">
-            <div className="chat-empty-brand">
-              <div className="chat-empty-mark">
-                <span className="chat-empty-pi">π</span>
-                <span className="chat-empty-word">Chat</span>
-              </div>
-              <div className="chat-empty-versions">
-                <span>
-                  web <span>v{import.meta.env.VITE_APP_VERSION ?? "0.1.1"}</span>
-                </span>
-                <span>
-                  pi <span>v{import.meta.env.VITE_PI_VERSION ?? t("interface.source.build")}</span>
-                </span>
-              </div>
+            <div className="chat-welcome">
+              <div className="chat-welcome-brand"><span><IconMessageCircle size={24} aria-hidden="true" /></span>Chat</div>
+              <h2>{t("chatDesign.welcomeTitle")}</h2>
+              <p>{t("chatDesign.welcomeDescription")}</p>
+              <small>{t("chatDesign.inputHint")}</small>
             </div>
             {isMobile ? null : (
               <>

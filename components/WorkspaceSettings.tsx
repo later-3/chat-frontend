@@ -1,5 +1,6 @@
 import { PageHeader } from "./ui/PageHeader";
 import { Button } from "./ui/Button";
+import { AppearanceSettings } from "./AppearanceSettings";
 
 import { InterfaceFeedback } from "./InterfaceFeedback";
 import { IconAdjustments, IconChevronRight, IconDeviceDesktop, IconMoon, IconSun, IconPalette, IconFolder, IconUser } from "@tabler/icons-react";
@@ -76,6 +77,7 @@ export function WorkspaceSettings({ items, wideContent, onContentWidth, theme, o
               ["light",IconSun], ["dark",IconMoon], ["auto",IconDeviceDesktop],
             ] as const).map(([value,Icon]) => <button key={value} type="button" aria-pressed={theme === value} onClick={() => onTheme(value)}><Icon size={26} stroke={1.4}/><span>{t(`design.theme.${value}`)}</span></button>)}</div>
           </section>
+          <AppearanceSettings />
           <section className="settings-section"><h3>{t("workspaceNav.contentWidth")}</h3><p>{t("design.densityHint")}</p>
             <div className="settings-segments" role="group" aria-label={t("workspaceNav.contentWidth")}>{[false,true].map(wide => <button key={String(wide)} type="button" aria-pressed={wideContent === wide} onClick={() => { if (wide !== wideContent) onContentWidth(); }}>{t(wide ? "workspaceNav.wide" : "workspaceNav.standard")}</button>)}</div>
           </section>

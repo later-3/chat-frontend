@@ -14,6 +14,9 @@ export async function readStyleSheetSources(): Promise<string[]> {
     "../src/styles/components.css",
     "../src/styles/workspace.css",
     "../src/styles/precision.css",
+    "../src/styles/appearance.css",
+    "../src/styles/workflow-settings.css",
+    "../src/styles/conversation-design.css",
   ];
   return Promise.all(sources.map((source) => readFile(new URL(source, import.meta.url), "utf8")));
 }

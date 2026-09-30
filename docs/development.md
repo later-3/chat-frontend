@@ -4,6 +4,10 @@
 
 本文面向 Frontend 贡献者和协助开发的外部 AI，说明浏览器端代码放在哪里、如何开发和验证，以及与 Chat Backend、父仓库的协作边界。视觉和交互要求不在本文重复，见 [Chat Frontend UI/UX 规范](./ui-ux-guidelines.md)。
 
+开发前先完成[前端设计方法与案例](./frontend-design-method.md)规定的文档分析；具体页面记录放在 `docs/design/`。
+
+第二轮[助手与聊天页实施记录](./design/assistant-and-chat-rollout.md)：助手配置保留原分类及各自保存合同，补分类职责和默认 Workflow 步骤摘要；空白可写 Session（包括长期助手）提供开始引导，读取失败、历史浏览、只读与运行中不显示空态。公共输入框采用框内输入/操作两行，复用原消息、草稿与发送链。查看效果必须使用运行中的 HTTP 预览，不能直接打开 Vite 的 `index.html`。
+
 ## 1. 职责边界
 
 本仓库既作为 Chat workspace 子模块构建，也由独立 CI 安装。依赖变更必须同步自身 `pnpm-lock.yaml` 和父仓库 workspace 锁文件；父仓库安装成功不能代替独立 `pnpm install --frozen-lockfile`。在 Chat workspace 内刷新独立锁文件时使用独立临时目录复制 package/lock，避免修改正在运行的 workspace node_modules。
@@ -372,3 +376,12 @@ Friend / Workflow 使用同一个 `ConfigurationSection` 折叠行和模型、�
 - Long Agent 设置复用 `WorkflowAgentConfigDialog`。Home 配置是服务端事实；身份表单只修改身份字段，刷新公共配置后保留未保存身份草稿。执行字段不再提供独立编辑器。
 - “新会话”创建独立直接 Session，“当天默认会话”返回默认引用；刷新按服务端 owner 恢复。浏览器只临时保留未确认创建 requestId，用于失败重试，Session ID 与日期归属由服务端确定。
 - Full history 保留原生 HTML、分支与压缩记录；请求取消、错误重试及 Session 切换隔离必须保留。耗时分请求总时间和缓存生成时间，不能以生成耗时冒充缓存命中耗时。
+
+
+### 可组合外观与工作流配置（2026-09-30）
+
+全局外观由既有 `useTheme` 唯一管理，明暗继续用 `pi-theme`；`chat:appearance:v1` 保存 version=1 的 material、palette、motion、background、opaque 浏览器偏好。`lib/appearance.ts` 校验与首屏应用，head module 在 React 前调用；存储失败仍可用，storage 事件同步其他窗口。系统减少动效和手动减少动效均阻止主题圆形揭示。离线壳保留经典明暗降级。
+
+`AppearanceSettings` 在设置外观页提供两种材质、五种配色和效果选项；`appearance.css` 定义全局角色与表面配方，`workflow-settings.css` 只负责信息布局，两个文件均列入 `style-sources.ts` 门禁。不要让原型七套预设变成生产中的七份组件。
+
+`WorkflowAgentConfigDialog` 以完整有序 Node 导航、选中 Agent 详情、模型/工具资源/会话或默认选择/检查四个入口组织已有 API。Task 没有模型编辑器；配置文件降为高级折叠。持久模型/工具/资源仍自动保存项目或 Home，第三分类依 `selectionScope` 区分会话随消息提交与助手默认持久保存。检查仍使用公共装配，不在浏览器重算。完整推导、范围和验收见[实施记录](./design/workflow-configuration-rollout.md)。

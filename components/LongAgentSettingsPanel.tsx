@@ -303,6 +303,10 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
   };
   const [usageOpen, setUsageOpen] = useState(false);
   const [identityOpen, setIdentityOpen] = useState(false);
+  const tabDescriptions = {
+    runtime: t("assistantDesign.settingsHint"), tasks: t("assistantDesign.scheduleHint"),
+    duties: t("assistantDesign.dutiesHint"), "agent-memory": t("assistantDesign.memoryHint"),
+  };
   const tabs = [
     { id: "runtime", label: t("longAgentSettings.runtimeTab"), icon: IconSettings },
     { id: "tasks", label: t("longAgentSettings.tasksTab"), icon: IconClock },
@@ -352,6 +356,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
     <div className={`${styles.dialog} configuration-dialog`}>
       <div className={styles.workspace}>
         <nav className={styles.agentNav} aria-label={t("longAgentSettings.agentList")}>
+          <div className={styles.navIntro}><span>{t("assistantDesign.workspace")}</span><small>{t("assistantDesign.workspaceHint")}</small></div>
           <SearchSelect label={t("longAgentSettings.agentList")} value={agentId}
             options={agents.map(agent => ({ value:agent.id, label:agent.name, detail:agent.available ? t("longAgentSettings.enabled") : t("longAgentSettings.disabled") }))}
             onChange={selectAgent} disabled={saving || lifecycleBusy} />
@@ -364,6 +369,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                       id={`long-agent-${tab.id}-tab`}
                       type="button"
                       role="tab"
+                      aria-label={tab.label}
                       aria-selected={activeTab === tab.id}
                       aria-controls={`long-agent-${tab.id}-panel`}
                       tabIndex={activeTab === tab.id ? 0 : -1}
@@ -371,7 +377,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                       onClick={() => selectTab(tab.id)}
                     >
                       <Icon size={17} aria-hidden="true" />
-                      {tab.label}
+                      <span><strong>{tab.label}</strong><small>{tabDescriptions[tab.id]}</small></span>
                     </button>
                   );
                 })}
@@ -393,8 +399,9 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
             <div className={styles.settingsShell}>
               <div className={styles.agentHeading}>
                 <div>
-                  <span className={styles.eyebrow}>{selectedSummary?.id ?? document.agent.id}</span>
+                  <span className={styles.eyebrow}>{tabs.find(tab => tab.id === activeTab)?.label}</span>
                   <h2>{draft.name}</h2>
+                  <p className={styles.headingDescription}>{tabDescriptions[activeTab]}</p>
                 </div>
                 {activeTab === "runtime" && (
                   <div className={styles.enabledControl}>
@@ -411,9 +418,6 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                 aria-labelledby={`long-agent-${activeTab}-tab`}
                 className={styles.tabPanel}
               >
-                {activeTab === "runtime" && <ConfigurationSection className={styles.disclosure} title={t("longAgentSettings.groupIdentity")} onToggle={event => { if (event.currentTarget.open) setIdentityOpen(true); }}>
-                  {identityOpen && <LongAgentGroupSettings longAgentId={document.agent.id} key={`${document.agent.id}:${refreshVersion}`} onDirtyChange={setTabDirty} />}
-                </ConfigurationSection>}
                 {activeTab === "runtime" && (
                   <form className={styles.form} onSubmit={(event) => { event.preventDefault(); void save(); }}>
                     <fieldset className={styles.formFields} disabled={saving}>
@@ -426,6 +430,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
 
                     <fieldset className={styles.section}>
                       <legend>{t("longAgentSettings.identity")}</legend>
+                      <p className={styles.help}>{t("assistantDesign.identityHint")}</p>
                       <LongAgentAvatarEditor
                         document={document}
                         onUpdated={(next) => {
@@ -478,6 +483,9 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                     </fieldset>
                   </form>
                 )}
+                {activeTab === "runtime" && <ConfigurationSection className={styles.disclosure} title={t("longAgentSettings.groupIdentity")} onToggle={event => { if (event.currentTarget.open) setIdentityOpen(true); }}>
+                  {identityOpen && <LongAgentGroupSettings longAgentId={document.agent.id} key={`${document.agent.id}:${refreshVersion}`} onDirtyChange={setTabDirty} />}
+                </ConfigurationSection>}
                 {activeTab === "runtime" && (
                   <ConfigurationSection className={styles.disclosure} title={t("longAgentSettings.effectiveAssembly")}>
                     <p className={styles.help}>{t("longAgentSettings.previewScope", { project: document.agent.id })}</p>

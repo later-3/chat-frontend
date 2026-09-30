@@ -1,0 +1,34 @@
+/* A writing surface, then its controls; the same structure for every Session. */
+.composer-frame { padding:16px; gap:16px; border-radius:var(--radius-panel); background:var(--surface-control,var(--bg)); border-color:var(--border-control); box-shadow:var(--material-edge); }
+.composer-frame:focus-within { border-color:var(--accent); }
+.composer-actions { display:flex; min-width:0; align-items:center; gap:6px; flex-wrap:wrap; }
+.composer-actions-space { flex:1; }
+.composer-actions [data-workflow-picker] { max-width:200px; background:var(--bg-panel); border-radius:var(--radius-control); font-weight:600; }
+.composer-actions .composer-send, .composer-actions .composer-stop { border-radius:var(--radius-control); min-height:36px; }
+.chat-welcome { margin:0 52px 28px 16px; }
+.chat-welcome-brand { display:flex; align-items:center; gap:10px; font-weight:650; font-size:16px; }
+.chat-welcome-brand > span { display:grid; place-items:center; width:36px; height:36px; background:var(--brand-ink); color:var(--brand-paper); border-radius:var(--radius-control); }
+.chat-welcome-brand svg { fill:currentColor; stroke:var(--brand-ink); }
+.chat-welcome h2 { margin:26px 0 12px; font-weight:650; font-size:32px; line-height:1.3; letter-spacing:-.03em; }
+.chat-welcome p { margin:0; color:var(--text-muted); font-size:15px; line-height:1.8; max-width:42ch; }
+.chat-welcome small { display:block; margin-top:20px; color:var(--text-muted); font-size:12px; line-height:1.6; }
+.assistant-workflow-settings { display:grid; gap:16px; }
+.assistant-workflow-settings > p { margin:0; color:var(--text-muted); font-size:13px; line-height:1.7; }
+.assistant-workflow-choice { display:flex; align-items:flex-end; gap:12px; }
+.assistant-workflow-choice > label { flex:1; }
+.assistant-workflow-choice > button { min-height:40px; }
+.assistant-workflow-steps { display:flex; flex-wrap:wrap; gap:8px 20px; list-style:none; margin:0; padding:12px 14px; border-radius:var(--radius-control); background:var(--bg-panel); }
+.assistant-workflow-steps li { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-muted); }
+.assistant-workflow-steps li > span { font-size:11px; color:var(--accent); font-weight:600; }
+@media (max-width:768px), (hover:none) and (pointer:coarse) and (max-height:500px) {
+  .composer-frame { padding:12px; gap:8px; }
+  .composer-actions [data-workflow-picker] { max-width:140px; }
+  .composer-actions .composer-send, .composer-actions .composer-stop { min-height:44px; padding-inline:12px; }
+  .chat-welcome { margin:24px 8px 32px; }
+  .chat-welcome h2 { font-size:28px; }
+  .assistant-workflow-choice { align-items:stretch; flex-direction:column; }
+}
+/* Keep the writing controls visible when the keyboard or a short window reduces space. */
+@media (max-height:600px) {
+  .chat-empty .chat-welcome { display:none; }
+}

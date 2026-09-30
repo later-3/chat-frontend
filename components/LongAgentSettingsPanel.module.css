@@ -113,14 +113,15 @@
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
+  grid-template-columns: 232px minmax(0, 1fr);
 }
 
 .agentNav {
   min-height: 0;
   overflow: auto;
-  padding: 16px 10px calc(16px + env(safe-area-inset-bottom));
-  background: var(--bg-panel);
+  padding: 24px 16px calc(16px + env(safe-area-inset-bottom));
+  background-color: var(--surface-chrome, var(--bg-panel));
+  background-image: var(--ambient-background);
   border-right: 1px solid var(--border);
 }
 
@@ -199,11 +200,11 @@
 .main {
   min-height: 0;
   overflow: auto;
-  padding: 24px 24px calc(88px + env(safe-area-inset-bottom));
+  padding: 30px 36px calc(96px + env(safe-area-inset-bottom));
 }
 
 .settingsShell {
-  width: min(920px, 100%);
+  width: min(800px, 100%);
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -227,15 +228,16 @@
 }
 
 .agentHeading h2 {
-  margin: 3px 0 0;
-  font-size: 24px;
+  margin: 6px 0 0;
+  font-size: 28px;
+  letter-spacing: -.025em;
   font-weight: 650;
 }
 
 .eyebrow {
   color: var(--text-dim);
-  font-family: var(--font-mono);
   font-size: 12px;
+  font-weight: 500;
 }
 
 .settingsTabs {
@@ -250,13 +252,13 @@
 
 .settingsTab,
 .activeSettingsTab {
-  min-height: 42px;
+  min-height: 64px;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 7px;
-  padding: 0 14px;
+  gap: 12px;
+  padding: 12px;
   border: 1px solid transparent;
   border-radius: var(--radius-control);
   color: var(--text-muted);
@@ -275,7 +277,8 @@
 .activeSettingsTab {
   color: var(--text);
   border-color: var(--border);
-  background: var(--bg-selected);
+  background: var(--surface-control, var(--bg));
+  box-shadow: var(--material-edge);
 }
 
 .settingsTab:focus-visible,
@@ -334,16 +337,17 @@
   flex-direction: column;
   gap: 12px;
   margin: 0;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  background: var(--bg-panel);
+  padding: 24px 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
 }
 
 .section legend {
-  padding: 0 6px;
+  padding: 0 12px 0 0;
   color: var(--text);
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 650;
 }
 
@@ -1009,7 +1013,7 @@
   flex: 1;
   min-height: 0;
 }
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   .dialog .workspace {
     display: flex;
     flex-direction: column;
@@ -1085,7 +1089,7 @@
 
   .settingsTabs {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 4px;
     margin: 8px 0 0;
   }
@@ -1328,3 +1332,21 @@
 @media(max-width:768px) { .section { padding:16px 0; } .modelFields { grid-template-columns:minmax(0,1fr); gap:16px; } }
 
 .section.runtimeSection { padding-bottom:0; }
+
+/* Assistant → category → editable facts. Shares the Workflow editor's rhythm. */
+.navIntro { display:grid; gap:6px; margin:0 4px 20px; }
+.navIntro > span { font-size:13px; font-weight:650; }
+.navIntro small { font-size:12px; color:var(--text-muted); line-height:1.6; }
+.settingsTab > svg, .activeSettingsTab > svg { flex-shrink:0; align-self:flex-start; margin-top:2px; }
+.settingsTab > span, .activeSettingsTab > span { min-width:0; display:grid; gap:5px; }
+.settingsTab strong, .activeSettingsTab strong { font-size:13px; font-weight:600; }
+.settingsTab small, .activeSettingsTab small { font-size:11px; font-weight:400; line-height:1.5; color:var(--text-muted); }
+.headingDescription { max-width:52ch; margin:10px 0 8px; color:var(--text-muted); font-size:13px; line-height:1.7; }
+@media (max-width:768px) {
+  .navIntro { display:none; }
+  .settingsTab small, .activeSettingsTab small { display:none; }
+  .settingsTab, .activeSettingsTab { min-height:44px; padding:8px 6px; justify-content:center; }
+  .settingsTab > svg, .activeSettingsTab > svg { display:none; }
+  .agentHeading h2 { font-size:24px; }
+  .section { padding:20px 0; }
+}

@@ -1831,18 +1831,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           {/* The bordered frame holds the textarea AND the controls row: the buttons
               belong inside the box, not in a strip below it (UI/UX §20.5). */}
           <div className={`composer-frame${bashMode ? " is-bash" : isStreaming && (onSteer || onFollowUp) ? " is-queued" : ""}`}>
-          <div
-            data-chat-toolbar
-            style={{
-              minWidth: 0,
-              display: "flex",
-              gap: 6,
-              alignItems: "center",
-              flexWrap: isMobile ? "wrap" : "nowrap",
-            }}
-          >
           <textarea
             data-chat-composer
+            aria-label={t("chatDesign.messageLabel")}
             ref={textareaRef}
             value={value}
             onChange={(e) => {
@@ -1875,7 +1866,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             }
             rows={1}
             style={{
-              flex: isMobile ? "1 0 100%" : 1,
+              flex: "none",
               minWidth: 0,
               width: "100%",
               background: "none",
@@ -1886,12 +1877,19 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               fontSize: isMobile ? 16 : 14,
               lineHeight: 1.6,
               fontFamily: "inherit",
-              minHeight: 24,
+              minHeight: isMobile ? 44 : 64,
               maxHeight: 200,
               overflow: "auto",
             }}
           />
-
+          <div data-chat-toolbar className="composer-actions">
+            <WorkflowPicker
+              disabled={isStreaming}
+              onChange={(next) => onWorkflowChange(next as ChatWorkflowId)}
+              selected={selectedWorkflow}
+              summaries={visibleWorkflows}
+              value={workflowId}
+            />
             <ToolbarAction
               shape="frame"
               label={attachImageTitle}
@@ -1909,6 +1907,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               disabled={isStreaming || !cwd || selectedWorkflow?.agents.length === 0}
               icon={<IconAdjustmentsHorizontal size={18} stroke={1.8} />}
             />}
+          <span className="composer-actions-space" />
           {isStreaming ? (
             <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, alignSelf: "flex-end" }}>
               {onSteer && (
@@ -1973,13 +1972,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               </Button>
             )}
             {/* Long Agent identity lives in the sidebar coworker panel; the composer never repeats it. */}
-            <WorkflowPicker
-              disabled={isStreaming}
-              onChange={(next) => onWorkflowChange(next as ChatWorkflowId)}
-              selected={selectedWorkflow}
-              summaries={visibleWorkflows}
-              value={workflowId}
-            />
+
           </div>
         </div>
 

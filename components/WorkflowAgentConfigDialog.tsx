@@ -10,7 +10,7 @@ import { ModelSelection, ThinkingSelection } from "./ModelSelection";
 
 import { SurfaceDialog } from "./SurfaceDialog";
 import { Button } from "./ui/Button";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import type {
   AgentConfigSelection,
   WorkflowAgentToolPolicy,
@@ -568,20 +568,24 @@ function ResourceConfigSection({
   );
 }
 
-type ConfigTab = "runtime" | "session" | "inspect";
+type ConfigTab = "runtime" | "resources" | "session" | "inspect";
 
 const CONFIG_TABS: readonly { readonly id: ConfigTab; readonly label: string }[] = [
-  { id: "runtime", label: "interface.model.and.tools" },
+  { id: "runtime", label: "workflowSettings.model" },
+  { id: "resources", label: "workflowSettings.resources" },
   { id: "session", label: "interface.session.overrides" },
   { id: "inspect", label: "interface.inspect.configuration" },
 ];
 
 export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, proposals, onConfigsChange, onClose, selectionScope = "session" }: Props) {
   const { t: tr } = useI18n();
-  const [agentId, setAgentId] = useState(workflow.agents[0]?.id ?? "");
+  const panelId = useId();
+  const [selectedNodeId, setSelectedNodeId] = useState(workflow.nodes.find(node => node.kind === "agent")?.id ?? "");
+  const [agentId, setAgentId] = useState(workflow.nodes.find(node => node.kind === "agent")?.agentId ?? workflow.agents[0]?.id ?? "");
   const [tab, setTab] = useState<ConfigTab>("runtime");
   const [inspection, setInspection] = useState<WorkflowAgentInspection | null>(null);
   const [catalog, setCatalog] = useState<WorkflowAgentInspection | null>(null);
+  const [promptQuery, setPromptQuery] = useState("");
   const [promptResources, setPromptResources] = useState<PromptResource[]>([]);
   const [modelCatalog, setModelCatalog] = useState<ChatModelCatalog | null>(null);
   const [modelConfigVersion, setModelConfigVersion] = useState(0);
@@ -596,7 +600,7 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
     void fetchChatModelCatalog(controller.signal)
       .then((catalog) => setModelCatalog(catalog))
       .catch((cause: unknown) => {
-        if (!(cause instanceof DOMException && cause.name === "AbortError")) {
+        if (!controller.signal.aborted) {
           setError(cause instanceof Error ? cause.message : String(cause));
         }
       });
@@ -620,7 +624,7 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
         setInspection(resolved);
         setCatalog(available);
       }).catch((cause: unknown) => {
-        if (!(cause instanceof DOMException && cause.name === "AbortError")) {
+        if (!controller.signal.aborted) {
           setError(cause instanceof Error ? cause.message : String(cause));
         }
       }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
@@ -654,16 +658,22 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
         if (!controller.signal.aborted) setPromptResources([...byAddress.values()]);
       })
       .catch((cause: unknown) => {
-        if (!(cause instanceof DOMException && cause.name === "AbortError")) {
+        if (!controller.signal.aborted) {
           setError(cause instanceof Error ? cause.message : String(cause));
         }
       });
     return () => controller.abort();
-  }, [projectId, selectionKey]);
+  }, [projectId, selectionKey, modelConfigVersion]);
 
   const effectiveResources = useMemo<WorkflowAgentResources>(() => (
     selection?.resources ?? inspection?.agent.resources ?? { mode: "inherit" }
   ), [inspection?.agent.resources, selection?.resources]);
+
+  const visiblePrompts = useMemo(() => {
+    const selected = new Set((selection?.promptResources ?? []).map(item => promptResourceAddress(item.target, item.id)));
+    return promptResources.filter(resource => `${resource.title} ${resource.purpose} ${resource.id}`.toLocaleLowerCase().includes(promptQuery.trim().toLocaleLowerCase()))
+      .sort((a, b) => Number(selected.has(promptResourceAddress(b.target, b.id))) - Number(selected.has(promptResourceAddress(a.target, a.id))));
+  }, [promptResources, promptQuery, selection?.promptResources]);
 
   if (agent === undefined) return null;
 
@@ -703,20 +713,34 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
   };
   return (
     <SurfaceDialog title={translateWorkflowCopy(workflow.id, workflow.name, tr)}
-      description={translateWorkflowCopy(workflow.id, workflow.description, tr)} onClose={onClose}>
+      description={tr("workflowSettings.subtitle")} onClose={onClose}>
       <div className="workflow-agent-dialog-shell">
-        <nav aria-label={tr("interface.workflow.agents")}>
-          {workflow.agents.map((item) => (
-            <button key={item.id} type="button" className={item.id === agent.id ? "active" : ""} onClick={() => { setInspection(null); setCatalog(null); setAgentId(item.id); }}>
-              <strong>{translateWorkflowCopy(workflow.id, item.name, tr)}</strong><small>{translateWorkflowCopy(workflow.id, item.description, tr)}</small>
-            </button>
-          ))}
+        <nav className="workflow-node-navigation" aria-label={tr("interface.workflow.agents")}>
+          <div className="workflow-navigation-heading"><span>{tr("design.workflowSteps")}</span><small>{tr("workflowSettings.stepsHint")}</small></div>
+          <ol className="workflow-node-list">
+            {workflow.nodes.map((node, index) => <li key={node.id}>
+              {node.kind === "agent" ? <button type="button" aria-current={node.id === selectedNodeId ? "step" : undefined}
+                className={node.id === selectedNodeId ? "active" : ""}
+                onClick={() => { setSelectedNodeId(node.id); if (node.agentId !== agent.id) { setInspection(null); setCatalog(null); setAgentId(node.agentId); } }}>
+                <span className="workflow-node-number" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+                <span><strong>{translateWorkflowCopy(workflow.id, node.name, tr)}</strong><small>{translateWorkflowCopy(workflow.id, node.description, tr)}</small></span>
+              </button> : <div className="workflow-task-node">
+                <span className="workflow-node-number" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+                <span><strong>{translateWorkflowCopy(workflow.id, node.name, tr)}</strong><small>{tr("workflowSettings.taskNode")}</small></span>
+              </div>}
+            </li>)}
+          </ol>
+          {workflow.agents.filter(item => !workflow.nodes.some(node => node.kind === "agent" && node.agentId === item.id)).map(item =>
+            <button key={item.id} type="button" aria-current={item.id === agent.id ? "true" : undefined} onClick={() => { setSelectedNodeId(""); setInspection(null); setCatalog(null); setAgentId(item.id); }}>
+              <strong>{translateWorkflowCopy(workflow.id, item.name, tr)}</strong>
+            </button>)}
+          <p className="workflow-navigation-note">{tr("workflowSettings.structureHint")}</p>
         </nav>
         <main>
-          <section className="workflow-agent-config-fields">
+          <section className="workflow-agent-config-fields workflow-agent-intro">
+            <span className="workflow-scope-label">{tr(selectionScope === "default" ? "workflowSettings.homeScope" : "workflowSettings.projectScope")}</span>
             <h2>{translateWorkflowCopy(workflow.id, agent.name, tr)}</h2>
             <p>{translateWorkflowCopy(workflow.id, agent.description, tr)}</p>
-            <details className="workflow-agent-flow"><summary>{tr("design.workflowSteps")}</summary><p>{workflow.nodes.map((node) => `${translateWorkflowCopy(workflow.id, node.name, tr)}（${node.kind === "agent" ? node.agentId : tr("interface.regular.node")}）`).join(" → ")}</p></details>
           </section>
 
           <div className="workflow-agent-tabs" role="tablist" aria-label={tr("interface.agent.configuration.sections")}>
@@ -725,6 +749,8 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
                 key={item.id}
                 type="button"
                 role="tab"
+                id={`${panelId}-${item.id}`}
+                aria-controls={`${panelId}-panel`}
                 aria-selected={tab === item.id}
                 tabIndex={tab === item.id ? 0 : -1}
                 onKeyDown={event => {
@@ -746,10 +772,10 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
           </div>
 
           {loading && <div className="workflow-agent-loading">{tr("interface.resolving.the.agent.through.pi.s.execution.path")}</div>}
-          {error && <div className="workflow-agent-error" role="alert"><InterfaceFeedback message={error} /></div>}
+          {error && <div className="workflow-agent-error" role="alert"><InterfaceFeedback message={error} /><Button variant="ghost" onClick={() => setModelConfigVersion(version => version + 1)}>{tr("common.retry")}</Button></div>}
 
           {tab === "runtime" && (
-            <div className="workflow-agent-tab-panel" role="tabpanel" aria-label={tr("interface.model.and.tools")}>
+            <div className="workflow-agent-tab-panel" role="tabpanel" id={`${panelId}-panel`} aria-labelledby={`${panelId}-${tab}`} tabIndex={0} aria-label={tr("interface.model.and.tools")}>
               <p className="workflow-agent-tab-note">{tr("interface.changes.save.automatically.to.this.project.and.apply.from.the.next.run")}</p>
               {inspection && (
                 <ModelConfigSection
@@ -762,8 +788,14 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
                   onConfigChanged={() => setModelConfigVersion((version) => version + 1)}
                 />
               )}
+            </div>
+          )}
+
+          {tab === "resources" && (
+            <div className="workflow-agent-tab-panel" role="tabpanel" id={`${panelId}-panel`} aria-labelledby={`${panelId}-${tab}`} tabIndex={0}>
+              <p className="workflow-agent-tab-note">{tr("interface.changes.save.automatically.to.this.project.and.apply.from.the.next.run")}</p>
               {inspection && catalog && (
-                <ConfigurationSection title={tr("design.toolSettings")}>
+                <div className="workflow-resource-section">
                 <ToolConfigSection
                   key={`${projectId}:${agent.id}`}
                   workflow={workflow}
@@ -772,7 +804,7 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
                   inspection={inspection}
                   catalog={catalog}
                   onConfigChanged={() => setModelConfigVersion((version) => version + 1)}
-                /></ConfigurationSection>
+                /></div>
               )}
               {inspection && catalog && (
                 <ConfigurationSection title={tr("design.resourceSettings")}>
@@ -791,19 +823,18 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
           )}
 
           {tab === "session" && (
-            <div className="workflow-agent-tab-panel" role="tabpanel" aria-label={tr(selectionScope === "default" ? "longAgentSettings.workflowDefaults" : "interface.session.overrides")}>
+            <div className="workflow-agent-tab-panel" role="tabpanel" id={`${panelId}-panel`} aria-labelledby={`${panelId}-${tab}`} tabIndex={0} aria-label={tr(selectionScope === "default" ? "longAgentSettings.workflowDefaults" : "interface.session.overrides")}>
               <section className="workflow-agent-config-fields">
                 <div className="workflow-agent-config-actions">
-                  <small>{tr("interface.changes.apply.to.this.workflow.agent.in.the.current.session.and.are.submitted.with.the.next.message")}</small>
+                  <small>{tr(selectionScope === "default" ? "workflowSettings.defaultSaveHint" : "interface.changes.apply.to.this.workflow.agent.in.the.current.session.and.are.submitted.with.the.next.message")}</small>
                   <Button variant="secondary" type="button" onClick={() => onConfigsChange({ ...configs, [agent.id]: {} })}>{tr("interface.restore.workflow.defaults")}</Button>
                 </div>
-                <label>{tr("interface.primary.configuration.file")}<input value={selection?.primary ?? ""} placeholder="/path/to/agent.json" onChange={(event) => updateSelection({ primary: event.target.value.trim() || undefined })} /></label>
-                <label>{tr("interface.additional.configuration.files.one.per.line")}<textarea value={lines(selection?.append)} onChange={(event) => updateSelection({ append: parseLines(event.target.value) })} /></label>
-                <label>{tr("interface.additional.prompt.files.one.per.line")}<textarea value={lines(selection?.promptFiles)} onChange={(event) => updateSelection({ promptFiles: parseLines(event.target.value) })} /></label>
+
 
                 <fieldset>
                   <legend>{tr("interface.rule.and.experience.prompts.2")}</legend>
-                  <div className="workflow-agent-resource-groups">
+                  <label className="workflow-resource-search">{tr("workflowSettings.searchPrompts")}<input type="search" value={promptQuery} onChange={event => setPromptQuery(event.target.value)} /></label>
+                  <div className="workflow-agent-resource-groups workflow-prompt-options">
                     {proposals.filter((proposal) => (
                       proposal.targetWorkflowId === workflow.id
                       && proposal.targetAgentId === agent.id
@@ -815,7 +846,7 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
                         <small>{proposal.promptResources.map((resource) => resource.reason ?? resource.id).join("；")}</small>
                       </article>
                     ))}
-                    {promptResources.map((resource) => {
+                    {visiblePrompts.map((resource) => {
                       const address = promptResourceAddress(resource.target, resource.id);
                       const selected = selection?.promptResources?.find((item) => (
                         promptResourceAddress(item.target, item.id) === address
@@ -848,6 +879,7 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
                         />
                       );
                     })}
+                    {promptResources.length > 0 && visiblePrompts.length === 0 && <small>{tr("workflowSettings.noMatches")}</small>}
                     {promptResources.length === 0 && <small>{tr("interface.no.active.resources.yet.use.the.rules.and.experiences.workflow.to.create.them.through.conversation")}</small>}
                   </div>
                 </fieldset>
@@ -869,12 +901,17 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
                     </div>
                   )}
                 </fieldset>
+                <ConfigurationSection title={tr("workflowSettings.configFiles")}>
+                <label>{tr("interface.primary.configuration.file")}<input value={selection?.primary ?? ""} placeholder="/path/to/agent.json" onChange={(event) => updateSelection({ primary: event.target.value.trim() || undefined })} /></label>
+                <label>{tr("interface.additional.configuration.files.one.per.line")}<textarea value={lines(selection?.append)} onChange={(event) => updateSelection({ append: parseLines(event.target.value) })} /></label>
+                <label>{tr("interface.additional.prompt.files.one.per.line")}<textarea value={lines(selection?.promptFiles)} onChange={(event) => updateSelection({ promptFiles: parseLines(event.target.value) })} /></label>
+                </ConfigurationSection>
               </section>
             </div>
           )}
 
           {tab === "inspect" && (
-            <div className="workflow-agent-tab-panel" role="tabpanel" aria-label={tr("interface.inspect.configuration")}>
+            <div className="workflow-agent-tab-panel" role="tabpanel" id={`${panelId}-panel`} aria-labelledby={`${panelId}-${tab}`} tabIndex={0} aria-label={tr("interface.inspect.configuration")}>
               {inspection && <RuntimeCapabilities inspection={inspection} />}
               {inspection && <InspectionDetails inspection={inspection} />}
             </div>

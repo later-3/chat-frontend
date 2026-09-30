@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useSyncExternalStore } from "react";
+import { APPEARANCE_KEY, DEFAULT_APPEARANCE, applyAppearance, initializeAppearance, readAppearance, type Appearance } from "@/lib/appearance";
 
 export type ThemePreference = "light" | "dark" | "auto";
 export type ResolvedTheme = "light" | "dark";
@@ -8,13 +9,14 @@ export type ResolvedTheme = "light" | "dark";
 type ThemeState = {
   preference: ThemePreference;
   theme: ResolvedTheme;
+  appearance: Appearance;
 };
 
 type ToggleOrigin = { x: number; y: number };
 
 const STORAGE_KEY = "pi-theme";
 const PREFERENCE_CYCLE: ThemePreference[] = ["light", "dark", "auto"];
-const SERVER_SNAPSHOT: ThemeState = { preference: "auto", theme: "light" };
+const SERVER_SNAPSHOT: ThemeState = { preference: "auto", theme: "light", appearance: { ...DEFAULT_APPEARANCE } };
 
 const listeners = new Set<() => void>();
 let state: ThemeState | null = null;
@@ -55,7 +57,7 @@ function ensureState(): ThemeState {
   const preference = readStoredPreference();
   const theme = resolveTheme(preference);
   applyDomTheme(theme);
-  state = { preference, theme };
+  state = { preference, theme, appearance: initializeAppearance() };
   return state;
 }
 
@@ -68,7 +70,7 @@ function setThemeState(preference: ThemePreference, theme: ResolvedTheme, persis
       // ignore storage errors (private mode, quota, etc.)
     }
   }
-  state = { preference, theme };
+  state = { preference, theme, appearance: ensureState().appearance };
   emit();
 }
 
@@ -85,6 +87,17 @@ function ensureSystemListener(): void {
 
   const mql = window.matchMedia("(prefers-color-scheme: dark)");
   mql.addEventListener("change", syncAutoThemeFromSystem);
+  window.addEventListener("storage", event => {
+    if (event.key !== null && event.key !== STORAGE_KEY && event.key !== APPEARANCE_KEY) return;
+    const preference = readStoredPreference();
+    let appearance = { ...DEFAULT_APPEARANCE };
+    try { appearance = readAppearance(window.localStorage); } catch { /* blocked storage */ }
+    applyAppearance(document.documentElement, appearance);
+    const theme = resolveTheme(preference);
+    applyDomTheme(theme);
+    state = { preference, theme, appearance };
+    emit();
+  });
   // Some browsers delay or miss scheme events while backgrounded.
   window.addEventListener("focus", syncAutoThemeFromSystem);
   document.addEventListener("visibilitychange", () => {
@@ -118,6 +131,14 @@ function nextPreference(preference: ThemePreference): ThemePreference {
 
 export function useTheme() {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const setAppearance = useCallback((patch: Partial<Appearance>) => {
+    const current = ensureState();
+    const appearance = { ...current.appearance, ...patch };
+    applyAppearance(document.documentElement, appearance);
+    try { localStorage.setItem(APPEARANCE_KEY, JSON.stringify({ version: 1, ...appearance })); } catch { /* keep in-memory preference usable */ }
+    state = { ...current, appearance };
+    emit();
+  }, []);
   const setTheme = useCallback((preference: ThemePreference) => {
     setThemeState(preference, resolveTheme(preference), true);
   }, []);
@@ -131,7 +152,7 @@ export function useTheme() {
       setThemeState(nextPref, nextTheme, true);
     };
 
-    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const reduceMotion = current.appearance.motion === "reduced" || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     const supportsVT = typeof document.startViewTransition === "function";
 
     if (!supportsVT || reduceMotion) {
@@ -171,6 +192,8 @@ export function useTheme() {
   return {
     theme: snapshot.theme,
     preference: snapshot.preference,
+    appearance: snapshot.appearance,
+    setAppearance,
     toggleTheme,
     setTheme,
     isDark: snapshot.theme === "dark",
