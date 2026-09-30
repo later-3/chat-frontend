@@ -13,7 +13,7 @@
 .dayMeta > span { font-size: 12px; color: var(--text-muted); }
 .sectionLabel { margin: 4px 0 0; color: var(--text-dim); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 .group { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.groupLabel { display: flex; align-items: center; gap: 8px; color: var(--text-dim); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.groupLabel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--text-dim); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 .count { font-size: 11px; font-weight: 600; color: var(--accent); background: var(--bg-selected); border-radius: 999px; padding: 1px 8px; letter-spacing: 0; text-transform: none; }
 .rows { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius-panel); overflow: hidden; }
 .row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 46px; padding: 8px 12px; text-align: left; border: 0; border-bottom: 1px solid var(--border); background: var(--bg); color: var(--text); cursor: pointer; }

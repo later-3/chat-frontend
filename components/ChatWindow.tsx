@@ -1,4 +1,5 @@
 "use client";
+import type { ExecutionSettlement } from "@/lib/execution-completion";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuItem, DropdownMenuSeparator } from "./ui/DropdownMenu";
 
 import { InterfaceFeedback } from "./InterfaceFeedback";
@@ -12,6 +13,8 @@ import { normalizeCustomPanelLines, parseAnsiLine } from "@/lib/ansi";
 import { asBracketedPaste, toTerminalKeyData } from "@/lib/terminal-input";
 import { getAssistantErrorMessage, getDisplayableAssistantBlocks, splitFinalAssistantBlocks, findFinalAssistantIndex, isSessionMemoryResponse } from "@/lib/message-display";
 import { extractTurnWrittenFiles, type WrittenFile } from "@/lib/turn-written-files";
+import { groupWorkflowProcess } from "@/lib/workflow-process";
+import { WorkflowProcess } from "./WorkflowProcess";
 import { summarizeTurn } from "@/lib/turn-summary";
 import { TurnSummary } from "./TurnSummary";
 import { Hint } from "@/components/ui/Tooltip";
@@ -66,7 +69,7 @@ interface Props {
   chatActionsSlot?: HTMLElement | null;
   newSessionCwd: string | null;
   newSessionDraftKey: string | null;
-  onAgentEnd?: () => void;
+  onExecutionSettled?: (event: ExecutionSettlement) => void;
   onAttentionNeeded?: (request: BlockingExtensionUiRequest) => void;
   onSessionCreated?: (session: SessionInfo, sourceDraftKey: string) => void;
   onSessionOpen?: (sessionId: string) => void | Promise<void>;
@@ -142,7 +145,7 @@ function withAssistantBlocks(
   return next;
 }
 
-export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjectId, topicNode: requestedTopicNode, onSessionMemoryChanged, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onConnectionFailure, soundEnabled = true, onSoundToggle, playDoneSound = () => {}, unlockAudio }: Props) {
+export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjectId, topicNode: requestedTopicNode, onSessionMemoryChanged, session, sessionRunning, newSessionCwd, newSessionDraftKey, onExecutionSettled, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onConnectionFailure, soundEnabled = true, onSoundToggle, playDoneSound = () => {}, unlockAudio }: Props) {
   const topicNode = requestedTopicNode ?? session?.topicNode;
   const sessionMemoryControl = useTopicMemoryControl(topicNode, onSessionMemoryChanged);
   const { t, locale } = useI18n();
@@ -152,21 +155,11 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
   const isMobile = useIsMobile();
   const readOnly = session?.readOnly === true;
 
-  // Wrap onAgentEnd to play the completion sound. This is more reliable than
-  // wrapping handleAgentEventRef because useAgentSession overwrites that ref
-  // on every render (it syncs the latest callback), which would blow away an
-  // externally-installed wrapper after the first re-render.
+  // Completion sound belongs to the enclosing execution in AppShell. Extension
+  // input requests retain their separate attention cue.
   const playDoneSoundRef = useRef(playDoneSound);
   playDoneSoundRef.current = playDoneSound;
-  const soundEnabledRef = useRef(soundEnabled);
-  soundEnabledRef.current = soundEnabled;
   const soundedExtensionDialogIdRef = useRef<string | null>(null);
-  const wrappedOnAgentEnd = useCallback(() => {
-    if (soundEnabledRef.current) {
-      playDoneSoundRef.current();
-    }
-    onAgentEnd?.();
-  }, [onAgentEnd]);
 
   // 稳定化 onEditContent 引用，配合 React.memo 防止历史消息重渲染
   const handleEditContent = useCallback((message: UserMessage) => {
@@ -192,7 +185,7 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
     memoryEnabled, setMemoryEnabled,
     promptCaptureEnabled, setPromptCaptureEnabled,
   } = useAgentSession({
-    projectId, deviceId, contextProjectId, topicNode, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd: wrappedOnAgentEnd, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked,
+    projectId, deviceId, contextProjectId, topicNode, session, sessionRunning, newSessionCwd, newSessionDraftKey, onExecutionSettled, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked,
     chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsPanelOpen,
     onConnectionFailure,
     sessionMemoryEnabled: sessionMemoryControl?.enabled,
@@ -751,13 +744,13 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
                   .map((processIdx) => visibleRefIndexByMessage.get(processIdx))
                   .find((value): value is number => typeof value === "number")
                   ?? (finalAnswerMessage ? undefined : visibleRefIndexByMessage.get(finalAssistantIdx));
-                const processContent = visibleProcessIndices.length || finalProcessMessage ? <>
-                  {visibleProcessIndices.map((processIdx) => renderMessage(processIdx, {
+                const processNodes = groupWorkflowProcess(messages, userIdx + 1, endIdx, toolResultsMap);
+                const processContent = processNodes.some(node => node.stage) || visibleProcessIndices.length || finalProcessMessage ? <WorkflowProcess
+                  nodes={processNodes} finalIndex={finalAssistantIdx} render={(processIdx) => !visibleProcessIndices.includes(processIdx) ? null : renderMessage(processIdx, {
                     attachRef: false, keyPrefix: "process",
                     ...(processIdx === finalAssistantIdx && finalProcessMessage
                       ? { messageOverride: finalProcessMessage, showTimestamp: false } : {}),
-                  }))}
-                </> : undefined;
+                  })} /> : undefined;
                 if (finalAnswerMessage) {
                   // Each tool call is stored as its own assistant entry, so the
                   // final answer alone carries no record of what the turn wrote.
@@ -770,7 +763,7 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
                       for (const b of (m as AssistantMessage).content ?? []) turnContent.push(b);
                     }
                   }
-                  const writtenFiles = extractTurnWrittenFiles(turnContent, toolResultsMap, messageCwd);
+                  const writtenFiles = extractTurnWrittenFiles(turnContent, toolResultsMap, messageCwd, longAgentId ?? undefined);
                   rendered.push(renderMessage(finalAssistantIdx, { messageOverride: finalAnswerMessage, writtenFiles }));
                 }
                 for (let renderIdx = finalAssistantIdx + 1; !memoryRound && renderIdx < endIdx; renderIdx++) {
@@ -799,6 +792,8 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
                       round's memory was not written, so turn folding must never swallow them. */}
                   {messages.flatMap((message, index) => message.role === "custom"
                     && (message as CustomMessage).customType === "chat.session_memory_notice"
+                    && !((message as CustomMessage).details && typeof (message as CustomMessage).details === "object"
+                      && "status" in ((message as CustomMessage).details as object) && ((message as CustomMessage).details as { status: unknown }).status === "skipped")
                     ? [<MessageView key={`session-memory-notice-${String(index)}`} message={message} cwd={messageCwd} onOpenFile={onOpenFile} />]
                     : [])}
                 </>

@@ -1,4 +1,5 @@
 "use client";
+import { friendSettlement, type ExecutionSettlement } from "@/lib/execution-completion";
 
 import { navigationNeedsRevalidation, stashProjectSessionPayload } from "@/lib/session-preload";
 import { peekSessionView, fetchSessionView } from "@/lib/session-view-cache";
@@ -205,7 +206,7 @@ interface UseAgentSessionOptions {
   sessionRunning?: boolean;
   newSessionCwd: string | null;
   newSessionDraftKey: string | null;
-  onAgentEnd?: () => void;
+  onExecutionSettled?: (event: ExecutionSettlement) => void;
   onAttentionNeeded?: (request: BlockingExtensionUiRequest) => void;
   onSessionCreated?: (session: SessionInfo, sourceDraftKey: string) => void;
   onSessionOpen?: (sessionId: string) => void | Promise<void>;
@@ -433,7 +434,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     session,
     newSessionCwd,
     newSessionDraftKey,
-    onAgentEnd,
+    onExecutionSettled,
     onSessionCreated,
     onSessionOpen,
     onSessionForked,
@@ -873,7 +874,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
                 });
             }
             setRunPhase(terminal);
-            onAgentEnd?.();
+            onExecutionSettled?.(friendSettlement(friendExecutionRef.current ?? reference, terminal));
           }
           setAgentRunning(false);
           setAgentPhase(null);
@@ -881,7 +882,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         }
       }
     },
-    [addNotice, applySessionData, handleConnection, handleRunEvent, onAgentEnd, setRunPhase],
+    [addNotice, applySessionData, handleConnection, handleRunEvent, onExecutionSettled, setRunPhase],
   );
 
   const loadSession = useCallback(async (sessionId: string) => {
@@ -1080,10 +1081,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         return;
       }
 
+      const workflowDraft = readWorkflowConfigDraft(workflowConfigDraftKey);
+      const hasWorkflowAdjustment = workflowDraft?.dirtyWorkflowIds.includes(workflowId) === true;
+      const submittedAgentConfigs = hasWorkflowAdjustment
+        ? structuredClone(agentConfigsByWorkflow[workflowId] ?? {})
+        : undefined;
       if (selectedLongAgent !== undefined) {
         const accepted = await acceptFriendMessage(selectedLongAgent.id, {
           requestId: pendingId ?? crypto.randomUUID(),
           workflow: workflowId,
+          ...(submittedAgentConfigs === undefined ? {} : { agentConfigs: submittedAgentConfigs }),
           ...(sessionIdRef.current === null ? {} : { sessionId: sessionIdRef.current }),
           text: message, ...(friendExecutionRef.current?.workId
             ? { contextProjectId: friendExecutionRef.current.contextProjectId }
@@ -1099,11 +1106,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         return;
       }
 
-      const workflowDraft = readWorkflowConfigDraft(workflowConfigDraftKey);
-      const hasWorkflowAdjustment = workflowDraft?.dirtyWorkflowIds.includes(workflowId) === true;
-      const submittedAgentConfigs = hasWorkflowAdjustment
-        ? structuredClone(agentConfigsByWorkflow[workflowId] ?? {})
-        : undefined;
       const workflow = await runChatWorkflowPrompt(
         {
           projectId,
@@ -1191,7 +1193,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         });
       }
       setRunPhase("completed");
-      onAgentEnd?.();
+      onExecutionSettled?.({ projectId, sessionId: workflow.result.sessionId, executionId: `run:${workflow.runId}`, status: "completed" });
     } catch (cause) {
       if (!mountedRef.current) return;
       if (!longAgentAccepted && !workflowAccepted) {
@@ -1227,7 +1229,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         dispatch({ type: "end" });
       }
     }
-  }, [observeFriend, setRunPhase, handleConnection, addNotice, agentConfigsByWorkflow, agentRunning, applySessionData, composerDraftKey, handleRunEvent, longAgentId, longAgents, newSessionCwd, newSessionDraftKey, onAgentEnd, onConnectionFailure, onSessionCreated, onSessionOpen, projectId, contextProjectId, restoreSubmission, session?.cwd, topicNode, workflowConfigDraftKey, workflowId,
+  }, [observeFriend, setRunPhase, handleConnection, addNotice, agentConfigsByWorkflow, agentRunning, applySessionData, composerDraftKey, handleRunEvent, longAgentId, longAgents, newSessionCwd, newSessionDraftKey, onExecutionSettled, onConnectionFailure, onSessionCreated, onSessionOpen, projectId, contextProjectId, restoreSubmission, session?.cwd, topicNode, workflowConfigDraftKey, workflowId,
     // The send callback reads the switch, so it MUST be a dependency: otherwise it keeps the value from
     // the render that created it and a switched-off round still asks for session memory.
     memoryEnabled, maintenance.busy, t]);
@@ -1498,7 +1500,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           addNotice({ type: "warning", message: `Workflow已完成，但读取Session失败：${cause instanceof Error ? cause.message : String(cause)}` });
         }
         setRunPhase("completed");
-        onAgentEnd?.();
+        onExecutionSettled?.({ projectId, sessionId: workflow.result.sessionId, executionId: `run:${workflow.runId}`, status: "completed" });
       })
       .catch((cause: unknown) => {
         if (!mountedRef.current || (cause instanceof DOMException && cause.name === "AbortError")) return;
@@ -1521,7 +1523,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     return () => {
       if (workflowAbortRef.current === controller) controller.abort();
     };
-  }, [setRunPhase, handleConnection, addNotice, applySessionData, data?.activeWorkflowRun, data?.activePlanningExecution, handleRunEvent, onAgentEnd, projectId]);
+  }, [setRunPhase, handleConnection, addNotice, applySessionData, data?.activeWorkflowRun, data?.activePlanningExecution, handleRunEvent, onExecutionSettled, projectId]);
 
   useEffect(() => {
     const active = data?.friendExecution;

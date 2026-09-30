@@ -11,6 +11,7 @@ import { dateInTimeZone, sessionsByDate } from "@/lib/friend-calendar";
 import { addArchivedDay, readArchivedDays, removeArchivedDay } from "@/lib/friend-archive-memory";
 import { fetchChatProjects } from "@/lib/projects-contract";
 import { startProjectLongAgent } from "@/lib/long-agents-browser";
+import { acknowledgeFriendSessionCreation, friendSessionCreationRequest } from "@/lib/friend-session-creation";
 import { Button } from "./ui/Button";
 import { FriendCalendar } from "./FriendCalendar";
 import { LongAgentTasksPanel } from "./LongAgentTasksPanel";
@@ -120,7 +121,8 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClo
   const timeZone = calendar?.timeZone;
   const today = calendar?.today ?? null;
   const sessions = calendar?.sessions ?? [];
-  const byDate = useMemo(() => sessionsByDate(sessions), [sessions]);
+  const byDate = useMemo(() => sessionsByDate(sessions.map(session => session.creationDate === undefined ? session
+    : { ...session, dates: [...new Set([...session.dates, session.creationDate])] })), [sessions]);
   const rows = useMemo(() => buildFriendTaskRows(tasks, works), [tasks, works]);
 
   // A day the user picked stays in the area even when it turns out empty —
@@ -161,6 +163,13 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClo
   const openDay = (day: string) => act(async () => {
     const started = await startProjectLongAgent({ longAgentId: agentId, projectId: agentId, date: day });
     await onOpenSession(started.primarySessionId, started.projectId, day);
+  });
+  const createSession = (day: string) => act(async () => {
+    const started = await startProjectLongAgent({ longAgentId: agentId, projectId: agentId, date: day,
+      createRequestId: friendSessionCreationRequest(agentId, day) });
+    // Keep the request through navigation failure so retry still opens the same acknowledged session.
+    await onOpenSession(started.primarySessionId, started.projectId, day);
+    acknowledgeFriendSessionCreation(agentId, day);
   });
   const addDay = useCallback((day: string) => {
     setPickerOpen(false);
@@ -225,7 +234,13 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClo
         </header>
 
         <div className={styles.group}>
-          <span className={styles.groupLabel}>{t("friendInspector.sessionsLabel")}</span>
+          <div className={styles.groupLabel}>
+            <span>{t("friendInspector.sessionsLabel")}</span>
+            <Button variant="ghost" type="button" data-friend-new-session={day} disabled={busy || calendarLoading}
+              onClick={() => void createSession(day)}><IconPlus size={16} aria-hidden="true" />{t("friendInspector.newSession")}</Button>
+            <Button variant="ghost" type="button" data-friend-default-session={day} disabled={busy || calendarLoading}
+              onClick={() => void openDay(day)}>{t("friendInspector.defaultSession")}</Button>
+          </div>
           <div className={styles.rows}>
             {/* The day's sessions read like the project session list: name + kind + time. */}
             {daySessions.map(session => <button type="button" key={session.sessionId} className={styles.row} disabled={busy || calendarLoading}

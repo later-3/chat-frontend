@@ -5,6 +5,7 @@ import { translateWorkflowCopy } from "@/lib/i18n/workflow-copy";
 import { InterfaceFeedback } from "./InterfaceFeedback";
 
 import { useI18n } from "@/hooks/useI18n";
+import { ConfigurationSection } from "./ConfigurationSection";
 import { ModelSelection, ThinkingSelection } from "./ModelSelection";
 
 import { SurfaceDialog } from "./SurfaceDialog";
@@ -39,6 +40,7 @@ import type { PromptResourceProposal } from "@/hooks/useAgentSession";
 import { EffectiveSkillsList } from "./EffectiveSkillsList";
 
 interface Props {
+  readonly selectionScope?: "session" | "default";
   readonly workflow: ChatWorkflowSummary;
   readonly projectId: string;
   readonly cwd: string;
@@ -296,6 +298,11 @@ function ModelConfigSection({
             : tr("interface.inherits.workflow.defaults.changes.apply.only.to.this.project")}
         </small>
       </div>
+      <div className="configuration-model-fields">
+      <ModelSelection models={catalogModels} value={durableModelKey} inheritedModelKey={inspection.agent.effectiveModel ? `${inspection.agent.effectiveModel.provider}/${inspection.agent.effectiveModel.modelId}` : undefined} onChange={applyModel} inheritLabel={tr("interface.use.workflow.default")} disabled={busy || modelCatalog === null} onCatalogChanged={() => onConfigChanged()} />
+      <ThinkingSelection value={durableThinking} onChange={applyThinking} inheritLabel={tr("interface.use.workflow.default")} disabled={busy || modelCatalog === null}
+        levels={catalogModels.find(model => `${model.provider}/${model.modelId}` === (durableModelKey || (inspection.agent.effectiveModel ? `${inspection.agent.effectiveModel.provider}/${inspection.agent.effectiveModel.modelId}` : "")))?.thinkingLevels ?? []} />
+      </div>
       <dl className="workflow-agent-facts">
         <dt>{tr("interface.effective.model")}</dt>
         <dd>{inspection.agent.effectiveModel
@@ -306,9 +313,7 @@ function ModelConfigSection({
         <dd>{tr(`design.thinking.${inspection.agent.effectiveThinkingLevel}`)}
           {inspection.agent.thinkingSource !== null && ` · ${tr(MODEL_SOURCE_LABELS[inspection.agent.thinkingSource] ?? inspection.agent.thinkingSource)}`}</dd>
       </dl>
-      <ModelSelection models={catalogModels} value={durableModelKey} inheritedModelKey={inspection.agent.effectiveModel ? `${inspection.agent.effectiveModel.provider}/${inspection.agent.effectiveModel.modelId}` : undefined} onChange={applyModel} inheritLabel={tr("interface.use.workflow.default")} disabled={busy || modelCatalog === null} />
-      <ThinkingSelection value={durableThinking} onChange={applyThinking} inheritLabel={tr("interface.use.workflow.default")} disabled={busy || modelCatalog === null}
-        levels={catalogModels.find(model => `${model.provider}/${model.modelId}` === (durableModelKey || (inspection.agent.effectiveModel ? `${inspection.agent.effectiveModel.provider}/${inspection.agent.effectiveModel.modelId}` : "")))?.thinkingLevels ?? []} />
+
       <Button variant="secondary" type="button" disabled={busy || !hasDurableConfig} onClick={() => void apply("clear")}>{tr("interface.reset.model.and.thinking.level")}</Button>
       {error && <small className="workflow-agent-model-error" role="alert"><InterfaceFeedback message={error} /></small>}
     </section>
@@ -571,7 +576,7 @@ const CONFIG_TABS: readonly { readonly id: ConfigTab; readonly label: string }[]
   { id: "inspect", label: "interface.inspect.configuration" },
 ];
 
-export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, proposals, onConfigsChange, onClose }: Props) {
+export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, proposals, onConfigsChange, onClose, selectionScope = "session" }: Props) {
   const { t: tr } = useI18n();
   const [agentId, setAgentId] = useState(workflow.agents[0]?.id ?? "");
   const [tab, setTab] = useState<ConfigTab>("runtime");
@@ -596,7 +601,7 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
         }
       });
     return () => controller.abort();
-  }, []);
+  }, [modelConfigVersion]);
 
   useEffect(() => {
     if (agent === undefined) return;
@@ -735,7 +740,7 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
                 className={tab === item.id ? "active" : ""}
                 onClick={() => setTab(item.id)}
               >
-                {tr(item.label)}
+                {tr(item.id === "session" && selectionScope === "default" ? "longAgentSettings.workflowDefaults" : item.label)}
               </button>
             ))}
           </div>
@@ -758,7 +763,7 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
                 />
               )}
               {inspection && catalog && (
-                <details className="workflow-agent-disclosure"><summary>{tr("design.toolSettings")}</summary>
+                <ConfigurationSection title={tr("design.toolSettings")}>
                 <ToolConfigSection
                   key={`${projectId}:${agent.id}`}
                   workflow={workflow}
@@ -767,10 +772,10 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
                   inspection={inspection}
                   catalog={catalog}
                   onConfigChanged={() => setModelConfigVersion((version) => version + 1)}
-                /></details>
+                /></ConfigurationSection>
               )}
               {inspection && catalog && (
-                <details className="workflow-agent-disclosure"><summary>{tr("design.resourceSettings")}</summary>
+                <ConfigurationSection title={tr("design.resourceSettings")}>
                 <ResourceConfigSection
                   key={`${projectId}:${agent.id}`}
                   workflow={workflow}
@@ -779,14 +784,14 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
                   inspection={inspection}
                   catalog={catalog}
                   onConfigChanged={() => setModelConfigVersion((version) => version + 1)}
-                /></details>
+                /></ConfigurationSection>
               )}
-              {inspection && <details className="workflow-agent-disclosure"><summary>{tr("design.effectiveCapabilities")}</summary><RuntimeCapabilities inspection={inspection} /></details>}
+              {inspection && <ConfigurationSection title={tr("design.effectiveCapabilities")}><RuntimeCapabilities inspection={inspection} /></ConfigurationSection>}
             </div>
           )}
 
           {tab === "session" && (
-            <div className="workflow-agent-tab-panel" role="tabpanel" aria-label={tr("interface.session.overrides")}>
+            <div className="workflow-agent-tab-panel" role="tabpanel" aria-label={tr(selectionScope === "default" ? "longAgentSettings.workflowDefaults" : "interface.session.overrides")}>
               <section className="workflow-agent-config-fields">
                 <div className="workflow-agent-config-actions">
                   <small>{tr("interface.changes.apply.to.this.workflow.agent.in.the.current.session.and.are.submitted.with.the.next.message")}</small>

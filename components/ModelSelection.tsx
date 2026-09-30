@@ -1,14 +1,37 @@
-import { useId } from "react";
+import { useEffect, useRef, useState } from "react";
+import { IconAdjustmentsHorizontal } from "@tabler/icons-react";
+import { Button } from "./ui/Button";
+import { fetchChatModelCatalog, type ChatModelCatalog } from "@/lib/chat-workflows-browser";
 import { useI18n } from "@/hooks/useI18n";
 import type { ChatModelCatalogModel } from "@/lib/chat-workflows-browser";
-import { SearchSelect } from "./SearchSelect";
+import { SearchSelect, type SelectOption } from "./SearchSelect";
 import styles from "./SelectionControl.module.css";
 
-export function ModelSelection({ models, value, onChange, inheritLabel, disabled, inheritedModelKey }: {
+import { ModelsConfig } from "./ModelsConfig";
+
+export function ModelSelection({ models, value, onChange, inheritLabel, disabled, inheritedModelKey, onCatalogChanged }: {
   models: readonly ChatModelCatalogModel[]; value: string; onChange: (key: string) => void;
   inheritLabel: string; disabled?: boolean; inheritedModelKey?: string;
+  onCatalogChanged?: (catalog: ChatModelCatalog) => void;
 }) {
   const { t } = useI18n();
+  const [editing, setEditing] = useState(false);
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const changed = useRef(false);
+  const onCatalogChangedRef = useRef(onCatalogChanged);
+  onCatalogChangedRef.current = onCatalogChanged;
+  useEffect(() => {
+    if (refreshVersion === 0) return;
+    const controller = new AbortController();
+    setRefreshError(null);
+    void fetchChatModelCatalog(controller.signal).then(catalog => {
+      if (!controller.signal.aborted) onCatalogChangedRef.current?.(catalog);
+    }).catch(cause => {
+      if (!controller.signal.aborted) setRefreshError(cause instanceof Error ? cause.message : String(cause));
+    });
+    return () => controller.abort();
+  }, [refreshVersion]);
   const options = models.map(model => ({
     value: `${model.provider}/${model.modelId}`, label: model.name,
     detail: `${model.provider} · ${model.modelId}${model.authConfigured ? "" : ` · ${t("design.authRequired")}`}`,
@@ -23,6 +46,15 @@ export function ModelSelection({ models, value, onChange, inheritLabel, disabled
       <div><dt>{t("models.contextWindow")}</dt><dd>{selected.contextWindow.toLocaleString()}</dd></div>
       <div><dt>{t("models.maxOutputTokens")}</dt><dd>{selected.maxTokens.toLocaleString()}</dd></div>
     </dl>}
+    {onCatalogChanged && <div className={styles.modelSettings}>
+      <Button variant="ghost" type="button" disabled={disabled} onClick={() => { changed.current = false; setEditing(true); }}>
+        <IconAdjustmentsHorizontal size={16} aria-hidden="true" />{t("design.modelSettings")}
+      </Button>
+      <p className={styles.hint}>{t("design.modelSettingsScope")}</p>
+    </div>}
+    {refreshError && <div role="alert" className={styles.hint}>{refreshError}<Button variant="ghost" type="button" onClick={() => setRefreshVersion(version => version + 1)}>{t("common.retry")}</Button></div>}
+    {editing && <ModelsConfig initialModel={selected ? { provider: selected.provider, modelId: selected.modelId } : undefined}
+        onSaved={() => { changed.current = true; }} onClose={() => { setEditing(false); if (changed.current) setRefreshVersion(version => version + 1); }} />}
   </div>;
 }
 
@@ -33,17 +65,11 @@ export function ThinkingSelection({ levels, value, onChange, inheritLabel, disab
   capabilitiesPending?:boolean;
 }) {
   const { t } = useI18n();
-  const id = useId();
-  const options = [{ value:"", label:inheritLabel }, ...(capabilitiesPending ? [] : levels).map(level => ({ value:level, label:t(`design.thinking.${level}`) }))];
+  const options: SelectOption[] = [{ value:"", label:inheritLabel }, ...(capabilitiesPending ? [] : levels).map(level => ({ value:level, label:t(`design.thinking.${level}`) }))];
   const unavailable = value !== "" && !levels.includes(value);
+  if (value && !options.some(option => option.value === value)) options.push({ value, label: t(`design.thinking.${value}`), disabled: true });
   return <div className={styles.field}>
-    <fieldset className={styles.choices} disabled={disabled} aria-describedby={`${id}-hint`}>
-      <legend className={styles.legend}>{t("design.thinking")}</legend>
-      {options.map(option => <label key={option.value} className={styles.choice}>
-        <input type="radio" name={id} value={option.value} checked={value === option.value} onChange={() => onChange(option.value)} />
-        <span>{option.label}</span>
-      </label>)}
-    </fieldset>
-    <p id={`${id}-hint`} className={styles.hint}>{capabilitiesPending ? t("design.thinkingPending") : unavailable ? t("design.thinkingUnavailable", { level:value }) : value ? t(`design.thinkingHint.${value}`) : t("design.thinkingInherited")}</p>
+    <SearchSelect label={t("design.thinking")} value={value} options={options} onChange={onChange} disabled={disabled}
+      hint={capabilitiesPending ? t("design.thinkingPending") : unavailable ? t("design.thinkingUnavailable", { level:value }) : value ? t(`design.thinkingHint.${value}`) : t("design.thinkingInherited")} />
   </div>;
 }

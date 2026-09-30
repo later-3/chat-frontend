@@ -3,7 +3,8 @@ export interface FriendCalendarSession {
   sessionId: string;
   projectId: string;
   dates: string[];
-  kind: "daily" | "work" | "topic" | "session";
+  kind: "daily" | "direct" | "work" | "topic" | "session";
+  creationDate?: string;
   title: string;
   createdAt?: string;
 }
@@ -49,8 +50,10 @@ export function parseFriendDailyState(value: unknown): FriendDailyState {
     for (const session of value.sessions) {
       if (!record(session) || !text(session.sessionId) || session.projectId !== value.longAgentId
         || (session.createdAt !== undefined && (!text(session.createdAt) || !Number.isFinite(Date.parse(session.createdAt))))
-        || typeof session.title !== "string" || !["daily", "work", "topic", "session"].includes(String(session.kind))
-        || !Array.isArray(session.dates) || session.dates.length === 0 || !session.dates.every(date)
+        || typeof session.title !== "string" || !["daily", "direct", "work", "topic", "session"].includes(String(session.kind))
+        || (session.creationDate !== undefined && !date(session.creationDate))
+        || (session.kind === "direct" && !date(session.creationDate))
+        || !Array.isArray(session.dates) || (session.dates.length === 0 && session.kind !== "direct") || !session.dates.every(date)
         || new Set(session.dates).size !== session.dates.length || seen.has(session.sessionId)) throw new Error("Invalid Friend history response");
       seen.add(session.sessionId);
     }

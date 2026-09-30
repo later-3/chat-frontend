@@ -1,4 +1,5 @@
 "use client";
+import { readSessionSettlement, type ExecutionSettlement } from "@/lib/execution-completion";
 import { Button } from "./ui/Button";
 
 import { formatRelativeTime } from "@/lib/i18n/format";
@@ -134,7 +135,7 @@ interface Props {
   onRequestClose?: () => void;
   /** Fired when a session that is not currently selected finishes running.
    *  Lets the app play a cross-workspace completion tone. */
-  onBackgroundTaskDone?: () => void;
+  onBackgroundTaskDone?: (event: ExecutionSettlement) => void;
   onRunningSessionIdsChange?: (ids: Set<string>) => void;
 }
 
@@ -530,8 +531,12 @@ export function SessionSidebar({ contentPanel, onContentPanelChange: setContentP
     if (completedInBackground.length > 0 || hasUnlistedRunningSession) {
       loadSessions(false, true);
     }
-    if (completedInBackground.length > 0) {
-      onBackgroundTaskDone?.();
+    for (const id of completedInBackground) {
+      const session = allSessions.find(item => item.id === id);
+      if (!session?.projectId) continue;
+      void readSessionSettlement(session.projectId, id).then(event => {
+        if (event) onBackgroundTaskDone?.(event);
+      }).catch(() => { /* An unavailable completion read must remain silent. */ });
     }
 
     previousRunningSessionIdsRef.current = runningSessionIds;

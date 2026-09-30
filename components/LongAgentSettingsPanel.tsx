@@ -1,18 +1,16 @@
 "use client";
+import { LongAgentWorkflowSettings } from "./LongAgentWorkflowSettings";
 import { LongAgentActivitySettings } from "./LongAgentActivitySettings";
 import { useConfirmation } from "./ui/Confirmation";
 import { Button } from "./ui/Button";
-import { Hint } from "./ui/Tooltip";
 import { SurfaceDialog } from "./SurfaceDialog";
 
-import { translateWorkflowCopy } from "@/lib/i18n/workflow-copy";
 
 import { InterfaceFeedback } from "./InterfaceFeedback";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { IconBook2, IconBrain, IconClock, IconRefresh, IconSettings } from "@tabler/icons-react";
 import { useI18n } from "@/hooks/useI18n";
-import { fetchChatModelCatalog, type ChatModelCatalog } from "@/lib/chat-workflows-browser";
 import {
   fetchLongAgentConfiguration,
   saveLongAgentConfiguration,
@@ -22,17 +20,10 @@ import {
 } from "@/lib/long-agents-browser";
 import { fetchChatProjects, type ChatProjectSummary } from "@/lib/projects-contract";
 import {
-  fetchProjectResourceCatalog,
-  type ProjectResourceCatalog,
-} from "@/lib/project-resources";
-import type { WorkflowAgentResources, WorkflowAgentToolPolicy } from "@/lib/chat-workflow-contract";
-import { fetchChatTools, type ChatToolCatalogEntry } from "@/lib/tools-browser";
-import {
   deleteChatLongAgent,
   fetchLongAgentInspection,
   setChatLongAgentArchived,
 } from "@/lib/long-agents-browser";
-import { fetchChatSkillTree, type SkillTreeEntry, type SkillTreeResponse } from "@/lib/skill-tree-browser";
 import type { WorkflowAgentInspection } from "@/lib/chat-workflows-browser";
 import { EffectiveSkillsList } from "./EffectiveSkillsList";
 import {
@@ -46,30 +37,9 @@ import { LongAgentGroupSettings } from "./LongAgentGroupSettings";
 import { LongAgentMemorySettings } from "./LongAgentMemorySettings";
 import { LongAgentTasksSettings } from "./LongAgentTasksSettings";
 import { LongAgentDutiesSettings } from "./LongAgentDutiesSettings";
-import { ModelSelection, ThinkingSelection } from "./ModelSelection";
+import { ConfigurationSection } from "./ConfigurationSection";
 import { ConfigurationToggle } from "./ConfigurationToggle";
 import { SearchSelect } from "./SearchSelect";
-
-/**
- * 可选系统Tool清单只来自Backend `/api/tools`；这里只提供已知地址的本地化标签，
- * 新增系统Tool不需要修改Frontend。
- */
-const CHAT_TOOL_LABEL_KEYS: Record<string, string> = {
-  "system:tool/memory_search": "longAgentSettings.memorySearch",
-  "system:tool/memory_record": "longAgentSettings.memoryRecord",
-  "system:tool/workflow_call": "longAgentSettings.workflowCall",
-  "system:tool/agent_memory_search": "longAgentSettings.agentMemorySearch",
-  "system:tool/agent_memory_read": "longAgentSettings.agentMemoryRead",
-  "system:tool/agent_memory_write": "longAgentSettings.agentMemoryWrite",
-  "system:tool/project_search": "longAgentSettings.projectSearch",
-  "system:tool/project_read": "longAgentSettings.projectRead",
-  "system:tool/project_create": "longAgentSettings.projectCreate",
-  "system:tool/project_open": "longAgentSettings.projectOpen",
-  "system:tool/project_update": "longAgentSettings.projectUpdate",
-  "system:tool/project_configure": "longAgentSettings.projectConfigure",
-  "system:tool/long_agent_manage": "longAgentSettings.longAgentManage",
-  "system:tool/channel_send": "longAgentSettings.channelSend",
-};
 
 interface Props {
   agents: readonly LongAgentSummary[];
@@ -84,81 +54,33 @@ interface Draft {
   enabled: boolean;
   defaultProjectId: string;
   timeZone: string;
-  modelKey: string;
-  thinkingLevel: string;
   systemPromptMode: "pi-default" | "replace";
   systemPromptText: string;
   responseTemplateText: string;
   customInstructionsText: string;
-  toolMode: WorkflowAgentToolPolicy["mode"];
-  toolNamesText: string;
-  excludedToolNamesText: string;
-  toolAddresses: readonly string[];
-  resourceMode: WorkflowAgentResources["mode"];
-  skillPathsText: string;
-  extensionPathsText: string;
-  pluginSourcesText: string;
 }
 
 type SettingsTab = "runtime" | "tasks" | "duties" | "agent-memory";
 
-function lines(value: string): string[] {
-  return [...new Set(value.split("\n").map((item) => item.trim()).filter(Boolean))];
-}
-
 function draftFrom(document: LongAgentConfigurationDocument): Draft {
   const definition = document.agent.definition;
-  const resources = definition.resources;
-  const tools = definition.tools;
   return {
     name: document.agent.name,
     description: document.agent.description,
     enabled: document.agent.enabled,
     defaultProjectId: document.agent.defaultProjectId,
     timeZone: document.agent.timeZone ?? "UTC",
-    modelKey: definition.model === null ? "" : `${definition.model.provider}/${definition.model.modelId}`,
-    thinkingLevel: definition.thinkingLevel ?? "",
     systemPromptMode: definition.systemPrompt.mode,
     systemPromptText: definition.systemPrompt.mode === "replace" ? definition.systemPrompt.text : "",
     responseTemplateText: document.agent.responseTemplate ?? "",
     customInstructionsText: formatLongAgentInstructions(definition.customInstructions),
-    toolMode: tools.mode,
-    toolNamesText: tools.mode === "explicit" ? tools.names.join("\n") : "",
-    excludedToolNamesText: tools.mode === "explicit" ? tools.exclude.join("\n") : "",
-    toolAddresses: tools.mode === "none" ? [] : tools.addresses ?? [],
-    resourceMode: resources.mode,
-    skillPathsText: resources.mode === "explicit" ? resources.skillPaths.join("\n") : "",
-    extensionPathsText: resources.mode === "explicit" ? resources.extensionPaths.join("\n") : "",
-    pluginSourcesText: resources.mode === "explicit" ? resources.pluginSources.join("\n") : "",
   };
 }
 
 function updateFromDraft(
   document: LongAgentConfigurationDocument,
   draft: Draft,
-  modelCatalog: ChatModelCatalog | null,
 ): LongAgentConfigurationUpdate {
-  const model = draft.modelKey === ""
-    ? null
-    : modelCatalog?.models.find((item) => `${item.provider}/${item.modelId}` === draft.modelKey) ?? null;
-  const tools: WorkflowAgentToolPolicy = draft.toolMode === "none"
-    ? { mode: "none" }
-    : draft.toolMode === "pi-default"
-      ? { mode: "pi-default", addresses: draft.toolAddresses }
-      : {
-          mode: "explicit",
-          names: lines(draft.toolNamesText),
-          exclude: lines(draft.excludedToolNamesText),
-          addresses: draft.toolAddresses,
-        };
-  const resources: WorkflowAgentResources = draft.resourceMode === "inherit"
-    ? { mode: "inherit" }
-    : {
-        mode: "explicit",
-        skillPaths: lines(draft.skillPathsText),
-        extensionPaths: lines(draft.extensionPathsText),
-        pluginSources: lines(draft.pluginSourcesText),
-      };
   return {
     responseTemplate: draft.responseTemplateText.trim() === "" ? null : draft.responseTemplateText.trim(),
     name: draft.name.trim(),
@@ -171,14 +93,14 @@ function updateFromDraft(
       id: document.agent.id,
       name: draft.name.trim(),
       description: draft.description.trim(),
-      model: model === null ? null : { provider: model.provider, modelId: model.modelId },
-      thinkingLevel: draft.thinkingLevel || null,
+      model: document.agent.definition.model,
+      thinkingLevel: document.agent.definition.thinkingLevel,
       systemPrompt: draft.systemPromptMode === "pi-default"
         ? { mode: "pi-default" }
         : { mode: "replace", text: draft.systemPromptText.trim() },
       customInstructions: parseLongAgentInstructions(draft.customInstructionsText),
-      tools,
-      resources,
+      tools: document.agent.definition.tools,
+      resources: document.agent.definition.resources,
     },
   };
 }
@@ -197,15 +119,9 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
   const [draft, setDraft] = useState<Draft | null>(null);
   const [initialDraft, setInitialDraft] = useState<Draft | null>(null);
   const [projects, setProjects] = useState<readonly ChatProjectSummary[]>([]);
-  const [modelCatalog, setModelCatalog] = useState<ChatModelCatalog | null>(null);
-  const [resourceCatalog, setResourceCatalog] = useState<ProjectResourceCatalog | null>(null);
-  const [resourceCatalogError, setResourceCatalogError] = useState<string | null>(null);
-  const [toolCatalog, setToolCatalog] = useState<readonly ChatToolCatalogEntry[] | null>(null);
-  const [toolCatalogError, setToolCatalogError] = useState<string | null>(null);
+  const [modelInspectionVersion, setModelInspectionVersion] = useState(0);
   const [inspection, setInspection] = useState<WorkflowAgentInspection | null>(null);
   const [inspectionError, setInspectionError] = useState<string | null>(null);
-  const [skillTree, setSkillTree] = useState<SkillTreeResponse | null>(null);
-  const [skillTreeError, setSkillTreeError] = useState<string | null>(null);
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -228,13 +144,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
 
   useEffect(() => {
     const controller = new AbortController();
-    void Promise.all([
-      fetchChatProjects(controller.signal),
-      fetchChatModelCatalog(controller.signal),
-    ]).then(([nextProjects, nextModels]) => {
-      setProjects(nextProjects);
-      setModelCatalog(nextModels);
-    }).catch((cause: unknown) => {
+    void fetchChatProjects(controller.signal).then(setProjects).catch((cause: unknown) => {
       if (!(cause instanceof DOMException && cause.name === "AbortError")) {
         setError(cause instanceof Error ? cause.message : String(cause));
       }
@@ -243,40 +153,19 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
   }, []);
 
   useEffect(() => {
-    const defaultProjectId = document?.agent.id;
-    if (!defaultProjectId) return;
+    if (!modelInspectionVersion || !document) return;
     const controller = new AbortController();
-    setResourceCatalog(null);
-    setResourceCatalogError(null);
-    setToolCatalog(null);
-    setToolCatalogError(null);
-    setSkillTree(null);
-    setSkillTreeError(null);
-    void fetchChatSkillTree(defaultProjectId, controller.signal)
-      .then(value => { if (!controller.signal.aborted) setSkillTree(value); })
+    const generation = loadGeneration.current;
+    const current = () => generation === loadGeneration.current && !controller.signal.aborted;
+    setInspection(null);
+    setInspectionError(null);
+    void fetchLongAgentInspection(document.agent.id, document.agent.id, controller.signal)
+      .then(value => { if (current()) setInspection(value); })
       .catch((cause: unknown) => {
-        if (!(cause instanceof DOMException && cause.name === "AbortError")) {
-          setSkillTreeError(cause instanceof Error ? cause.message : String(cause));
-        }
-      });
-    void fetchProjectResourceCatalog(defaultProjectId, controller.signal)
-      .then(value => { if (!controller.signal.aborted) setResourceCatalog(value); })
-      .catch((cause: unknown) => {
-        if (!(cause instanceof DOMException && cause.name === "AbortError")) {
-          setResourceCatalogError(cause instanceof Error ? cause.message : String(cause));
-        }
-      });
-    void fetchChatTools(defaultProjectId, controller.signal)
-      .then((response) => {
-        if (!controller.signal.aborted) setToolCatalog(response.tools.filter(tool => tool.address.startsWith("system:tool/")));
-      })
-      .catch((cause: unknown) => {
-        if (!(cause instanceof DOMException && cause.name === "AbortError")) {
-          setToolCatalogError(cause instanceof Error ? cause.message : String(cause));
-        }
+        if (current()) setInspectionError(cause instanceof Error ? cause.message : String(cause));
       });
     return () => controller.abort();
-  }, [document?.agent.id, refreshVersion]);
+  }, [document?.agent.id, modelInspectionVersion]);
 
   const load = useCallback(async (selectedAgentId: string, signal?: AbortSignal) => {
     if (!selectedAgentId) return;
@@ -368,12 +257,6 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
       setError(t("longAgentSettings.systemPromptRequired"));
       return;
     }
-    if (draft.modelKey && !modelCatalog?.models.some((model) => (
-      `${model.provider}/${model.modelId}` === draft.modelKey
-    ))) {
-      setError(t("longAgentSettings.modelUnavailable"));
-      return;
-    }
     setSaving(true);
     setError(null);
     setNotice(null);
@@ -381,7 +264,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
       const next = await saveLongAgentConfiguration(
         document.agent.id,
         document.revision,
-        updateFromDraft(document, draft, modelCatalog),
+        updateFromDraft(document, draft),
       );
       const nextDraft = draftFrom(next);
       setDocument(next);
@@ -391,7 +274,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
       onSaved();
       setInspection(null);
       setInspectionError(null);
-      const generation = loadGeneration.current;
+      const generation = ++loadGeneration.current;
       try {
         const resolved = await fetchLongAgentInspection(next.agent.id, next.agent.id);
         if (generation === loadGeneration.current) setInspection(resolved);
@@ -405,60 +288,18 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
     }
   };
 
+  const workflowChanged = () => {
+    if (!document) return;
+    const generation = ++loadGeneration.current;
+    void fetchLongAgentConfiguration(document.agent.id).then(next => {
+      if (generation === loadGeneration.current) setDocument(next);
+    }).catch(cause => { if (generation === loadGeneration.current) setError(String(cause)); });
+    setModelInspectionVersion(version => version + 1);
+  };
+
   const selectedSummary = agents.find((agent) => agent.id === agentId) ?? null;
-  const modelOptions = useMemo(() => modelCatalog?.models ?? [], [modelCatalog]);
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => {
     setDraft((current) => current === null ? current : { ...current, [key]: value });
-  };
-  const toggleToolAddress = (address: string, checked: boolean) => {
-    if (!draft) return;
-    const addresses = new Set(draft.toolAddresses);
-    if (checked) addresses.add(address);
-    else addresses.delete(address);
-    set("toolAddresses", [...addresses]);
-  };
-  /**
-   * Skill 树勾选：勾中 = 写入该 Agent 配置并默认生效，未勾 = 仅存在的实体。
-   * 继承模式下首次改动会切换为“明确选择”，并按当前生效装配冻结 Skills、
-   * Extensions 和 Plugins，避免隐式丢掉其他资源。
-   */
-  const toggleSkillPath = (filePath: string, checked: boolean) => {
-    if (!draft) return;
-    const currentPaths = draft.resourceMode === "explicit"
-      ? lines(draft.skillPathsText)
-      : (inspection?.skills.map((skill) => skill.filePath) ?? []);
-    const next = new Set(currentPaths);
-    if (checked) next.add(filePath);
-    else next.delete(filePath);
-    if (draft.resourceMode === "explicit") {
-      set("skillPathsText", [...next].join("\n"));
-      return;
-    }
-    setDraft({
-      ...draft,
-      resourceMode: "explicit",
-      skillPathsText: [...next].join("\n"),
-      extensionPathsText: (inspection?.extensions.map((extension) => extension.resolvedPath) ?? []).join("\n"),
-      pluginSourcesText: (inspection?.plugins.map((plugin) => plugin.source) ?? []).join("\n"),
-    });
-  };
-  const isSkillChecked = (filePath: string): boolean => {
-    if (!draft) return false;
-    if (draft.resourceMode === "explicit") return lines(draft.skillPathsText).includes(filePath);
-    return inspection?.skills.some((skill) => skill.filePath === filePath) ?? false;
-  };
-  const skillSelectionDisabled = saving || (draft?.resourceMode === "inherit" && inspection === null);
-
-  const toggleResourcePath = (
-    key: "skillPathsText" | "extensionPathsText" | "pluginSourcesText",
-    value: string,
-    checked: boolean,
-  ) => {
-    if (!draft) return;
-    const current = new Set(lines(draft[key]));
-    if (checked) current.add(value);
-    else current.delete(value);
-    set(key, [...current].join("\n"));
   };
   const [usageOpen, setUsageOpen] = useState(false);
   const [identityOpen, setIdentityOpen] = useState(false);
@@ -494,10 +335,10 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
   const requestClose = () => { void back(); };
   const headerActions = (<>
       {selectedSummary !== null && (<>
-        <Button variant="secondary" type="button"
+        <Button variant="ghost" type="button"
           disabled={saving || lifecycleBusy}
           onClick={() => void runLifecycle(selectedSummary.status === "archived" ? "restore" : "archive")}>{selectedSummary.status === "archived" ? t("longAgent.restore") : t("longAgent.archive")}</Button>
-        {selectedSummary.status === "archived" && (<Button variant="secondary" type="button"
+        {selectedSummary.status === "archived" && (<Button variant="ghost" type="button"
           disabled={saving || lifecycleBusy}
           onClick={() => void runLifecycle("delete")}>{t("longAgent.delete")}</Button>)}
       </>)}
@@ -570,10 +411,9 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                 aria-labelledby={`long-agent-${activeTab}-tab`}
                 className={styles.tabPanel}
               >
-                {activeTab === "runtime" && <details className={styles.section} onToggle={event => { if (event.currentTarget.open) setIdentityOpen(true); }}>
-                  <summary>{t("longAgentSettings.groupIdentity")}</summary>
+                {activeTab === "runtime" && <ConfigurationSection className={styles.disclosure} title={t("longAgentSettings.groupIdentity")} onToggle={event => { if (event.currentTarget.open) setIdentityOpen(true); }}>
                   {identityOpen && <LongAgentGroupSettings longAgentId={document.agent.id} key={`${document.agent.id}:${refreshVersion}`} onDirtyChange={setTabDirty} />}
-                </details>}
+                </ConfigurationSection>}
                 {activeTab === "runtime" && (
                   <form className={styles.form} onSubmit={(event) => { event.preventDefault(); void save(); }}>
                     <fieldset className={styles.formFields} disabled={saving}>
@@ -602,163 +442,20 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                       <label>{t("longAgentSettings.description")}<textarea value={draft.description} rows={3} maxLength={500} onChange={(event) => set("description", event.target.value)} /></label>
                     </fieldset>
 
-                    <fieldset className={styles.section}>
+                    <fieldset className={`${styles.section} ${styles.runtimeSection}`}>
                       <legend>{t("longAgentSettings.runtime")}</legend>
-                      <dl className={styles.facts}>
-                        <dt>{t("longAgentSettings.effectiveModel")}</dt>
-                        <dd>
-                          {document.agent.effective.model
-                            ? `${document.agent.effective.model.provider}/${document.agent.effective.model.modelId}`
-                            : t("longAgentSettings.modelSourceUnresolved")}
-                          {document.agent.effective.modelSource && ` · ${document.agent.effective.modelSource === "explicit"
-                            ? t("longAgentSettings.modelSourceExplicit")
-                            : t("longAgentSettings.modelSourceChatDefault")}`}
-                        </dd>
-                        <dt>{t("longAgentSettings.effectiveThinking")}</dt>
-                        <dd>
-                          {document.agent.effective.thinkingLevel ?? t("longAgentSettings.modelSourceUnresolved")}
-                          {document.agent.effective.thinkingSource && ` · ${document.agent.effective.thinkingSource === "explicit"
-                            ? t("longAgentSettings.modelSourceExplicit")
-                            : t("longAgentSettings.modelSourceChatDefault")}`}
-                        </dd>
-                      </dl>
-                      <div className={styles.modelFields}>
-                        <ModelSelection models={modelOptions} value={draft.modelKey} inheritedModelKey={document.agent.definition.model === null && document.agent.effective.model ? `${document.agent.effective.model.provider}/${document.agent.effective.model.modelId}` : undefined} onChange={value => set("modelKey", value)} inheritLabel={t("workspaceNav.inheritModel")} />
-                        <ThinkingSelection value={draft.thinkingLevel} onChange={value => set("thinkingLevel", value)} inheritLabel={t("design.inheritDefault")}
-                          capabilitiesPending={draft.modelKey === "" && document.agent.definition.model !== null}
-                          levels={modelOptions.find(model => `${model.provider}/${model.modelId}` === (draft.modelKey || (document.agent.effective.model ? `${document.agent.effective.model.provider}/${document.agent.effective.model.modelId}` : "")))?.thinkingLevels ?? []} />
-                      </div>
-                      <details className={styles.promptOptions}><summary>{t("design.promptOptions")}</summary><div className={styles.advancedBody}>
+                      <LongAgentWorkflowSettings key={document.agent.id} projectId={document.agent.id}
+                        cwd={projects.find(project => project.projectId === document.agent.id)?.path ?? ""}
+                        onChanged={workflowChanged} />
+                      <ConfigurationSection className={styles.disclosure} title={t("design.promptOptions")}>
                       <label>{t("longAgentSettings.systemPrompt")}<select value={draft.systemPromptMode} onChange={(event) => set("systemPromptMode", event.target.value as Draft["systemPromptMode"])}><option value="pi-default">{t("longAgentSettings.piDefaultPrompt")}</option><option value="replace">{t("longAgentSettings.replacePrompt")}</option></select></label>
                       {draft.systemPromptMode === "replace" && <label>{t("longAgentSettings.systemPromptText")}<textarea value={draft.systemPromptText} rows={8} onChange={(event) => set("systemPromptText", event.target.value)} /></label>}
                       <label>{t("longAgentSettings.responseTemplate")}<textarea rows={3} value={draft.responseTemplateText} placeholder={"project：{{project}}"} onChange={(event) => set("responseTemplateText", event.target.value)} /><span className={styles.fieldHint}>{t("longAgentSettings.responseTemplateHint")}</span></label>
                       <label>{t("longAgentSettings.customInstructions")}<textarea value={draft.customInstructionsText} rows={8} placeholder={t("longAgentSettings.instructionSeparator", { separator: LONG_AGENT_INSTRUCTION_SEPARATOR })} onChange={(event) => set("customInstructionsText", event.target.value)} /><span className={styles.fieldHint}>{t("longAgentSettings.instructionSeparator", { separator: LONG_AGENT_INSTRUCTION_SEPARATOR })}</span></label>
-                      </div></details>
+                      </ConfigurationSection>
                     </fieldset>
 
-                    <details className={`${styles.section} ${styles.advancedSection}`}>
-                      <summary>{t("longAgentSettings.chatTools")}</summary><div className={styles.advancedBody}>
-                      <label>{t("longAgentSettings.toolMode")}<select value={draft.toolMode} onChange={(event) => set("toolMode", event.target.value as Draft["toolMode"])}><option value="pi-default">{t("longAgentSettings.piDefaultTools")}</option><option value="explicit">{t("longAgentSettings.explicitTools")}</option><option value="none">{t("longAgentSettings.noTools")}</option></select></label>
-                      <p className={styles.help}>{t("longAgentSettings.chatToolsHelp")}</p>
-                      {toolCatalogError && <div className={styles.error} role="alert"><InterfaceFeedback message={toolCatalogError} /></div>}
-                      <div className={styles.checkGrid}>
-                        {(toolCatalog ?? []).map((tool) => {
-                          const labelKey = CHAT_TOOL_LABEL_KEYS[tool.address];
-                          return (
-                            <label key={tool.address} className={styles.checkCard}>
-                              <input type="checkbox" checked={draft.toolAddresses.includes(tool.address)} disabled={draft.toolMode === "none"} onChange={(event) => toggleToolAddress(tool.address, event.target.checked)} />
-                              <span><strong>{labelKey === undefined ? tool.label || tool.name : t(labelKey)}</strong><code>{tool.address}</code></span>
-                            </label>
-                          );
-                        })}
-                        {draft.toolAddresses
-                          .filter((address) => !(toolCatalog ?? []).some((tool) => tool.address === address))
-                          .map((address) => (
-                            <label key={address} className={styles.checkCard}>
-                              <input type="checkbox" checked disabled={draft.toolMode === "none"} onChange={(event) => toggleToolAddress(address, event.target.checked)} />
-                              <span><strong>{address}</strong><code>{t("longAgentSettings.toolUnavailable")}</code></span>
-                            </label>
-                          ))}
-                      </div>
-                      {draft.toolMode === "explicit" && <div className={styles.twoColumns}><label>{t("longAgentSettings.toolNames")}<textarea rows={4} value={draft.toolNamesText} placeholder={t("longAgentSettings.onePerLine")} onChange={(event) => set("toolNamesText", event.target.value)} /></label><label>{t("longAgentSettings.excludedToolNames")}<textarea rows={4} value={draft.excludedToolNamesText} placeholder={t("longAgentSettings.onePerLine")} onChange={(event) => set("excludedToolNamesText", event.target.value)} /></label></div>}
-                    </div></details>
-
-                    <details className={`${styles.section} ${styles.advancedSection}`}>
-                      <summary>{t("longAgentSettings.skillSelection")}</summary><div className={styles.advancedBody}>
-                      <p className={styles.help}>{t("longAgentSettings.skillSelectionHint")}</p>
-                      {skillTreeError && <div className={styles.error} role="alert"><InterfaceFeedback message={skillTreeError} /></div>}
-                      {skillTree === null && skillTreeError === null && <small>{t("longAgentSettings.inspectionLoading")}</small>}
-                      {skillTree !== null && (
-                        <div className={styles.checkGrid}>
-                          {([
-                            { key: "personal", label: t("longAgentSettings.skillOwnerPersonal"), entries: skillTree.personal.skills },
-                            ...skillTree.projects.map((project) => ({
-                              key: `project:${project.projectId}`,
-                              label: `${t("longAgentSettings.skillOwnerProject")} · ${project.name}${project.projectId === document.agent.id ? ` · ${t("skillsTree.currentBadge")}` : ""}`,
-                              entries: project.skills,
-                            })),
-                            ...skillTree.workflows.flatMap((workflow) => workflow.agents.map((agent) => ({
-                              key: `workflow:${workflow.workflowId}/${agent.agentId}`,
-                              label: `${t("longAgentSettings.skillOwnerWorkflow")} · ${translateWorkflowCopy(workflow.workflowId, workflow.name, t)} / ${translateWorkflowCopy(workflow.workflowId, agent.name, t)}`,
-                              entries: agent.skills,
-                            }))),
-                            ...skillTree.longAgents.map((agent) => ({
-                              key: `long-agent:${agent.longAgentId}`,
-                              label: `${t("longAgentSettings.skillOwnerLongAgent")} · ${agent.name}${agent.longAgentId === document.agent.id ? ` · ${t("skillsTree.currentBadge")}` : ""}`,
-                              entries: agent.skills,
-                            })),
-                          ] as const).map((group) => (
-                            <div key={group.key} className={styles.skillTreeGroup}>
-                              <small className={styles.skillTreeOwner}>{group.label}</small>
-                              {group.entries.length === 0
-                                ? <small className={styles.skillTreeOwner}>{t("skillsTree.empty")}</small>
-                                : group.entries.map((entry: SkillTreeEntry) => (
-                                    <Hint key={entry.filePath} label={entry.filePath} side="top">
-                                    <label className={styles.checkCard} title={entry.filePath}>
-                                      <input
-                                        type="checkbox"
-                                        checked={isSkillChecked(entry.filePath)}
-                                        disabled={skillSelectionDisabled}
-                                        onChange={(event) => toggleSkillPath(entry.filePath, event.target.checked)}
-                                      />
-                                      <span><strong>{entry.name}</strong><code>{entry.description || entry.filePath}</code></span>
-                                    </label>
-                                    </Hint>
-                                  ))}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div></details>
-
-                    <details className={`${styles.section} ${styles.advancedSection}`}>
-                      <summary>{t("longAgentSettings.resources")}</summary><div className={styles.advancedBody}>
-                      <label>{t("longAgentSettings.resourceMode")}<select value={draft.resourceMode} onChange={(event) => set("resourceMode", event.target.value as Draft["resourceMode"])}><option value="inherit">{t("longAgentSettings.inheritResources")}</option><option value="explicit">{t("longAgentSettings.explicitResources")}</option></select></label>
-                      {draft.resourceMode === "explicit" && (
-                        <div className={styles.resourcePicker}>
-                          <p className={styles.help}>{t("longAgentSettings.resourceCatalogHint")}</p>
-                          {resourceCatalogError && <div className={styles.error} role="alert"><InterfaceFeedback message={resourceCatalogError} /></div>}
-                          <h4>{t("interface.extensions")}</h4>
-                          {resourceCatalog !== null && resourceCatalog.extensions.length > 0 ? (
-                            <div className={styles.checkGrid}>
-                              {resourceCatalog.extensions.map((extension) => (
-                                <label key={extension.path} className={styles.checkCard}>
-                                  <input
-                                    type="checkbox"
-                                    checked={lines(draft.extensionPathsText).includes(extension.path)}
-                                    onChange={(event) => toggleResourcePath("extensionPathsText", extension.path, event.target.checked)}
-                                  />
-                                  <span><strong>{extension.name}</strong><code>{extension.path}</code></span>
-                                </label>
-                              ))}
-                            </div>
-                          ) : (
-                            <small>{t("longAgentSettings.resourceCatalogEmpty")}</small>
-                          )}
-                          <h4>{t("interface.plugins")}</h4>
-                          {resourceCatalog !== null && resourceCatalog.plugins.length > 0 ? (
-                            <div className={styles.checkGrid}>
-                              {resourceCatalog.plugins.map((plugin) => (
-                                <label key={`${plugin.scope}:${plugin.source}`} className={styles.checkCard}>
-                                  <input
-                                    type="checkbox"
-                                    checked={lines(draft.pluginSourcesText).includes(plugin.source)}
-                                    onChange={(event) => toggleResourcePath("pluginSourcesText", plugin.source, event.target.checked)}
-                                  />
-                                  <span><strong>{plugin.source}</strong><code>{plugin.scope} · {plugin.status} · {plugin.skills}{t("interface.skills.2")}{plugin.extensions}{t("interface.extensions")}</code></span>
-                                </label>
-                              ))}
-                            </div>
-                          ) : (
-                            <small>{t("longAgentSettings.resourceCatalogEmpty")}</small>
-                          )}
-                          <div className={styles.resourceGrid}><label>{t("interface.skills")}<textarea rows={4} value={draft.skillPathsText} placeholder={t("longAgentSettings.onePerLine")} onChange={(event) => set("skillPathsText", event.target.value)} /></label><label>{t("interface.extensions")}<textarea rows={4} value={draft.extensionPathsText} placeholder={t("longAgentSettings.onePerLine")} onChange={(event) => set("extensionPathsText", event.target.value)} /></label><label>{t("interface.plugins")}<textarea rows={4} value={draft.pluginSourcesText} placeholder={t("longAgentSettings.onePerLine")} onChange={(event) => set("pluginSourcesText", event.target.value)} /></label></div>
-                        </div>
-                      )}
-                    </div></details>
-
-                    <details className={`${styles.section} ${styles.advancedSection}`}>
-                      <summary>{t("longAgentSettings.channel")}</summary><div className={styles.advancedBody}>
+                    <ConfigurationSection className={styles.disclosure} title={t("longAgentSettings.channel")}>
                       {document.channel === null ? (
                         <p className={styles.help}>{t("longAgentSettings.channelUnbound")}</p>
                       ) : (
@@ -771,7 +468,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                           <p className={styles.securityNote}>{t("longAgentSettings.channelCredentialBoundary")}</p>
                         </>
                       )}
-                    </div></details>
+                    </ConfigurationSection>
 
                     <div className={styles.actions}>
                       <span>{dirty ? t("longAgentSettings.unsaved") : t("longAgentSettings.savedState")}</span>
@@ -782,8 +479,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                   </form>
                 )}
                 {activeTab === "runtime" && (
-                  <details className={styles.section}>
-                    <summary>{t("longAgentSettings.effectiveAssembly")}</summary>
+                  <ConfigurationSection className={styles.disclosure} title={t("longAgentSettings.effectiveAssembly")}>
                     <p className={styles.help}>{t("longAgentSettings.previewScope", { project: document.agent.id })}</p>
                     {dirty && <p className={styles.help}>{t("longAgentSettings.previewSaved")}</p>}
                     {inspection && <div className={styles.capabilitySummary}>
@@ -809,9 +505,9 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                         }}
                       />
                     )}
-                  </details>
+                  </ConfigurationSection>
                 )}
-                {activeTab === "runtime" && <details className={styles.section} onToggle={event => setUsageOpen(event.currentTarget.open)}><summary>{t("longAgentSettings.activityHeading")}</summary>{usageOpen && <LongAgentActivitySettings longAgentId={document.agent.id} />}</details>}
+                {activeTab === "runtime" && <ConfigurationSection className={styles.disclosure} title={t("longAgentSettings.activityHeading")} onToggle={event => setUsageOpen(event.currentTarget.open)}>{usageOpen && <LongAgentActivitySettings longAgentId={document.agent.id} />}</ConfigurationSection>}
             {activeTab === "tasks" && <LongAgentTasksSettings longAgentId={document.agent.id} />}
                 {activeTab === "duties" && <LongAgentDutiesSettings longAgentId={document.agent.id} />}
                 {activeTab === "agent-memory" && <LongAgentMemorySettings longAgentId={document.agent.id} key={`${document.agent.id}:${refreshVersion}`} onDirtyChange={setTabDirty} />}

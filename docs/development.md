@@ -355,3 +355,20 @@ Friend、Workflow 和模型配置复用 SurfaceDialog/标准按钮。模型导�
 模型能力来自 `/api/models` 的 input/contextWindow/maxTokens/thinkingLevels，缺失输入信息显示未知。模型高级 JSON 错误阻止保存，配置读取失败也不得用空默认覆盖服务端配置。Friend 保存后重新检查自身 Home 基础能力；业务轮次权限仍由 Backend 按冻结项目决定。所有对象切换和刷新清除旧检查，迟到响应不能覆盖当前对象；刷新要经过未保存草稿保护。
 
 跨层浏览器回归由父仓库 `scripts/configuration-browser.test.mjs` 使用隔离 CHAT_HOME、真实构建服务、假 Nano/模型运行，覆盖图片与采样参数保存回读、错误 JSON、长名称和宽窄屏布局；不访问正式配置。
+
+
+### 执行完成提示与配置折叠（2026-09-30）
+
+完成提示归属整次 Workflow Run / Friend turn；Pi `agent_end`、某个 Stage 完成和流断开都不能独立触发成功音。`useAgentSession` 传递包含项目、Session、执行 ID 与终态的 `onExecutionSettled`；AppShell 统一按执行 ID 去重。后台 Session 离开运行列表后只触发一次事实读取，确认成功才播放；失败、取消、仍在运行及读取失败保持静默。去重集合只是当前页面的通知投递记录，不能充当执行状态源。等待用户输入仍有独立提示。现有单次提示音包含两个音符。
+
+Friend / Workflow 使用同一个 `ConfigurationSection` 折叠行和模型、思考强度选择器。模型参数入口复用全局 `ModelsConfig`，定位当前模型，明确后续所有使用该模型的 Agent 均受影响；关闭嵌套编辑器保留父级草稿。保存后重新读取模型目录与生效检查，失败可重试。模型配置仍经现有 Backend API 保存，没有新增 Agent 级采样参数合同。
+
+门禁：`lib/execution-completion.test.mjs` 覆盖状态确认、归属校验和前后台重复观察；根仓库 `scripts/session-memory-switch-browser.test.mjs` 在真实双 Agent Workflow 中检查第一个 Agent 完成无音、最终完成一次音；`scripts/configuration-browser.test.mjs` 检查关闭行高度、嵌套编辑保存与草稿保留、能力刷新及不同视口。
+
+### 2026-09-30：会话过程和 Long Agent 配置
+
+- Agent Memory 写入产物使用回执中的所有者、资源路径与 revision，打开 Agent Memory API 查看器，不进入项目文件 API；旧回执仅可使用当前服务端 Session 所有者补全身份。
+- Completed 内按 invocation、stage、agent 分组；主回复属于工作节点，记忆节点只展示维护过程及真实写入回执。没有写入回执不得声称已保存。失败/取消/关闭的记忆节点使用服务端持久状态。
+- Long Agent 设置复用 `WorkflowAgentConfigDialog`。Home 配置是服务端事实；身份表单只修改身份字段，刷新公共配置后保留未保存身份草稿。执行字段不再提供独立编辑器。
+- “新会话”创建独立直接 Session，“当天默认会话”返回默认引用；刷新按服务端 owner 恢复。浏览器只临时保留未确认创建 requestId，用于失败重试，Session ID 与日期归属由服务端确定。
+- Full history 保留原生 HTML、分支与压缩记录；请求取消、错误重试及 Session 切换隔离必须保留。耗时分请求总时间和缓存生成时间，不能以生成耗时冒充缓存命中耗时。

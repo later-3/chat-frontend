@@ -449,11 +449,13 @@ export async function startProjectLongAgent(input: {
   readonly longAgentId: string;
   readonly projectId: string;
   readonly date?: string;
+  readonly createRequestId?: string;
 }, signal?: AbortSignal): Promise<ProjectLongAgentStarted> {
   const response = await fetch(`/api/long-agents/${encodeURIComponent(input.longAgentId)}/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ projectId: input.projectId, ...(input.date === undefined ? {} : { date: input.date }) }),
+    body: JSON.stringify({ projectId: input.projectId, ...(input.date === undefined ? {} : { date: input.date }),
+      ...(input.createRequestId === undefined ? {} : { mode: "new", requestId: input.createRequestId }) }),
     ...(signal === undefined ? {} : { signal }),
   });
   const started = parseProjectLongAgentStarted(await responseBody(response));

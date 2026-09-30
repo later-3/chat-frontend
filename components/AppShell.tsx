@@ -1,4 +1,7 @@
 "use client";
+import { startProjectLongAgent } from "@/lib/long-agents-browser";
+import { friendSessionCreationRequest, acknowledgeFriendSessionCreation } from "@/lib/friend-session-creation";
+import { claimExecutionCompletion, type ExecutionSettlement } from "@/lib/execution-completion";
 import { Popover, PopoverTrigger, PopoverContent } from "./ui/Popover";
 import { Button } from "./ui/Button";
 
@@ -176,8 +179,11 @@ export function AppShell({
   // is not mounted. ChatWindow receives the audio callbacks as props.
   const { soundEnabled, onSoundToggle, playDoneSound, unlockAudio, soundEnabledRef } = useAudio();
   const notifiedAttentionRequestIdsRef = useRef(new Set<string>());
-  const handleBackgroundTaskDone = useCallback(() => {
+  const completedExecutionsRef = useRef(new Set<string>());
+  const playExecutionCompletion = useCallback((event: ExecutionSettlement) => {
+    if (!claimExecutionCompletion(event, completedExecutionsRef.current)) return false;
     if (soundEnabledRef.current) playDoneSound();
+    return true;
   }, [playDoneSound, soundEnabledRef]);
   const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null);
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(() => new Set());
@@ -879,10 +885,29 @@ export function AppShell({
     router.replace(`?cwd=${encodeURIComponent(cwd ?? "")}`, { scroll: false });
   }, [activateChat, invalidateWorkspaceRestore, router, isMobile, projectDraftKey]);
 
+  const creatingFriendSession = useRef(false);
+  const newSessionInCurrentContext = (cwd: string) => {
+    if (!selectedLongAgentId || contentPanel !== "long-agents") { handleNewSession(`new-${crypto.randomUUID()}`, cwd); return; }
+    if (creatingFriendSession.current) return;
+    const owner = selectedLongAgentId;
+    creatingFriendSession.current = true;
+    void (async () => {
+      try {
+        const started = await startProjectLongAgent({ longAgentId: owner, projectId: owner,
+          createRequestId: friendSessionCreationRequest(owner, "today") });
+        const next = await fetchProjectSessionById(started.projectId, started.primarySessionId);
+        if (!next) throw new Error(translate("friendInspector.sessionNotFound"));
+        handleSelectSession(next);
+        acknowledgeFriendSessionCreation(owner, "today");
+      } catch (cause) { setNavigationError(cause instanceof Error ? cause.message : String(cause)); }
+      finally { creatingFriendSession.current = false; }
+    })();
+  };
+
   // Global keyboard shortcuts (handles Esc, Ctrl+Alt+N etc.)
   useGlobalKeyboardShortcuts({
     enabled: !settingsVisible && workspaceView === "chat",
-    onNewSession: (cwd: string) => handleNewSession(`kb-${Date.now()}`, cwd),
+    onNewSession: newSessionInCurrentContext,
     activeCwd,
   });
 
@@ -956,19 +981,19 @@ export function AppShell({
     }
   }, [handleSelectSession]);
 
-  const handleAgentEnd = useCallback(() => {
+  const handleExecutionSettled = useCallback((event: ExecutionSettlement) => {
     setRefreshKey((k) => k + 1);
     setExplorerRefreshKey((k) => k + 1);
     if (selectedSession) hydrateSelectedSession(selectedSession.id);
 
-    if (!shouldShowBrowserNotification()) return;
+    if (!playExecutionCompletion(event) || !shouldShowBrowserNotification()) return;
     const targetSession = selectedSession;
     deliverSessionNotification({
       targetSession,
       title: targetSession?.name ?? translate("i18n.sessionComplete"),
       body: translate("i18n.taskFinished"),
     });
-  }, [deliverSessionNotification, hydrateSelectedSession, selectedSession, translate]);
+  }, [deliverSessionNotification, hydrateSelectedSession, playExecutionCompletion, selectedSession, translate]);
 
   const handleAttentionNeeded = useCallback((request: BlockingExtensionUiRequest) => {
     if (!shouldShowBrowserNotification()) return;
@@ -1219,7 +1244,7 @@ export function AppShell({
         mobileView={mobileWorkspaceView}
         onMobileViewChange={setMobileWorkspaceView}
         onRequestClose={() => setSidebarOpen(false)}
-        onBackgroundTaskDone={handleBackgroundTaskDone}
+        onBackgroundTaskDone={playExecutionCompletion}
         onRunningSessionIdsChange={handleRunningSessionIdsChange}
       />
 
@@ -2121,7 +2146,7 @@ export function AppShell({
               sessionRunning={Boolean(selectedSession && runningSessionIds.has(selectedSession.id))}
               newSessionCwd={effectiveNewSessionCwd}
               newSessionDraftKey={newSessionDraftKey}
-              onAgentEnd={handleAgentEnd}
+              onExecutionSettled={handleExecutionSettled}
               onAttentionNeeded={handleAttentionNeeded}
               onSessionCreated={handleSessionCreated}
               onSessionOpen={(sessionId) => handleOpenExistingSession(sessionId, currentProjectId)}
@@ -2372,8 +2397,8 @@ export function AppShell({
       onNewSession={() => {
         activateChat();
         if (activeCwd) {
-          handleNewSession(`palette-${crypto.randomUUID()}`, activeCwd);
-          if (activeProjectId) restoreWorkspaceContext(activeProjectId, activeCwd);
+          newSessionInCurrentContext(activeCwd);
+          if (!selectedLongAgentId && activeProjectId) restoreWorkspaceContext(activeProjectId, activeCwd);
         } else {
           setSelectedSession(null);
           setSessionKey((k) => k + 1);

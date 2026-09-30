@@ -95,6 +95,7 @@ export async function acceptFriendMessage(
   input: {
     requestId: string;
     workflow?: string;
+    agentConfigs?: Record<string, import("./chat-workflow-contract").AgentConfigSelection>;
     sessionId?: string;
     contextProjectId?: string | null;
     text: string;

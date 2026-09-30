@@ -829,7 +829,7 @@ pre, code {
   display: grid; gap: 16px; padding: 16px;
   min-width:0; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-panel);
 }
-.workflow-agent-runtime-capabilities > div { display: flex; flex-direction: column; gap: 3px; }
+.workflow-agent-runtime-capabilities > div:not(.configuration-model-fields) { display: flex; flex-direction: column; gap: 3px; }
 .workflow-agent-runtime-capabilities .workflow-agent-facts { grid-template-columns: minmax(100px, auto) minmax(0, 1fr); }
 .workflow-agent-config-fields > label, .workflow-agent-runtime-capabilities > label:has(> select) { display: grid; gap: 6px; min-width:0; font-size:13px; font-weight:500; }
 .workflow-agent-config-fields input[type="text"],
@@ -1059,5 +1059,9 @@ pre, code {
 .workflow-agent-disclosure > section { margin-bottom:16px; }
 .workflow-agent-dialog-shell .workflow-agent-runtime-capabilities { background:transparent; border:0; padding:16px 0; border-radius:0; }
 .workflow-agent-dialog-shell > main { padding:24px; min-width:0; }
-.workflow-agent-dialog-shell .workflow-agent-runtime-capabilities > div { gap:8px; }
+.workflow-agent-dialog-shell .workflow-agent-runtime-capabilities > div:not(.configuration-model-fields) { gap:8px; }
 @media(max-width:768px) { .workflow-agent-dialog-shell > main { padding:16px; } }
+
+/* Model choice and effort share a baseline; capability facts stay subordinate. */
+.configuration-model-fields { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,1fr); gap:24px; align-items:start; }
+@media(max-width:768px) { .configuration-model-fields { grid-template-columns:minmax(0,1fr); gap:16px; } }

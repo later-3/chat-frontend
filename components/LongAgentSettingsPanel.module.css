@@ -354,7 +354,7 @@
   font-weight: 650;
 }
 
-.section label {
+:is(.section,.disclosure) label {
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -364,9 +364,9 @@
   font-weight: 600;
 }
 
-.section input:not([type="checkbox"]),
-.section select,
-.section textarea {
+:is(.section,.disclosure) input:not([type="checkbox"]),
+:is(.section,.disclosure) select,
+:is(.section,.disclosure) textarea {
   width: 100%;
   box-sizing: border-box;
   padding: 9px 10px;
@@ -379,19 +379,19 @@
   font-size: 13px;
 }
 
-.section input:not([type="checkbox"]),
-.section select {
+:is(.section,.disclosure) input:not([type="checkbox"]),
+:is(.section,.disclosure) select {
   min-height: 40px;
 }
 
-.section textarea {
+:is(.section,.disclosure) textarea {
   line-height: 1.5;
   resize: vertical;
 }
 
-.section input:focus,
-.section select:focus,
-.section textarea:focus {
+:is(.section,.disclosure) input:focus,
+:is(.section,.disclosure) select:focus,
+:is(.section,.disclosure) textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-outline, color-mix(in srgb, var(--accent) 12%, transparent));
 }
@@ -1148,9 +1148,9 @@
     font-size: 16px;
   }
 
-  .section input:not([type="checkbox"]),
-  .section select,
-  .section textarea {
+  :is(.section,.disclosure) input:not([type="checkbox"]),
+  :is(.section,.disclosure) select,
+  :is(.section,.disclosure) textarea {
     font-size: 16px;
   }
 
@@ -1254,7 +1254,7 @@
 .pageHeader { display:flex; flex-wrap:wrap; padding-block:10px; }
 .titleGroup { flex:1; }
 .section { font-size:14px; }
-.section label { font-size:13px; }
+:is(.section,.disclosure) label { font-size:13px; }
 @media(max-width:768px), (hover:none) and (pointer:coarse) and (max-height:500px) {
   .pageHeader > .secondaryButton { display:inline-flex; min-height:44px; }
   .pageHeader .titleGroup { flex-basis:calc(100% - 120px); }
@@ -1304,29 +1304,27 @@
 .settingsTab, .activeSettingsTab { font-size: 13px; font-weight: 500; text-align: left; }
 .activeSettingsTab { color: var(--accent); border-color: transparent; }
 .section { border-radius: var(--radius-panel); padding: 20px; }
-.section input:not([type="checkbox"]):not([type="radio"]), .section select { min-height: 40px; }
-.section input[type="radio"] { min-height: 0; }
+:is(.section,.disclosure) input:not([type="checkbox"]):not([type="radio"]), :is(.section,.disclosure) select { min-height: 40px; }
+:is(.section,.disclosure) input[type="radio"] { min-height: 0; }
 .taskRow { padding: 14px 16px; border-radius: var(--radius-control); background: var(--bg-panel); }
 .taskPrompt { font-size: 14px; line-height: 1.6; }
-@media (max-width: 768px) { .agentNav { padding: 10px 12px; } .section { padding: 16px; } .section input:not([type="checkbox"]):not([type="radio"]), .section select { min-height: 44px; } }
+@media (max-width: 768px) { .agentNav { padding: 10px 12px; } .section { padding: 16px; } :is(.section,.disclosure) input:not([type="checkbox"]):not([type="radio"]), :is(.section,.disclosure) select { min-height: 44px; } }
 
 .sourceLine {flex-wrap:wrap; gap:12px; font-weight:400;}
 .sourceLine > span:first-child {flex:1;min-width:180px;}
 .sourceLine > button {flex-shrink:0;white-space:nowrap;}
 
-.advancedSection { display:block; }
-.advancedSection > summary,.promptOptions > summary { min-height:36px; align-content:center; cursor:pointer; color:var(--text); font-size:14px; font-weight:550; }
-.advancedBody { display:flex; flex-direction:column; gap:16px; padding-top:16px; }
-.promptOptions { border-top:1px solid var(--border); padding-top:12px; }
-@media(max-width:767px) { .advancedSection > summary,.promptOptions > summary { min-height:44px; } }
-
 /* Configuration uses the shared control sizes and a single content column. */
-.formFields { display:flex; flex-direction:column; gap:20px; border:0; margin:0; padding:0; min-width:0; }
-.modelFields { display:grid; gap:20px; }
-.section { background:transparent; border:0; border-top:1px solid var(--border); border-radius:0; padding:20px 0; }
+.formFields { display:flex; flex-direction:column; gap:0; border:0; margin:0; padding:0; min-width:0; }
+.modelFields { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,1fr); gap:24px; align-items:start; }
+.form { gap:0; }
+.sourceLine { margin:16px 0; }
+.disclosure { min-width:0; }
+.section { background:transparent; border:0; border-top:1px solid var(--border); border-radius:0; padding:16px 0 24px; }
 .section legend { padding:0 10px 0 0; font-size:14px; }
-.section > summary { cursor:pointer; font-size:14px; font-weight:550; padding:4px 0; }
 .capabilitySummary { display:grid; gap:8px; font-size:13px; }
 .capabilitySummary p { overflow-wrap:anywhere; margin:0; color:var(--text-muted); line-height:1.7; }
 .capabilitySummary small { color:var(--text-muted); line-height:1.6; }
-@media(max-width:768px) { .section { padding:16px 0; } }
+@media(max-width:768px) { .section { padding:16px 0; } .modelFields { grid-template-columns:minmax(0,1fr); gap:16px; } }
+
+.section.runtimeSection { padding-bottom:0; }

@@ -1505,7 +1505,10 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
   );
 }
 
-export function ModelsConfig({ onClose }: { onClose: () => void }) {
+export function ModelsConfig({ onClose, initialModel, onSaved }: {
+  onClose: () => void; initialModel?: { provider: string; modelId: string }; onSaved?: () => void;
+}) {
+  const initialModelRef = useRef(initialModel);
   const confirm = useConfirmation();
   const isMobile = useIsMobile();
   const { t } = useI18n();
@@ -1583,7 +1586,10 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
         setCapabilities(document.capabilities);
         setModelsConfigPath(document.source.path);
         const keys = Object.keys(normalized.providers ?? {});
-        if (keys.length > 0) setSelection({ type: "provider", name: keys[0] });
+        const target = initialModelRef.current;
+        const index = target ? normalized.providers?.[target.provider]?.models?.findIndex(model => model.id === target.modelId) ?? -1 : -1;
+        if (target && index >= 0) setSelection({ type: "model", providerName: target.provider, index });
+        else if (keys.length > 0) setSelection({ type: "provider", name: keys[0] });
       })
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
@@ -1697,13 +1703,14 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
       setSavedConfig(JSON.stringify(saved.config));
       setModelsConfigPath(saved.source.path);
       setSavedOk(true);
+      onSaved?.();
       setTimeout(() => setSavedOk(false), 2000);
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : String(e));
     } finally {
       setSaving(false);
     }
-  }, [config, saving, loading, capabilities, invalidFields]);
+  }, [config, saving, loading, capabilities, invalidFields, onSaved]);
 
   const providers = Object.entries(config.providers ?? {});
   const activeOAuth = oauthProviders.filter((p) => p.loggedIn);
@@ -1759,7 +1766,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
   // P3: outer shell is the shared SurfaceDialog (wide). Radix owns overlay +
   // focus + Escape; the inner body keeps its own navigation/detail layout.
-  return (<ModelFieldValidation.Provider value={reportValidation}><SurfaceDialog title={t("common.models")} description={t("design.providerHint")} onClose={requestClose}>
+  return (<ModelFieldValidation.Provider value={reportValidation}><SurfaceDialog title={t("common.models")} description={t(initialModel ? "design.modelSettingsScope" : "design.providerHint")} onClose={requestClose}>
       <div className={`${styles.surfaceBody} configuration-dialog`}>
 
         {/* Body */}
