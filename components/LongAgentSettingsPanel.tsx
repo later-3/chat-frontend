@@ -9,7 +9,7 @@ import { translateWorkflowCopy } from "@/lib/i18n/workflow-copy";
 
 import { InterfaceFeedback } from "./InterfaceFeedback";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IconBook2, IconBrain, IconClock, IconRefresh, IconSettings } from "@tabler/icons-react";
 import { useI18n } from "@/hooks/useI18n";
 import { fetchChatModelCatalog, type ChatModelCatalog } from "@/lib/chat-workflows-browser";
@@ -47,6 +47,7 @@ import { LongAgentMemorySettings } from "./LongAgentMemorySettings";
 import { LongAgentTasksSettings } from "./LongAgentTasksSettings";
 import { LongAgentDutiesSettings } from "./LongAgentDutiesSettings";
 import { ModelSelection, ThinkingSelection } from "./ModelSelection";
+import { ConfigurationToggle } from "./ConfigurationToggle";
 import { SearchSelect } from "./SearchSelect";
 
 /**
@@ -190,6 +191,8 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
       ? initialAgentId
       : agents[0]?.id ?? "",
   );
+  const loadGeneration = useRef(0);
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [document, setDocument] = useState<LongAgentConfigurationDocument | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [initialDraft, setInitialDraft] = useState<Draft | null>(null);
@@ -240,7 +243,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
   }, []);
 
   useEffect(() => {
-    const defaultProjectId = document?.agent.defaultProjectId;
+    const defaultProjectId = document?.agent.id;
     if (!defaultProjectId) return;
     const controller = new AbortController();
     setResourceCatalog(null);
@@ -250,33 +253,35 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
     setSkillTree(null);
     setSkillTreeError(null);
     void fetchChatSkillTree(defaultProjectId, controller.signal)
-      .then(setSkillTree)
+      .then(value => { if (!controller.signal.aborted) setSkillTree(value); })
       .catch((cause: unknown) => {
         if (!(cause instanceof DOMException && cause.name === "AbortError")) {
           setSkillTreeError(cause instanceof Error ? cause.message : String(cause));
         }
       });
     void fetchProjectResourceCatalog(defaultProjectId, controller.signal)
-      .then(setResourceCatalog)
+      .then(value => { if (!controller.signal.aborted) setResourceCatalog(value); })
       .catch((cause: unknown) => {
         if (!(cause instanceof DOMException && cause.name === "AbortError")) {
           setResourceCatalogError(cause instanceof Error ? cause.message : String(cause));
         }
       });
     void fetchChatTools(defaultProjectId, controller.signal)
-      .then((response) => setToolCatalog(
-        response.tools.filter((tool) => tool.address.startsWith("system:tool/")),
-      ))
+      .then((response) => {
+        if (!controller.signal.aborted) setToolCatalog(response.tools.filter(tool => tool.address.startsWith("system:tool/")));
+      })
       .catch((cause: unknown) => {
         if (!(cause instanceof DOMException && cause.name === "AbortError")) {
           setToolCatalogError(cause instanceof Error ? cause.message : String(cause));
         }
       });
     return () => controller.abort();
-  }, [document?.agent.defaultProjectId]);
+  }, [document?.agent.id, refreshVersion]);
 
   const load = useCallback(async (selectedAgentId: string, signal?: AbortSignal) => {
     if (!selectedAgentId) return;
+    const generation = ++loadGeneration.current;
+    const current = () => generation === loadGeneration.current && !signal?.aborted;
     setLoading(true);
     setError(null);
     setNotice(null);
@@ -284,27 +289,28 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
     setInspectionError(null);
     try {
       const next = await fetchLongAgentConfiguration(selectedAgentId, signal);
+      if (!current()) return;
       const nextDraft = draftFrom(next);
       setDocument(next);
       setDraft(nextDraft);
       setInitialDraft(nextDraft);
       // 生效装配与配置同源读取：失败只影响只读展示区，不影响配置编辑。
-      void fetchLongAgentInspection(selectedAgentId, next.agent.defaultProjectId, signal)
-        .then(setInspection)
+      void fetchLongAgentInspection(selectedAgentId, next.agent.id, signal)
+        .then(value => { if (current()) setInspection(value); })
         .catch((cause: unknown) => {
-          if (!(cause instanceof DOMException && cause.name === "AbortError")) {
+          if (current() && !(cause instanceof DOMException && cause.name === "AbortError")) {
             setInspectionError(cause instanceof Error ? cause.message : String(cause));
           }
         });
     } catch (cause) {
-      if (!(cause instanceof DOMException && cause.name === "AbortError")) {
+      if (current() && !(cause instanceof DOMException && cause.name === "AbortError")) {
         setDocument(null);
         setDraft(null);
         setInitialDraft(null);
         setError(cause instanceof Error ? cause.message : String(cause));
       }
     } finally {
-      if (!signal?.aborted) setLoading(false);
+      if (current()) setLoading(false);
     }
   }, []);
 
@@ -333,7 +339,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
   useEffect(() => {
     const controller = new AbortController();
     void load(agentId, controller.signal);
-    return () => controller.abort();
+    return () => { controller.abort(); loadGeneration.current += 1; };
   }, [agentId, load]);
 
   const selectAgent = async (nextAgentId: string) => {
@@ -341,6 +347,12 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
     if (hasUnsavedChanges && !await confirm(t("longAgentSettings.discardConfirm"), t("common.discard"))) return;
     setTabDirty(false);
     setAgentId(nextAgentId);
+  };
+  const refresh = async () => {
+    if (hasUnsavedChanges && !await confirm(t("longAgentSettings.discardConfirm"), t("common.discard"))) return;
+    setTabDirty(false);
+    setRefreshVersion(version => version + 1);
+    await load(agentId);
   };
   const back = async () => {
     if (hasUnsavedChanges && !await confirm(t("longAgentSettings.discardConfirm"), t("common.discard"))) return;
@@ -377,6 +389,15 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
       setInitialDraft(nextDraft);
       setNotice(t("longAgentSettings.saved"));
       onSaved();
+      setInspection(null);
+      setInspectionError(null);
+      const generation = loadGeneration.current;
+      try {
+        const resolved = await fetchLongAgentInspection(next.agent.id, next.agent.id);
+        if (generation === loadGeneration.current) setInspection(resolved);
+      } catch (cause) {
+        if (generation === loadGeneration.current) setInspectionError(cause instanceof Error ? cause.message : String(cause));
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -473,15 +494,15 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
   const requestClose = () => { void back(); };
   const headerActions = (<>
       {selectedSummary !== null && (<>
-        <Button variant="secondary" type="button" className={styles.secondaryButton}
+        <Button variant="secondary" type="button"
           disabled={saving || lifecycleBusy}
           onClick={() => void runLifecycle(selectedSummary.status === "archived" ? "restore" : "archive")}>{selectedSummary.status === "archived" ? t("longAgent.restore") : t("longAgent.archive")}</Button>
-        {selectedSummary.status === "archived" && (<Button variant="secondary" type="button" className={styles.secondaryButton}
+        {selectedSummary.status === "archived" && (<Button variant="secondary" type="button"
           disabled={saving || lifecycleBusy}
           onClick={() => void runLifecycle("delete")}>{t("longAgent.delete")}</Button>)}
       </>)}
-      <Button variant="secondary" type="button" className={styles.secondaryButton}
-        onClick={() => void load(agentId)} disabled={loading || saving}>
+      <Button variant="secondary" type="button"
+        onClick={() => void refresh()} disabled={loading || saving || lifecycleBusy}>
         <IconRefresh size={16} stroke={1.8} aria-hidden="true" />{t("common.refresh")}
       </Button>
   </>);
@@ -523,11 +544,11 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
             <div className={styles.state} role="alert">
               <strong>{t("longAgentSettings.loadFailed")}</strong>
               <span><InterfaceFeedback message={error} /></span>
-              <Button variant="secondary" type="button" className={styles.secondaryButton} onClick={() => void load(agentId)}>
+              <Button variant="secondary" type="button" onClick={() => void load(agentId)}>
                 {t("longAgentSettings.retry")}
               </Button>
             </div>
-          ) : document && draft ? (
+          ) : document && document.agent.id === agentId && draft ? (
             <div className={styles.settingsShell}>
               <div className={styles.agentHeading}>
                 <div>
@@ -535,10 +556,10 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                   <h2>{draft.name}</h2>
                 </div>
                 {activeTab === "runtime" && (
-                  <label className={styles.enabledControl}>
-                    <input type="checkbox" checked={draft.enabled} onChange={(event) => set("enabled", event.target.checked)} />
+                  <div className={styles.enabledControl}>
                     <span>{draft.enabled ? t("longAgentSettings.enabled") : t("longAgentSettings.disabled")}</span>
-                  </label>
+                    <ConfigurationToggle enabled={draft.enabled} loading={saving} onToggle={() => set("enabled", !draft.enabled)} label={t("longAgentSettings.enabled")} />
+                  </div>
                 )}
               </div>
 
@@ -549,8 +570,13 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                 aria-labelledby={`long-agent-${activeTab}-tab`}
                 className={styles.tabPanel}
               >
+                {activeTab === "runtime" && <details className={styles.section} onToggle={event => { if (event.currentTarget.open) setIdentityOpen(true); }}>
+                  <summary>{t("longAgentSettings.groupIdentity")}</summary>
+                  {identityOpen && <LongAgentGroupSettings longAgentId={document.agent.id} key={`${document.agent.id}:${refreshVersion}`} onDirtyChange={setTabDirty} />}
+                </details>}
                 {activeTab === "runtime" && (
                   <form className={styles.form} onSubmit={(event) => { event.preventDefault(); void save(); }}>
+                    <fieldset className={styles.formFields} disabled={saving}>
                     <div className={styles.sourceLine}>
                       <span>{t("longAgentSettings.chatSource")}</span>
                       <span>{t("longAgentSettings.nextTurnEffective")}</span>
@@ -596,8 +622,8 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                             : t("longAgentSettings.modelSourceChatDefault")}`}
                         </dd>
                       </dl>
-                      <div className={styles.twoColumns}>
-                        <ModelSelection models={modelOptions} value={draft.modelKey} onChange={value => set("modelKey", value)} inheritLabel={t("workspaceNav.inheritModel")} />
+                      <div className={styles.modelFields}>
+                        <ModelSelection models={modelOptions} value={draft.modelKey} inheritedModelKey={document.agent.definition.model === null && document.agent.effective.model ? `${document.agent.effective.model.provider}/${document.agent.effective.model.modelId}` : undefined} onChange={value => set("modelKey", value)} inheritLabel={t("workspaceNav.inheritModel")} />
                         <ThinkingSelection value={draft.thinkingLevel} onChange={value => set("thinkingLevel", value)} inheritLabel={t("design.inheritDefault")}
                           capabilitiesPending={draft.modelKey === "" && document.agent.definition.model !== null}
                           levels={modelOptions.find(model => `${model.provider}/${model.modelId}` === (draft.modelKey || (document.agent.effective.model ? `${document.agent.effective.model.provider}/${document.agent.effective.model.modelId}` : "")))?.thinkingLevels ?? []} />
@@ -648,7 +674,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                             { key: "personal", label: t("longAgentSettings.skillOwnerPersonal"), entries: skillTree.personal.skills },
                             ...skillTree.projects.map((project) => ({
                               key: `project:${project.projectId}`,
-                              label: `${t("longAgentSettings.skillOwnerProject")} · ${project.name}${project.projectId === document.agent.defaultProjectId ? ` · ${t("skillsTree.currentBadge")}` : ""}`,
+                              label: `${t("longAgentSettings.skillOwnerProject")} · ${project.name}${project.projectId === document.agent.id ? ` · ${t("skillsTree.currentBadge")}` : ""}`,
                               entries: project.skills,
                             })),
                             ...skillTree.workflows.flatMap((workflow) => workflow.agents.map((agent) => ({
@@ -749,14 +775,22 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
 
                     <div className={styles.actions}>
                       <span>{dirty ? t("longAgentSettings.unsaved") : t("longAgentSettings.savedState")}</span>
-                      <Button variant="secondary" type="button" className={styles.secondaryButton} disabled={!dirty || saving} onClick={() => { if (initialDraft) setDraft(initialDraft); }}>{t("longAgentSettings.reset")}</Button>
-                      <Button variant="primary" type="submit" className={styles.primaryButton} disabled={!dirty || saving}>{saving ? t("common.saving") : t("common.save")}</Button>
+                      <Button variant="secondary" type="button" disabled={!dirty || saving} onClick={() => { if (initialDraft) setDraft(initialDraft); }}>{t("longAgentSettings.reset")}</Button>
+                      <Button variant="primary" type="submit" disabled={!dirty || saving}>{saving ? t("common.saving") : t("common.save")}</Button>
                     </div>
+                    </fieldset>
                   </form>
                 )}
                 {activeTab === "runtime" && (
-                  <section className={styles.section} aria-label={t("longAgentSettings.effectiveAssembly")}>
-                    <h3>{t("longAgentSettings.effectiveAssembly")}</h3>
+                  <details className={styles.section}>
+                    <summary>{t("longAgentSettings.effectiveAssembly")}</summary>
+                    <p className={styles.help}>{t("longAgentSettings.previewScope", { project: document.agent.id })}</p>
+                    {dirty && <p className={styles.help}>{t("longAgentSettings.previewSaved")}</p>}
+                    {inspection && <div className={styles.capabilitySummary}>
+                      <strong>{t("longAgentSettings.availableTools", { count: inspection.tools.filter(tool => tool.active).length })}</strong>
+                      <p>{inspection.tools.filter(tool => tool.active).map(tool => tool.name).join(" · ") || t("longAgentSettings.noTools")}</p>
+                      <small>{t("longAgentSettings.memoryBoundary")}</small>
+                    </div>}
                     {inspectionError && <div className={styles.error} role="alert"><InterfaceFeedback message={inspectionError} /></div>}
                     {inspection === null && inspectionError === null && <small>{t("longAgentSettings.inspectionLoading")}</small>}
                     {inspection !== null && (
@@ -775,16 +809,12 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                         }}
                       />
                     )}
-                  </section>
+                  </details>
                 )}
-                {activeTab === "runtime" && <details className={styles.section} onToggle={event => { if (event.currentTarget.open) setIdentityOpen(true); }}>
-                  <summary>{t("longAgentSettings.groupIdentity")}</summary>
-                  {identityOpen && <LongAgentGroupSettings longAgentId={document.agent.id} onDirtyChange={setTabDirty} />}
-                </details>}
                 {activeTab === "runtime" && <details className={styles.section} onToggle={event => setUsageOpen(event.currentTarget.open)}><summary>{t("longAgentSettings.activityHeading")}</summary>{usageOpen && <LongAgentActivitySettings longAgentId={document.agent.id} />}</details>}
             {activeTab === "tasks" && <LongAgentTasksSettings longAgentId={document.agent.id} />}
                 {activeTab === "duties" && <LongAgentDutiesSettings longAgentId={document.agent.id} />}
-                {activeTab === "agent-memory" && <LongAgentMemorySettings longAgentId={document.agent.id} onDirtyChange={setTabDirty} />}
+                {activeTab === "agent-memory" && <LongAgentMemorySettings longAgentId={document.agent.id} key={`${document.agent.id}:${refreshVersion}`} onDirtyChange={setTabDirty} />}
               </div>
             </div>
           ) : null}

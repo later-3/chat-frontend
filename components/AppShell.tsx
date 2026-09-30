@@ -1,4 +1,5 @@
 "use client";
+import { Popover, PopoverTrigger, PopoverContent } from "./ui/Popover";
 import { Button } from "./ui/Button";
 
 import { InterfaceFeedback } from "./InterfaceFeedback";
@@ -7,7 +8,7 @@ import { useState, useCallback, useRef, useEffect, useLayoutEffect } from "react
 import { FriendInspector } from "./FriendInspector";
 import { WorkspaceNavigation, type WorkspaceSection } from "./WorkspaceNavigation";
 import { WorkspaceSettings } from "./WorkspaceSettings";
-import { IconLayoutSidebar, IconFolder, IconX, IconCalendarStats } from "@tabler/icons-react";
+import { IconLayoutSidebar, IconFolder, IconX, IconCalendarStats, IconHistory, IconFileDescription, IconArrowsHorizontal } from "@tabler/icons-react";
 import { MeasureSlider } from "./ui/MeasureSlider";
 import { ToolbarAction } from "./ui/ToolbarAction";
 import { useBrowserRouter } from "@/lib/browser-router";
@@ -1319,7 +1320,7 @@ export function AppShell({
         <ToolbarAction
           iconOnly={mobile}
           label={selectedSession ? translate("history.full") : translate("history.unsaved")}
-          icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l3 2" /></svg>}
+          icon={<IconHistory size={18} />}
           disabled={!selectedSession}
           data-mobile-toolbar-action={mobile ? "history" : undefined}
           onClick={() => {
@@ -1369,7 +1370,7 @@ export function AppShell({
           ref={systemBtnRef}
           iconOnly={mobile}
           label={translate("system.label")}
-          icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="8" y1="13" x2="16" y2="13" /><line x1="8" y1="17" x2="13" y2="17" /></svg>}
+          icon={<IconFileDescription size={18} />}
           active={activeTopPanel === "system"}
           disabled={mobile && !showChat}
           data-mobile-toolbar-action={mobile ? "system" : undefined}
@@ -1733,7 +1734,8 @@ export function AppShell({
             <>
               {renderChatToolbarActions(false)}
               {renderSessionStatsButton(false)}
-              <MeasureSlider
+              <Popover><PopoverTrigger asChild><ToolbarAction label={translate("layout.conversationWidth")} icon={<IconArrowsHorizontal size={18} />} /></PopoverTrigger>
+                <PopoverContent align="end" className="conversation-width-popover"><p>{translate("layout.conversationWidth")}</p><MeasureSlider
                 value={effectiveConversationMeasure}
                 min={CONVERSATION_MEASURE_MIN_WIDTH}
                 max={conversationMeasureMax}
@@ -1744,7 +1746,7 @@ export function AppShell({
                 onReset={() => commitConversationMeasure(null)}
                 label={translate("layout.conversationWidth")}
                 autoLabel={translate("layout.conversationWidthAuto")}
-              />
+              /></PopoverContent></Popover>
             </>
           )}
           {isMobile && (

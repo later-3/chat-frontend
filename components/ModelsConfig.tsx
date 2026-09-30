@@ -93,6 +93,36 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <div className={styles.field}><span id={id} className={styles.fieldLabel}>{label}</span><FieldName.Provider value={id}>{children}</FieldName.Provider></div>;
 }
 
+const ModelFieldValidation = createContext<(id: string, invalid: boolean) => void>(() => {});
+function JsonObjectField({ label, value, onChange, help }: {
+  label: string; value: Record<string, unknown> | undefined;
+  onChange: (value: Record<string, unknown> | undefined) => void; help: string;
+}) {
+  const id = useId();
+  const { t } = useI18n();
+  const report = useContext(ModelFieldValidation);
+  const serialized = value === undefined ? "" : JSON.stringify(value, null, 2);
+  const [draft, setDraft] = useState(serialized);
+  const [invalid, setInvalid] = useState(false);
+  useEffect(() => { setDraft(serialized); setInvalid(false); }, [serialized]);
+  useEffect(() => { report(id, invalid); return () => report(id, false); }, [id, invalid, report]);
+  return <label className={styles.field}>
+    <span className={styles.fieldLabel}>{label}</span>
+    <textarea rows={5} value={draft} spellCheck={false} aria-invalid={invalid} aria-describedby={`${id}-hint`}
+      onChange={event => {
+        const text = event.target.value;
+        setDraft(text);
+        try {
+          const parsed: unknown = text.trim() ? JSON.parse(text) : undefined;
+          if (parsed !== undefined && (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))) throw new Error();
+          setInvalid(false);
+          onChange(parsed as Record<string, unknown> | undefined);
+        } catch { setInvalid(true); }
+      }} />
+    <small id={`${id}-hint`} role={invalid ? "alert" : undefined}>{invalid ? t("models.jsonObjectRequired") : help}</small>
+  </label>;
+}
+
 const inputStyle = {
   minHeight: 40,
   padding: "9px 12px",
@@ -225,8 +255,8 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 // ── Provider detail ───────────────────────────────────────────────────────────
 
-function ProviderDetail({ name, provider, apiOptions, onChange, onRename, onDelete, onAddModels }: {
-  name: string; provider: ProviderEntry; apiOptions: readonly string[];
+function ProviderDetail({ name, provider, apiOptions, canDiscover, onChange, onRename, onDelete, onAddModels }: {
+  name: string; provider: ProviderEntry; apiOptions: readonly string[]; canDiscover: boolean;
   onChange: (p: ProviderEntry) => void; onRename: (n: string) => void; onDelete: () => void;
   onAddModels: (models: DiscoveredModel[]) => void;
 }) {
@@ -253,7 +283,7 @@ function ProviderDetail({ name, provider, apiOptions, onChange, onRename, onDele
   }, [name, provider.baseUrl, provider.api, provider.apiKey]);
 
   const handleDiscoverModels = useCallback(async () => {
-    if (!provider.baseUrl?.trim() || discoveryState.phase === "loading") return;
+    if (!canDiscover || !provider.baseUrl?.trim() || discoveryState.phase === "loading") return;
     const requestId = ++discoveryRequestIdRef.current;
     setDiscoveryState({ phase: "loading" });
     setSelectedModelIds([]);
@@ -274,7 +304,7 @@ function ProviderDetail({ name, provider, apiOptions, onChange, onRename, onDele
       if (requestId !== discoveryRequestIdRef.current) return;
       setDiscoveryState({ phase: "error", message: error instanceof Error ? error.message : String(error) });
     }
-  }, [discoveryState.phase, name, provider]);
+  }, [canDiscover, discoveryState.phase, name, provider]);
 
   const existingModelIds = new Set((provider.models ?? []).map((model) => model.id));
   const discoveredModels = discoveryState.phase === "success" ? discoveryState.models : [];
@@ -322,19 +352,19 @@ function ProviderDetail({ name, provider, apiOptions, onChange, onRename, onDele
     <div className="ui-stack-16">
       <div className="ui-row-between">
          <SectionTitle>{t("i18n.provider")}</SectionTitle>
-        <button onClick={onDelete}
-          style={{ padding: "3px 8px", background: "none", border: "1px solid var(--danger)", borderRadius: 4, color: "var(--danger)", cursor: "pointer", fontSize: 11 }}>
+        <Button variant="danger" onClick={onDelete}
+          >
            {t("i18n.delete")}
-        </button>
+        </Button>
       </div>
 
        <Field label={t("i18n.providerName")}>
         <TextInput value={editingName} onChange={setEditingName} placeholder={t("interface.provider.name")} mono />
         {editingName !== name && editingName.trim() && (
-          <button onClick={() => onRename(editingName.trim())}
-            style={{ marginTop: 4, padding: "3px 10px", background: "var(--accent)", border: "none", borderRadius: 4, color: "var(--on-accent)", cursor: "pointer", fontSize: 12, alignSelf: "flex-start" }}>
+          <Button variant="primary" onClick={() => onRename(editingName.trim())}
+            >
              {t("i18n.rename")}
-          </button>
+          </Button>
         )}
       </Field>
 
@@ -351,6 +381,12 @@ function ProviderDetail({ name, provider, apiOptions, onChange, onRename, onDele
         </span>
       </Field>
 
+      <Field label={t("models.providerDisplayName")}>
+        <TextInput value={provider.name ?? ""} onChange={value => set("name", value || undefined)} placeholder={name} />
+      </Field>
+      <Check label={t("models.authHeader")} checked={provider.authHeader ?? false} onChange={value => set("authHeader", value)} />
+      <JsonObjectField label={t("models.compatibilityJson")} value={provider.compat}
+        onChange={value => set("compat", value)} help={t("models.compatibilityJsonHelp")} />
       <Field label="API">
         <Select value={provider.api ?? "openai-completions"} onChange={(v) => set("api", v)} options={withCurrentOption(apiOptions, provider.api)} required />
       </Field>
@@ -367,17 +403,13 @@ function ProviderDetail({ name, provider, apiOptions, onChange, onRename, onDele
 
       <div style={{ borderTop: "1px solid var(--border)", paddingTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
         {discoveryState.phase !== "success" && (
-          <button
+          <Button variant="secondary"
             onClick={handleDiscoverModels}
-            disabled={!provider.baseUrl?.trim() || discoveryState.phase === "loading"}
-            style={{
-              alignSelf: "flex-start", height: 30, padding: "0 12px", border: "1px solid var(--border)", borderRadius: 5,
-              background: "var(--bg-panel)", color: !provider.baseUrl?.trim() || discoveryState.phase === "loading" ? "var(--text-dim)" : "var(--text-muted)",
-              cursor: !provider.baseUrl?.trim() || discoveryState.phase === "loading" ? "not-allowed" : "pointer", fontSize: 12,
-            }}
+            disabled={!canDiscover || !provider.baseUrl?.trim() || discoveryState.phase === "loading"}
+
           >
             {discoveryState.phase === "loading" ? t("models.discoveryFetching") : t("models.discoveryFetch")}
-          </button>
+          </Button>
         )}
 
         {discoveryState.phase === "error" && (
@@ -452,15 +484,15 @@ function ProviderDetail({ name, provider, apiOptions, onChange, onRename, onDele
                   ? t("models.discoveryShowing", { shown: shownDiscoveredModels.length, total: filteredDiscoveredModels.length })
                   : t("models.discoveryFetched", { count: discoveryState.models.length })}
               </span>
-              <button
+              <Button variant="secondary"
                 onClick={addSelectedModels}
                 disabled={selectedCount === 0}
-                style={{ height: 28, padding: "0 11px", border: "none", borderRadius: 5, background: selectedCount ? "var(--accent)" : "var(--bg-panel)", color: selectedCount ? "var(--on-accent)" : "var(--text-dim)", cursor: selectedCount ? "pointer" : "not-allowed", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}
+
               >
                 {selectedCount
                   ? t("models.discoveryAddSelectedCount", { count: selectedCount })
                   : t("models.discoveryAddSelected")}
-              </button>
+              </Button>
             </div>
           </>
         )}
@@ -545,16 +577,7 @@ function HeaderListEditor({ headers, onChange }: {
   const removeEntry = (id: number): void => {
     applyRows(rows.filter((row) => row.id !== id));
   };
-  const rowBtnStyle = {
-    padding: "6px 9px",
-    background: "none",
-    border: "1px solid var(--danger)",
-    borderRadius: 4,
-    color: "var(--danger)",
-    cursor: "pointer",
-    fontSize: 12,
-    lineHeight: 1,
-  } satisfies React.CSSProperties;
+
   return (
     <div className="ui-stack-6">
       {rows.map((row) => (
@@ -563,16 +586,16 @@ function HeaderListEditor({ headers, onChange }: {
             aria-label={t("design.headerName")} placeholder={t("interface.header.name")} style={{ ...inputStyle, fontFamily: "var(--font-mono)", flex: 1 }} />
           <input value={row.value} onChange={(e) => setEntry(row.id, { value: e.target.value })}
             aria-label={t("design.headerValue")} placeholder={t("interface.value")} style={{ ...inputStyle, fontFamily: "var(--font-mono)", flex: 1 }} />
-          <button aria-label={t("design.removeHeader")} onClick={() => removeEntry(row.id)} style={rowBtnStyle}><IconX size={16}/></button>
+          <Button variant="secondary" aria-label={t("design.removeHeader")} onClick={() => removeEntry(row.id)} ><IconX size={16}/></Button>
         </div>
       ))}
-      <button onClick={() => setRows((current) => [
+      <Button variant="secondary" onClick={() => setRows((current) => [
         ...current,
         { id: nextRowIdRef.current++, name: "", value: "" },
       ])}
-        style={{ padding: "5px 9px", background: "none", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-muted)", cursor: "pointer", fontSize: 12, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, alignSelf: "flex-start" }}>
+        >
         <IconPlus size={16}/>{t("design.addHeader")}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -628,6 +651,7 @@ function ModelDetail({
   model,
   apiOptions,
   thinkingLevels,
+  operations,
   onChange,
   onDelete,
 }: {
@@ -636,6 +660,7 @@ function ModelDetail({
   model: ModelEntry;
   apiOptions: readonly string[];
   thinkingLevels: readonly string[];
+  operations: ChatModelCapabilities["operations"];
   onChange: (m: ModelEntry) => void;
   onDelete: () => void;
 }) {
@@ -699,7 +724,7 @@ function ModelDetail({
   }, [providerName, provider.baseUrl, model.id]);
 
   const handleTest = useCallback(async () => {
-    if (!model.id.trim() || testState.phase === "testing") return;
+    if (!operations?.test || !model.id.trim() || testState.phase === "testing") return;
     setTestState({ phase: "testing" });
     try {
       const res = await fetch("/api/models-config/test", {
@@ -732,11 +757,11 @@ function ModelDetail({
     } catch (e) {
       setTestState({ phase: "error", message: e instanceof Error ? e.message : String(e) });
     }
-  }, [model, provider, providerName, testState.phase]);
+  }, [model, operations?.test, provider, providerName, testState.phase]);
 
   const handleCatalogFill = useCallback(async () => {
     const query = model.id.trim();
-    if (!query || catalogState.phase === "loading") return;
+    if (!operations?.catalog || !query || catalogState.phase === "loading") return;
     const requestId = ++catalogRequestIdRef.current;
     setCatalogState({ phase: "loading" });
     try {
@@ -764,7 +789,7 @@ function ModelDetail({
       if (requestId !== catalogRequestIdRef.current) return;
       setCatalogState({ phase: "error", message: error instanceof Error ? error.message : String(error) });
     }
-  }, [catalogState.phase, model, onChange, provider.baseUrl, providerName]);
+  }, [catalogState.phase, model, onChange, operations?.catalog, provider.baseUrl, providerName]);
 
   const undoCatalogFill = () => {
     const previous = catalogUndoRef.current;
@@ -870,25 +895,11 @@ function ModelDetail({
               {testSummary}
             </span>
           )}
-          <button
+          <Button variant="secondary"
             onClick={handleTest}
-            disabled={!model.id.trim() || testState.phase === "testing"}
+            disabled={!operations?.test || !model.id.trim() || testState.phase === "testing"}
              title={t("i18n.testConnection")}
-            style={{
-              height: 24,
-              padding: "0 8px",
-              background: testState.phase === "success" ? "var(--success-bg)" : "none",
-              border: `1px solid ${testState.phase === "success" ? "var(--success)" : "var(--border)"}`,
-              borderRadius: 4,
-              color: testState.phase === "success" ? "var(--success)" : (!model.id.trim() || testState.phase === "testing") ? "var(--text-dim)" : "var(--text-muted)",
-              cursor: (!model.id.trim() || testState.phase === "testing") ? "not-allowed" : "pointer",
-              fontSize: 12,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxSizing: "border-box",
-              gap: 5,
-            }}
+
           >
             {testState.phase === "success" && (
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -896,11 +907,11 @@ function ModelDetail({
               </svg>
             )}
              {testState.phase === "testing" ? t("i18n.checking") : testState.phase === "success" ? t("common.ok") : t("i18n.test")}
-          </button>
-          <button onClick={onDelete}
-            style={{ height: 24, padding: "0 8px", background: "none", border: "1px solid var(--danger)", borderRadius: 4, color: "var(--danger)", cursor: "pointer", fontSize: 12, boxSizing: "border-box" }}>
+          </Button>
+          <Button variant="danger" onClick={onDelete}
+            >
              {t("i18n.remove")}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -911,19 +922,13 @@ function ModelDetail({
 
       <div style={{ padding: "2px 0" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <button
+          <Button variant="secondary"
             onClick={() => void handleCatalogFill()}
-            disabled={!model.id.trim() || catalogState.phase === "loading"}
-            style={{
-              height: 28, padding: "0 10px", border: "1px solid var(--border)", borderRadius: 5,
-              background: "var(--bg-panel)",
-              color: !model.id.trim() || catalogState.phase === "loading" ? "var(--text-dim)" : "var(--text-muted)",
-              cursor: !model.id.trim() || catalogState.phase === "loading" ? "not-allowed" : "pointer",
-              fontSize: 12,
-            }}
+            disabled={!operations?.catalog || !model.id.trim() || catalogState.phase === "loading"}
+
           >
             {catalogState.phase === "loading" ? t("models.catalogFilling") : t("models.catalogFill")}
-          </button>
+          </Button>
           <a
             href="https://github.com/anomalyco/models.dev"
             target="_blank"
@@ -949,12 +954,12 @@ function ModelDetail({
               {catalogStatusText}
             </span>
             {catalogUndoRef.current && (
-              <button
+              <Button variant="secondary"
                 onClick={undoCatalogFill}
-                style={{ flexShrink: 0, padding: "0 2px", border: "none", background: "none", color: "var(--accent)", cursor: "pointer", fontSize: 10 }}
+
               >
                 {t("models.catalogUndo")}
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -963,9 +968,9 @@ function ModelDetail({
       <div>
         <SectionTitle>{t("models.capabilities")}</SectionTitle>
         <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginTop: 8 }}>
-          <Check label={t("models.reasoning")} checked={model.reasoning ?? false} onChange={(v) => set("reasoning", v || undefined)} />
+          <Check label={t("models.reasoning")} checked={model.reasoning ?? false} onChange={(v) => set("reasoning", v)} />
           <Check label={t("models.imageInput")} checked={model.input?.includes("image") ?? false}
-            onChange={(v) => set("input", v ? ["text", "image"] : undefined)} />
+            onChange={(v) => set("input", v ? ["text", "image"] : ["text"])} />
         </div>
       </div>
 
@@ -1062,12 +1067,19 @@ function ModelDetail({
           </svg>
         </button>
 
-        {advancedOpen && (
-          <div id="model-advanced-settings" style={{ display: "flex", flexDirection: "column", gap: 14, padding: "4px 0 16px" }}>
+          <div id="model-advanced-settings" hidden={!advancedOpen} style={{ display: advancedOpen ? "flex" : "none", flexDirection: "column", gap: 14, padding: "4px 0 16px" }}>
             <Field label={t("models.apiOverride")}>
               <Select value={model.api ?? ""} onChange={(v) => set("api", v || undefined)} options={withCurrentOption(apiOptions, model.api)} />
             </Field>
 
+            <Field label={t("models.baseUrlOverride")}>
+              <TextInput value={model.baseUrl ?? ""} onChange={value => set("baseUrl", value || undefined)} placeholder={provider.baseUrl} mono />
+              <small>{t("models.baseUrlOverrideHelp")}</small>
+            </Field>
+            <JsonObjectField label={t("models.samplingParams")} value={model.samplingParams}
+              onChange={value => set("samplingParams", value)} help={t("models.samplingParamsHelp")} />
+            <JsonObjectField label={t("models.compatibilityJson")} value={model.compat}
+              onChange={value => set("compat", value)} help={t("models.compatibilityJsonHelp")} />
             <Field label={t("models.headers")}>
               <HeaderListEditor
                 headers={model.headers}
@@ -1078,6 +1090,11 @@ function ModelDetail({
               </span>
             </Field>
 
+                <Check
+                  label={t("models.developerRole")}
+                  checked={effectiveCompat(provider, model)["supportsDeveloperRole"] !== false}
+                  onChange={(v) => onChange(setCompatBool(model, "supportsDeveloperRole", v))}
+                />
             {model.reasoning && (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <SectionTitle>{t("models.compatibility")}</SectionTitle>
@@ -1086,22 +1103,18 @@ function ModelDetail({
                   checked={hasDeepseekCompat(model)}
                   onChange={(v) => onChange(setDeepseekCompat(model, v))}
                 />
-                <Check
-                  label={t("models.developerRole")}
-                  checked={effectiveCompat(provider, model)["supportsDeveloperRole"] !== false}
-                  onChange={(v) => onChange(setCompatBool(model, "supportsDeveloperRole", v))}
-                />
+
                 <div style={{ marginTop: 4 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
                     <SectionTitle>{t("models.thinkingLevelMap")}</SectionTitle>
                     {model.thinkingLevelMap && (
-                      <button
+                      <Button variant="secondary"
                         type="button"
                         onClick={() => set("thinkingLevelMap", undefined)}
-                        style={{ fontSize: 12, padding: "2px 5px", background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer" }}
+
                       >
                         {t("models.clearAll")}
-                      </button>
+                      </Button>
                     )}
                   </div>
                   <ThinkingLevelMapEditor
@@ -1113,7 +1126,6 @@ function ModelDetail({
               </div>
             )}
           </div>
-        )}
       </section>
     </div>
   );
@@ -1274,13 +1286,13 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
             </p>
             <div className="ui-stack-6">
               {loginState.options.map((option) => (
-                <button
+                <Button variant="secondary"
                   key={option.id}
                   onClick={() => submitSelection(loginState.token, option.id)}
-                  style={{ padding: "6px 9px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text)", cursor: "pointer", fontSize: 12, textAlign: "left" }}
+
                 >
                   {option.label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -1307,13 +1319,13 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
                 placeholder={loginState.phase === "auth" ? "http://localhost:1455/auth/callback?code=…" : (loginState.placeholder ?? t("interface.enter.a.value"))}
                 style={{ flex: 1, padding: "6px 9px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text)", fontSize: 12, outline: "none", fontFamily: "var(--font-mono)", boxSizing: "border-box" }}
               />
-              <button
+              <Button variant="secondary"
                 onClick={() => submitCode(loginState.token, inputValue)}
                 disabled={!inputValue.trim()}
-                style={{ padding: "6px 12px", background: inputValue.trim() ? "var(--accent)" : "var(--bg-panel)", border: "none", borderRadius: 5, color: inputValue.trim() ? "var(--on-accent)" : "var(--text-dim)", cursor: inputValue.trim() ? "pointer" : "not-allowed", fontSize: 12, fontWeight: 600, flexShrink: 0 }}
+
               >
                  {t("i18n.submit")}
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -1345,27 +1357,27 @@ function OAuthDetail({ provider, onRefresh }: { provider: OAuthProvider; onRefre
       {/* Actions */}
       <div style={{ display: "flex", gap: 8 }}>
         {isWorking ? (
-          <button
+          <Button variant="secondary"
             onClick={() => { eventSourceRef.current?.close(); setLoginState({ phase: "idle" }); }}
-            style={{ padding: "5px 12px", background: "none", border: "1px solid var(--border)", borderRadius: 5, color: "var(--text-muted)", cursor: "pointer", fontSize: 12 }}
+
           >
              {t("i18n.cancel")}
-          </button>
+          </Button>
         ) : (
           <>
-            <button
+            <Button variant="primary"
               onClick={handleLogin}
-              style={{ padding: "5px 14px", background: "var(--accent)", border: "none", borderRadius: 5, color: "var(--on-accent)", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
+
             >
                {provider.loggedIn ? t("i18n.relogin") : t("i18n.login")}
-            </button>
+            </Button>
             {provider.loggedIn && (
-              <button
+              <Button variant="danger"
                 onClick={handleLogout}
-                style={{ padding: "5px 12px", background: "none", border: "1px solid var(--danger)", borderRadius: 5, color: "var(--danger)", cursor: "pointer", fontSize: 12 }}
+
               >
                  {t("i18n.disconnect")}
-              </button>
+              </Button>
             )}
           </>
         )}
@@ -1463,18 +1475,10 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
             spellCheck={false}
             mono
           />
-          <button
+          <Button variant="secondary"
             onClick={handleSave}
             disabled={saving || !apiKey.trim() || savedOk}
-            style={{
-              padding: "6px 12px",
-              background: savedOk ? "var(--success-bg)" : apiKey.trim() ? "var(--accent)" : "var(--bg-panel)",
-              border: "none", borderRadius: 5,
-              color: savedOk ? "var(--success)" : apiKey.trim() ? "var(--on-accent)" : "var(--text-dim)",
-              cursor: (saving || !apiKey.trim() || savedOk) ? "not-allowed" : "pointer",
-              fontSize: 12, fontWeight: 600, flexShrink: 0,
-              display: "flex", alignItems: "center", gap: 5,
-            }}
+
           >
             {savedOk && (
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -1482,25 +1486,20 @@ function ApiKeyDetail({ provider, onRefresh }: { provider: ApiKeyProvider; onRef
               </svg>
             )}
              {savedOk ? t("i18n.saved") : saving ? t("i18n.saving") : t("i18n.save")}
-          </button>
+          </Button>
         </div>
       </Field>
 
       {error && <p style={{ margin: 0, fontSize: 12, color: "var(--danger)" }}><InterfaceFeedback message={error} /></p>}
 
       {provider.configured && (
-        <button
+        <Button variant="danger"
           onClick={handleRemove}
           disabled={removing}
-          style={{
-            alignSelf: "flex-start", padding: "5px 12px",
-            background: "none", border: "1px solid var(--danger)",
-            borderRadius: 5, color: "var(--danger)",
-            cursor: removing ? "not-allowed" : "pointer", fontSize: 12,
-          }}
+
         >
            {removing ? t("i18n.removing") : t("i18n.disconnect")}
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -1512,7 +1511,16 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
   const { t } = useI18n();
   const [config, setConfig] = useState<ModelsJson>({ providers: {} });
   const [savedConfig, setSavedConfig] = useState(() => JSON.stringify({ providers: {} }));
-  const dirty = JSON.stringify(config) !== savedConfig;
+  const [invalidFields, setInvalidFields] = useState<ReadonlySet<string>>(new Set());
+  const reportValidation = useCallback((id: string, invalid: boolean) => {
+    setInvalidFields(current => {
+      if (current.has(id) === invalid) return current;
+      const next = new Set(current);
+      if (invalid) next.add(id); else next.delete(id);
+      return next;
+    });
+  }, []);
+  const dirty = JSON.stringify(config) !== savedConfig || invalidFields.size > 0;
   const requestClose = async () => {
     if (dirty && !await confirm(t("longAgentSettings.discardConfirm"), t("common.discard"))) return;
     onClose();
@@ -1583,9 +1591,12 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
         setSaveError(error instanceof Error ? error.message : String(error));
       })
       .finally(() => setLoading(false));
-    refreshAuthProviders();
     return () => controller.abort();
-  }, [refreshAuthProviders]);
+  }, []);
+
+  useEffect(() => {
+    if (capabilities?.operations?.credentials) refreshAuthProviders();
+  }, [capabilities?.operations?.credentials, refreshAuthProviders]);
 
   const addCustomProvider = useCallback(() => {
     let finalName = "new-provider";
@@ -1676,6 +1687,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
   }, []);
 
   const handleSave = useCallback(async () => {
+    if (saving || loading || capabilities === null || invalidFields.size > 0) return;
     setSaving(true);
     setSaveError(null);
     setSavedOk(false);
@@ -1691,7 +1703,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
     } finally {
       setSaving(false);
     }
-  }, [config]);
+  }, [config, saving, loading, capabilities, invalidFields]);
 
   const providers = Object.entries(config.providers ?? {});
   const activeOAuth = oauthProviders.filter((p) => p.loggedIn);
@@ -1719,6 +1731,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           name={selection.name}
           provider={provider}
           apiOptions={capabilities?.modelApis ?? []}
+          canDiscover={capabilities?.operations?.discover === true}
           onChange={(p) => updateProvider(selection.name, p)}
           onRename={(n) => renameProvider(selection.name, n)}
           onDelete={() => deleteProvider(selection.name)}
@@ -1737,6 +1750,7 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
         model={model}
         apiOptions={capabilities?.modelApis ?? []}
         thinkingLevels={capabilities?.thinkingLevels ?? []}
+        operations={capabilities?.operations}
         onChange={(m) => updateModel(selection.providerName, selection.index, m)}
         onDelete={() => removeModel(selection.providerName, selection.index)}
       />
@@ -1745,14 +1759,14 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
   // P3: outer shell is the shared SurfaceDialog (wide). Radix owns overlay +
   // focus + Escape; the inner body keeps its own navigation/detail layout.
-  return (<SurfaceDialog title={t("common.models")} description={t("design.providerHint")} onClose={requestClose}>
-      <div className={`${styles.dialog} ${styles.surfaceBody} configuration-dialog`}>
+  return (<ModelFieldValidation.Provider value={reportValidation}><SurfaceDialog title={t("common.models")} description={t("design.providerHint")} onClose={requestClose}>
+      <div className={`${styles.surfaceBody} configuration-dialog`}>
 
         {/* Body */}
-        <div className={styles.body} data-show-list={showProviderList || selection === null || undefined}>
+        <fieldset disabled={saving} className={styles.body} data-show-list={showProviderList || selection === null || undefined}>
 
           {/* Left: tree */}
-          <div className={styles.navigation} aria-label={t("design.providerList")}>
+          <fieldset className={styles.navigation} aria-label={t("design.providerList")} disabled={invalidFields.size > 0}>
             <div className="ui-list-scroll">
               {/* Active OAuth subscriptions */}
               {activeOAuth.map((p) => {
@@ -1852,57 +1866,34 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
 
             {/* Add provider */}
             <div style={{ borderTop: "1px solid var(--border)", padding: "8px 6px" }}>
-              <button onClick={() => setPickerOpen(true)} style={{
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
-                width: "100%", padding: "6px 0", background: "none", border: "1px dashed var(--border)", borderRadius: 5,
-                color: "var(--text-muted)", cursor: "pointer", fontSize: 12,
-              }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.color = "var(--accent)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+              <Button variant="secondary" onClick={() => setPickerOpen(true)}
+
+
               >
                  + {t("i18n.addProvider")}
-              </button>
+              </Button>
             </div>
-          </div>
+          </fieldset>
 
           {/* Right: detail */}
           <div className={styles.detail}>
             {isMobile && selection && <Button variant="ghost" type="button" className={styles.back} onClick={()=>setShowProviderList(true)}><IconArrowLeft size={18}/>{t("design.backToProviders")}</Button>}
+            {!loading && (!capabilities?.operations?.catalog || !capabilities.operations.discover || !capabilities.operations.test || !capabilities.operations.credentials) && <p className={styles.operationNotice}>{t("models.manualConfiguration")}</p>}
             {loading ? null : detailContent ?? (
               <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontSize: 13 }}>
                  {t("i18n.selectProviderModel")}
               </div>
             )}
           </div>
-        </div>
+        </fieldset>
 
-        {/* Footer */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, padding: "10px 18px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
-          {saveError && <span style={{ fontSize: 12, color: "var(--danger)", flex: 1 }}><InterfaceFeedback message={saveError} /></span>}
-          <button onClick={requestClose} style={{ padding: "6px 14px", background: "none", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-muted)", cursor: "pointer", fontSize: 13 }}>
-             {t("i18n.cancel")}
-          </button>
-          <button onClick={handleSave} disabled={saving || savedOk} style={{
-            position: "relative",
-            padding: "6px 16px",
-            minWidth: 92,
-            background: savedOk ? "var(--success-bg)" : saving ? "var(--bg-panel)" : "var(--accent)",
-            border: "none", borderRadius: 6,
-            color: savedOk ? "var(--success)" : saving ? "var(--text-muted)" : "var(--on-accent)",
-            cursor: (saving || savedOk) ? "default" : "pointer", fontSize: 13, fontWeight: 600,
-            display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
-            transition: "background-color var(--duration-panel) var(--ease-standard), color var(--duration-panel) var(--ease-standard)",
-            animation: savedOk ? "saved-pop 0.45s ease" : undefined,
-          }}>
-            {savedOk && (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-                style={{ strokeDasharray: 18, animation: "saved-check-draw 0.35s var(--ease-standard) forwards", flexShrink: 0 }}>
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            )}
-             <span>{savedOk ? t("i18n.saved") : saving ? t("i18n.saving") : t("i18n.save")}</span>
-          </button>
-        </div>
+        <footer className={styles.footer}>
+          {(saveError || invalidFields.size > 0) && <span role="alert" className={styles.error}><InterfaceFeedback message={saveError ?? t("models.jsonObjectRequired")} /></span>}
+          <Button variant="secondary" onClick={requestClose} disabled={saving}>{t("i18n.cancel")}</Button>
+          <Button variant="primary" onClick={handleSave} disabled={saving || loading || capabilities === null || invalidFields.size > 0 || !dirty}>
+            {savedOk ? t("i18n.saved") : saving ? t("i18n.saving") : t("i18n.save")}
+          </Button>
+        </footer>
       </div>
       {pickerOpen && (
         <AddProviderPicker
@@ -1914,6 +1905,6 @@ export function ModelsConfig({ onClose }: { onClose: () => void }) {
           onClose={() => setPickerOpen(false)}
         />
       )}
-    </SurfaceDialog>
+    </SurfaceDialog></ModelFieldValidation.Provider>
   );
 }

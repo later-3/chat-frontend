@@ -1226,8 +1226,8 @@ span.token.table {
 }
 /* Inside the composer frame the same action keeps the label rule but not the
    toolbar strip chrome (no dividers, full height or top border). */
-.toolbar-action.is-frame { width: auto; min-width: 32px; height: 32px; min-height: 32px; padding: 0 8px; border: 0; border-right: 0; border-top: 0; border-radius: 9px; }
-.toolbar-action.is-frame.is-icon-only { width: 32px; min-width: 32px; padding: 0; }
+.toolbar-action.is-frame { width: auto; min-width: 36px; height: 36px; min-height: 36px; padding: 0 8px; border: 0; border-right: 0; border-top: 0; border-radius: 9px; }
+.toolbar-action.is-frame.is-icon-only { width: 36px; min-width: 36px; padding: 0; }
 .toolbar-action.is-frame.is-active { background: var(--bg-selected); color: var(--text); border-top-color: transparent; }
 @media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
   .toolbar-action.is-frame, .toolbar-action.is-frame.is-icon-only { min-width: 44px; min-height: 44px; }
@@ -1260,7 +1260,7 @@ span.token.table {
 
 /* A value control inside the composer frame (workflow picker): same metrics as the
    frame actions, but it shows the current value. */
-.composer-control { display: inline-flex; align-items: center; gap: 4px; max-width: 220px; height: 32px; min-height: 32px; padding: 0 8px; border: 0; border-radius: 9px; background: none; color: var(--text-muted); font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer; transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard); }
+.composer-control { display: inline-flex; align-items: center; gap: 4px; max-width: 220px; height: 36px; min-height: 36px; padding: 0 8px; border: 0; border-radius: 9px; background: none; color: var(--text-muted); font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer; transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard); }
 .composer-control:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
 .composer-control:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .composer-control:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -1406,3 +1406,9 @@ span.token.table {
   font-size: 12px;
   font-family: var(--font-mono);
 }
+
+.conversation-width-popover { width: min(300px, calc(100vw - 24px)); padding: 16px; }
+.conversation-width-popover > p { margin: 0 0 12px; font-size: 13px; color: var(--text-muted); }
+
+.composer-send, .composer-stop { flex-shrink: 0; align-self: flex-end; }
+.conversation-width-popover .measure-slider { width: 100%; border: 0; padding: 0; }

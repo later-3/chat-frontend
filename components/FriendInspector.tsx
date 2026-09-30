@@ -1,3 +1,4 @@
+import { FriendDaySummary } from "./FriendDaySummary";
 import { InterfaceFeedback } from "./InterfaceFeedback";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IconChevronRight, IconPlus, IconX } from "@tabler/icons-react";
@@ -40,6 +41,8 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClo
   const { t, locale } = useI18n();
   const [calendar, setCalendar] = useState<FriendDailyState | null>(null);
   const [dayError, setDayError] = useState<string | null>(null);
+  const [tasksLoading, setTasksLoading] = useState(true);
+  const [taskError, setTaskError] = useState<string | null>(null);
   const [works, setWorks] = useState<FriendWorkItem[]>([]);
   const [tasks, setTasks] = useState<FriendTasks | null>(null);
   const [projectNames, setProjectNames] = useState<Map<string, string>>(new Map());
@@ -50,40 +53,58 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClo
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
+  const [loadedCalendarQuery, setLoadedCalendarQuery] = useState<string | null>(null);
+  const calendarQuery = JSON.stringify([agentId, sessionId, date, addedDays]);
+  const calendarLoading = loadedCalendarQuery !== calendarQuery;
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => { setAddedDays(readArchivedDays(agentId)); }, [agentId]);
+  useEffect(() => {
+    if (!active) return;
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") setRefresh(value => value + 1); }, 30_000);
+    return () => window.clearInterval(timer);
+  }, [active]);
   // Pending work recovery is local state; it must not be fetched while hidden.
 
   useEffect(() => {
     if (!active) return;
     const controller = new AbortController();
-    setCalendar(null);
     setDayError(null);
     void (async () => {
       // The 60-day window resolves today; the annual read supplies the real
       // per-day Session projection used by the archive.
       const summary = await fetchFriendDailyState(agentId, controller.signal);
       const target = date ?? summary.days.find(day => day.sessionId === sessionId)?.date ?? summary.today;
-      const annual = await fetchFriendDailyState(agentId, controller.signal, undefined, Number(target.slice(0, 4)));
-      if (!controller.signal.aborted) setCalendar(annual);
+      const years = [...new Set([summary.today, target, ...addedDays].map(day => Number(day.slice(0, 4))))];
+      const annual = await Promise.all(years.map(year => fetchFriendDailyState(agentId, controller.signal, undefined, year)));
+      const sessions = new Map<string, FriendCalendarSession>();
+      for (const state of annual) for (const session of state.sessions ?? []) {
+        const previous = sessions.get(session.sessionId);
+        sessions.set(session.sessionId, { ...session, dates: [...new Set([...(previous?.dates ?? []), ...session.dates])] });
+      }
+      if (!controller.signal.aborted) {
+        setCalendar({ ...summary, days: annual.flatMap(state => state.days), sessions: [...sessions.values()] });
+        setLoadedCalendarQuery(calendarQuery);
+      }
     })().catch((cause: unknown) => {
       if (!controller.signal.aborted) setDayError(cause instanceof Error ? cause.message : String(cause));
     });
     return () => controller.abort();
-  }, [active, agentId, sessionId, date, refresh]);
+  }, [active, agentId, sessionId, date, refresh, addedDays, calendarQuery]);
 
   useEffect(() => {
     if (!active) return;
     const controller = new AbortController();
+    setTasksLoading(true); setTaskError(null);
     void Promise.all([
-      fetchFriendWork(agentId, controller.signal).catch(() => [] as FriendWorkItem[]),
-      requestFriendTasks(agentId, undefined, controller.signal).catch(() => null),
+      fetchFriendWork(agentId, controller.signal),
+      requestFriendTasks(agentId, undefined, controller.signal),
     ]).then(([nextWorks, nextTasks]) => {
       if (controller.signal.aborted) return;
       setWorks(nextWorks);
       setTasks(nextTasks);
-    });
+    }).catch(cause => { if (!controller.signal.aborted) setTaskError(cause instanceof Error ? cause.message : String(cause)); })
+      .finally(() => { if (!controller.signal.aborted) setTasksLoading(false); });
     return () => controller.abort();
   }, [active, agentId, refresh]);
 
@@ -105,9 +126,9 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClo
   // A day the user picked stays in the area even when it turns out empty —
   // silently dropping it would look like the pick failed. Today is always first.
   const days = useMemo(() => {
-    const older = addedDays.filter(day => day !== today);
+    const older = [...new Set([...(date ? [date] : []), ...addedDays])].filter(day => day !== today);
     return today === null ? older : [today, ...older];
-  }, [addedDays, today]);
+  }, [addedDays, today, date]);
 
   function inDay(timestamp: string | null, day: string, tz: string | undefined): boolean {
     return timestamp !== null && tz !== undefined && dateInTimeZone(timestamp, tz) === day;
@@ -121,7 +142,7 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClo
   };
 
   const formatDay = (day: string, options: Intl.DateTimeFormatOptions = { weekday: "short", month: "long", day: "numeric" }) =>
-    new Intl.DateTimeFormat(locale, { ...options, timeZone }).format(new Date(`${day}T00:00:00Z`));
+    new Intl.DateTimeFormat(locale, { ...options, timeZone: "UTC" }).format(new Date(`${day}T00:00:00Z`));
   const formatTime = (value: string | null) => value === null ? null : new Intl.DateTimeFormat(locale, {
     hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone,
   }).format(new Date(value));
@@ -182,9 +203,10 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClo
         })}>{t("friendWork.confirm")}</Button>
     </div>}
 
-    {(error || dayError) && <div role="alert" className={styles.error}><p><InterfaceFeedback message={error || dayError} /></p>
+    {(error || dayError || taskError) && <div role="alert" className={styles.error}><p><InterfaceFeedback message={error || dayError || taskError} /></p>
       <Button type="button" onClick={() => setRefresh(value => value + 1)}>{t("friendWork.retry")}</Button></div>}
 
+    {!calendar && !dayError && <p role="status">{t("friendArchive.loading")}</p>}
     {days.map((day, index) => {
       const isToday = day === today;
       const firstAdded = index === 1;
@@ -192,7 +214,7 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClo
       const activeCount = executed.filter(row => row.execution && ["running", "queued"].includes(row.execution.status)).length;
       return <Fragment key={day}>
       {firstAdded && <h3 className={styles.sectionLabel}>{t("friendInspector.addedDaysHeading")}</h3>}
-      <section className={styles.dayBlock} data-friend-day={day}>
+      <section className={styles.dayBlock} data-friend-day={day} aria-busy={calendarLoading}>
         <header className={styles.dayHeader}>
           <h3>{isToday ? t("friendInspector.todayHeading") : formatDay(day)}{isToday && <em>{formatDay(day)}</em>}</h3>
           <div className={styles.dayMeta}>
@@ -206,7 +228,7 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClo
           <span className={styles.groupLabel}>{t("friendInspector.sessionsLabel")}</span>
           <div className={styles.rows}>
             {/* The day's sessions read like the project session list: name + kind + time. */}
-            {daySessions.map(session => <button type="button" key={session.sessionId} className={styles.row} disabled={busy}
+            {daySessions.map(session => <button type="button" key={session.sessionId} className={styles.row} disabled={busy || calendarLoading}
               data-day-session={session.sessionId}
               aria-current={session.sessionId === sessionId ? "page" : undefined}
               onClick={() => void openSession(session.sessionId, day)}>
@@ -216,7 +238,8 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClo
               </span>
               <IconChevronRight size={16} aria-hidden="true" />
             </button>)}
-            {daySessions.length === 0 && <button type="button" className={styles.row} disabled={busy}
+            {calendarLoading && <p role="status">{t("friendArchive.loading")}</p>}
+            {!calendarLoading && daySessions.length === 0 && <button type="button" className={styles.row} disabled={busy}
               data-friend-enter-day={day}
               onClick={() => void openDay(day)}>
               <span className={styles.rowText}>
@@ -234,11 +257,13 @@ export function FriendInspector({ agentId, sessionId, date, onOpenSession, onClo
             {activeCount > 0 && <span className={styles.count} data-state="running">{t("friendInspector.runningCount", { count: activeCount })}</span>}
           </span>
           <div className={styles.rows}>
-            {planned.length === 0 && executed.length === 0 && <p className={styles.empty}>{t("friendInspector.noTasks")}</p>}
+            {!tasksLoading && !taskError && planned.length === 0 && executed.length === 0 && <p className={styles.empty}>{t("friendInspector.noTasks")}</p>}
+            {tasksLoading && <p className={styles.empty} role="status">{t("friendArchive.loading")}</p>}
             {planned.map(row => taskRow(row, day))}
             {executed.map(row => taskRow(row, day))}
           </div>
         </div>
+        <FriendDaySummary agentId={agentId} date={day} refresh={refresh} active={active} onOpenSession={onOpenSession} />
       </section>
       </Fragment>;
     })}

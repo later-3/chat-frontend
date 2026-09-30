@@ -612,6 +612,8 @@ export interface ChatModelCatalogModel {
   readonly modelId: string;
   readonly name: string;
   readonly reasoning: boolean;
+  /** Missing only when connected to a Backend from before the capability projection. */
+  readonly input?: readonly ("text" | "image")[];
   readonly contextWindow: number;
   readonly maxTokens: number;
   readonly authConfigured: boolean;
@@ -652,11 +654,16 @@ function parseModelCatalog(value: unknown, field: string): ChatModelCatalog {
       || model.thinkingLevels.some(level => typeof level !== "string" || !thinkingLevels.includes(level)))) {
       throw new Error(`Chat返回了无效的${field}.models[${index}].thinkingLevels`);
     }
+    if (model.input !== undefined && (!Array.isArray(model.input)
+      || model.input.some(kind => kind !== "text" && kind !== "image"))) {
+      throw new Error(`Chat返回了无效的${field}.models[${index}].input`);
+    }
     return {
       provider: readString(model.provider, `${field}.models[${index}].provider`),
       modelId: readString(model.modelId, `${field}.models[${index}].modelId`),
       name: readString(model.name, `${field}.models[${index}].name`),
       reasoning: model.reasoning,
+      ...(model.input === undefined ? {} : { input: model.input as ("text" | "image")[] }),
       contextWindow: model.contextWindow,
       maxTokens: model.maxTokens,
       authConfigured: model.authConfigured,

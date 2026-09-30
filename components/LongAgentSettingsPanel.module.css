@@ -1319,3 +1319,14 @@
 .advancedBody { display:flex; flex-direction:column; gap:16px; padding-top:16px; }
 .promptOptions { border-top:1px solid var(--border); padding-top:12px; }
 @media(max-width:767px) { .advancedSection > summary,.promptOptions > summary { min-height:44px; } }
+
+/* Configuration uses the shared control sizes and a single content column. */
+.formFields { display:flex; flex-direction:column; gap:20px; border:0; margin:0; padding:0; min-width:0; }
+.modelFields { display:grid; gap:20px; }
+.section { background:transparent; border:0; border-top:1px solid var(--border); border-radius:0; padding:20px 0; }
+.section legend { padding:0 10px 0 0; font-size:14px; }
+.section > summary { cursor:pointer; font-size:14px; font-weight:550; padding:4px 0; }
+.capabilitySummary { display:grid; gap:8px; font-size:13px; }
+.capabilitySummary p { overflow-wrap:anywhere; margin:0; color:var(--text-muted); line-height:1.7; }
+.capabilitySummary small { color:var(--text-muted); line-height:1.6; }
+@media(max-width:768px) { .section { padding:16px 0; } }

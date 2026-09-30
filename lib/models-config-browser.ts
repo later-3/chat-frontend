@@ -2,6 +2,7 @@ export interface ChatModelEntry {
   id: string;
   name?: string;
   api?: string;
+  baseUrl?: string;
   reasoning?: boolean;
   thinkingLevelMap?: Record<string, string | null>;
   input?: string[];
@@ -10,9 +11,12 @@ export interface ChatModelEntry {
   cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; tiers?: unknown };
   headers?: Record<string, string>;
   compat?: Record<string, unknown>;
+  samplingParams?: Record<string, unknown>;
 }
 
 export interface ChatProviderEntry {
+  name?: string;
+  authHeader?: boolean;
   baseUrl?: string;
   api?: string;
   apiKey?: string;
@@ -29,6 +33,12 @@ export interface ChatModelsConfig {
 export interface ChatModelCapabilities {
   readonly thinkingLevels: readonly string[];
   readonly modelApis: readonly string[];
+  readonly operations?: {
+    readonly catalog: boolean;
+    readonly discover: boolean;
+    readonly test: boolean;
+    readonly credentials: boolean;
+  };
 }
 
 export interface ChatModelsConfigDocument {
@@ -65,6 +75,10 @@ function validateModel(value: unknown, field: string): void {
   if (!isRecord(value) || typeof value.id !== "string") throw new Error(`Chat返回了无效的${field}`);
   assertOptionalString(value.name, `${field}.name`);
   assertOptionalString(value.api, `${field}.api`);
+  assertOptionalString(value.baseUrl, `${field}.baseUrl`);
+  if (value.samplingParams !== undefined && !isRecord(value.samplingParams)) {
+    throw new Error(`Chat返回了无效的${field}.samplingParams`);
+  }
   if (value.reasoning !== undefined && typeof value.reasoning !== "boolean") {
     throw new Error(`Chat返回了无效的${field}.reasoning`);
   }
@@ -75,7 +89,7 @@ function validateModel(value: unknown, field: string): void {
     }
   }
   if (value.input !== undefined
-    && (!Array.isArray(value.input) || value.input.some((entry) => typeof entry !== "string"))) {
+    && (!Array.isArray(value.input) || value.input.some((entry) => entry !== "text" && entry !== "image"))) {
     throw new Error(`Chat返回了无效的${field}.input`);
   }
   assertOptionalFiniteNumber(value.contextWindow, `${field}.contextWindow`);
@@ -98,6 +112,10 @@ function validateConfig(value: unknown, field: string): asserts value is ChatMod
     assertOptionalString(provider.baseUrl, `${providerField}.baseUrl`);
     assertOptionalString(provider.api, `${providerField}.api`);
     assertOptionalString(provider.apiKey, `${providerField}.apiKey`);
+    assertOptionalString(provider.name, `${providerField}.name`);
+    if (provider.authHeader !== undefined && typeof provider.authHeader !== "boolean") {
+      throw new Error(`Chat返回了无效的${providerField}.authHeader`);
+    }
     if (provider.headers !== undefined) assertStringRecord(provider.headers, `${providerField}.headers`);
     if (provider.compat !== undefined && !isRecord(provider.compat)) {
       throw new Error(`Chat返回了无效的${providerField}.compat`);
@@ -119,6 +137,11 @@ function parseCapabilities(value: unknown): ChatModelCapabilities {
     || !Array.isArray(value.modelApis)
     || value.modelApis.some((entry) => typeof entry !== "string" || entry === "")) {
     throw new Error("Chat返回了无效的模型配置文档.capabilities");
+  }
+  const operations = value.operations;
+  if (operations !== undefined && (!isRecord(operations)
+    || ["catalog", "discover", "test", "credentials"].some(key => typeof operations[key] !== "boolean"))) {
+    throw new Error("Chat返回了无效的模型配置文档.capabilities.operations");
   }
   return value as unknown as ChatModelCapabilities;
 }

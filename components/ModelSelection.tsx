@@ -4,9 +4,9 @@ import type { ChatModelCatalogModel } from "@/lib/chat-workflows-browser";
 import { SearchSelect } from "./SearchSelect";
 import styles from "./SelectionControl.module.css";
 
-export function ModelSelection({ models, value, onChange, inheritLabel, disabled }: {
+export function ModelSelection({ models, value, onChange, inheritLabel, disabled, inheritedModelKey }: {
   models: readonly ChatModelCatalogModel[]; value: string; onChange: (key: string) => void;
-  inheritLabel: string; disabled?: boolean;
+  inheritLabel: string; disabled?: boolean; inheritedModelKey?: string;
 }) {
   const { t } = useI18n();
   const options = models.map(model => ({
@@ -15,7 +15,15 @@ export function ModelSelection({ models, value, onChange, inheritLabel, disabled
     disabled: !model.authConfigured,
   }));
   if (value && !options.some(option => option.value === value)) options.unshift({ value, label: value, detail: t("design.modelUnavailable"), disabled: true });
-  return <SearchSelect label={t("design.model")} value={value} options={[{ value:"", label:inheritLabel }, ...options]} onChange={onChange} disabled={disabled} />;
+  const selected = models.find(model => `${model.provider}/${model.modelId}` === (value || inheritedModelKey));
+  return <div className={styles.field}>
+    <SearchSelect label={t("design.model")} value={value} options={[{ value:"", label:inheritLabel }, ...options]} onChange={onChange} disabled={disabled} />
+    {selected && <dl className={styles.capabilities} aria-label={t("models.capabilities")}>
+      <div><dt>{t("models.imageInput")}</dt><dd>{t(selected.input === undefined ? "design.capabilityUnknown" : selected.input.includes("image") ? "design.capabilitySupported" : "design.capabilityUnsupported")}</dd></div>
+      <div><dt>{t("models.contextWindow")}</dt><dd>{selected.contextWindow.toLocaleString()}</dd></div>
+      <div><dt>{t("models.maxOutputTokens")}</dt><dd>{selected.maxTokens.toLocaleString()}</dd></div>
+    </dl>}
+  </div>;
 }
 
 /** Levels are capabilities from Backend/Pi; the copy here does not define availability. */

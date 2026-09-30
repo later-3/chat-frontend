@@ -29,7 +29,7 @@ export function WorkflowPicker({ disabled, onChange, selected, summaries, value 
     <DropdownMenuTrigger asChild>
       <button type="button" className="composer-control" data-workflow-picker aria-label={t("chat.workflow")}
         title={t("chat.workflowTitle")} disabled={disabled}>
-        <IconSitemap size={15} stroke={1.8} aria-hidden="true" />
+        <IconSitemap size={18} stroke={1.8} aria-hidden="true" />
         <span className="composer-control-label">{label}</span>
         <IconChevronDown size={14} stroke={1.8} aria-hidden="true" />
       </button>

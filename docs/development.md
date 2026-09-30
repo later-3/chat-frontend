@@ -345,3 +345,13 @@ v2.3 art 方向实现合同（规范语义见 [UI/UX 规范 §18.5](./ui-ux-guid
 侧面板统一使用 `.workspace-dock`（`src/styles/components.css`）：`.is-open`/`.is-closed` class 开合、`--dock-width` 决定宽度、`--duration-panel` + `--ease-standard` 过渡、内层固定宽避免重排、`.is-resizing` 关闭过渡；列表侧栏、项目资料、任务与归档三处共用，Compact 走覆盖 + `transform`。`--dock-width` 必须是绝对长度：原语同时用它设定面板与内层宽度，百分比会二次解析并使内容被压窄。门禁在 `lib/motion-contract.test.mjs`。
 
 工具类中的 `ToolbarAction`（`components/ui/ToolbarAction.tsx`）是工具栏动作的唯一形态：默认仅图标，设置 → 外观 → “工具栏操作”可开启“图标与文字”（`chat:toolbar-labels`，`hooks/useToolbarLabels.ts`）。新增任何带文字的工具栏按钮必须走它，不得各自渲染文本标签。全局主导航（`WorkspaceNavigation`）与顶栏分支动作（`BranchNavigator` 的内联按钮）同样读取该偏好：默认仅图标 + `Hint`；Compact 保留可见名称，因为触控没有 hover。
+
+每日归档接口和运行时校验位于 `lib/friend-day-archive.ts`，`FriendDaySummary` 只读取 Backend 日目录，不自行推算 cron 或把执行结束视为文件已保存。聊天设置菜单保留原有发送偏好，变更需覆盖 `scripts/prompt-capture-browser.test.mjs` 的菜单切换、刷新、实际发送与历史阅读链路（父仓库）。
+
+### 配置表单与能力检查（2026-09-30）
+
+Friend、Workflow 和模型配置复用 SurfaceDialog/标准按钮。模型导航必须有固定收缩边界，详情独立滚动，不能在 SurfaceDialog 内再次套旧 dialog 尺寸。Workflow 高级工具/资源按需展开，身份长期指令位于 Friend 设置前部。
+
+模型能力来自 `/api/models` 的 input/contextWindow/maxTokens/thinkingLevels，缺失输入信息显示未知。模型高级 JSON 错误阻止保存，配置读取失败也不得用空默认覆盖服务端配置。Friend 保存后重新检查自身 Home 基础能力；业务轮次权限仍由 Backend 按冻结项目决定。所有对象切换和刷新清除旧检查，迟到响应不能覆盖当前对象；刷新要经过未保存草稿保护。
+
+跨层浏览器回归由父仓库 `scripts/configuration-browser.test.mjs` 使用隔离 CHAT_HOME、真实构建服务、假 Nano/模型运行，覆盖图片与采样参数保存回读、错误 JSON、长名称和宽窄屏布局；不访问正式配置。

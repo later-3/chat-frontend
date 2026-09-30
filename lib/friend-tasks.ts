@@ -30,6 +30,7 @@ export interface FriendTask extends TaskDefinition {
   migrationNote?: string;
   /** Set when this task drives an LA3 duty; such tasks are managed from the duty page. */
   dutyId?: string;
+  purpose?: "daily-summary";
   projection: {
     taskId: string;
     revision: number;
@@ -121,6 +122,7 @@ export function parseFriendTasks(v: unknown, agentId: string): FriendTasks {
       "overlap",
       "deliverable",
       "dutyId",
+      "purpose",
       "projection",
     ]);
     if (
@@ -130,6 +132,7 @@ export function parseFriendTasks(v: unknown, agentId: string): FriendTasks {
       !["skip", "queue-one"].includes(String(raw.overlap))
     )
       throw new Error("任务状态无效");
+    if (raw.purpose !== undefined && raw.purpose !== "daily-summary") throw new Error("任务用途无效");
     obj(raw.schedule);
     const s = raw.schedule;
     let schedule: TaskSchedule;
@@ -174,6 +177,7 @@ export function parseFriendTasks(v: unknown, agentId: string): FriendTasks {
     const timeZone = text(raw.timeZone);
     new Intl.DateTimeFormat("en", { timeZone });
     return {
+      ...(raw.purpose === "daily-summary" ? { purpose: "daily-summary" as const } : {}),
       id: text(raw.id),
       longAgentId: agentId,
       revision: integer(raw.revision),

@@ -22,9 +22,9 @@ export function SurfaceDialog({ title, description, children, onClose, maximized
         {...(description ? {} : { "aria-describedby": undefined })}
         onCloseAutoFocus={event => { event.preventDefault(); if (origin.current instanceof HTMLElement && origin.current.isConnected) origin.current.focus(); }}>
         <header className="surface-header">
-          <div><Dialog.Title asChild><h1>{title}</h1></Dialog.Title>{description && <Dialog.Description>{description}</Dialog.Description>}</div>
-          {actions}
-          <Dialog.Close asChild><Button iconOnly variant="ghost" aria-label={t("chat.close")}><IconX size={20} /></Button></Dialog.Close>
+          <div className="surface-heading"><Dialog.Title asChild><h1>{title}</h1></Dialog.Title>{description && <Dialog.Description>{description}</Dialog.Description>}</div>
+          {actions && <div className="surface-actions">{actions}</div>}
+          <Dialog.Close asChild><Button className="surface-close" iconOnly variant="ghost" aria-label={t("chat.close")}><IconX size={20} /></Button></Dialog.Close>
         </header>
         {children}
       </Dialog.Content>

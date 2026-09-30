@@ -1,4 +1,5 @@
 .field { display:grid; align-content:start; align-self:start; gap:8px; min-width:0; text-align:left; }
+.field > .field { width:100%; }
 .field > label, .legend { color:var(--text); font-size:13px; font-weight:550; }
 .control { display:flex; align-items:center; gap:8px; min-height:42px; padding:0 12px; border:1px solid var(--border-control); border-radius:var(--radius-control); background:var(--bg); color:var(--text-muted); }
 .control:focus-within { outline:2px solid var(--accent); outline-offset:2px; }
@@ -23,3 +24,7 @@
 .choice input { position:absolute; width:1px!important; height:1px!important; min-height:0!important; padding:0!important; opacity:0; }
 .choice:hover { background:var(--bg-hover); }
 @media(max-width:768px), (pointer:coarse) { .control,.choice { min-height:44px; } .control > input { font-size:16px; } .option { min-height:52px; } }
+.capabilities { display:flex; flex-wrap:wrap; gap:8px 20px; margin:0; font-size:12px; }
+.capabilities > div { display:grid; gap:3px; }
+.capabilities dt { color:var(--text-muted); }
+.capabilities dd { margin:0; color:var(--text); font-variant-numeric:tabular-nums; }

@@ -1,4 +1,5 @@
 "use client";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuItem, DropdownMenuSeparator } from "./ui/DropdownMenu";
 
 import { InterfaceFeedback } from "./InterfaceFeedback";
 
@@ -38,7 +39,7 @@ import { PlanReviewCard } from "./PlanReviewCard";
 import { SessionMemoryDialog } from "./SessionMemoryDialog";
 import { Button } from "./ui/Button";
 import { ToolbarAction } from "./ui/ToolbarAction";
-import { IconBell, IconBellOff, IconCircleDot, IconNotebook, IconVolume, IconVolumeOff } from "@tabler/icons-react";
+import { IconBell, IconCircleDot, IconNotebook, IconVolume, IconAdjustmentsHorizontal, IconArrowsMinimize, IconPlayerStop } from "@tabler/icons-react";
 import { SurfaceDialog } from "./SurfaceDialog";
 import { TopicCreationRequests } from "./TopicCreationRequests";
 import {
@@ -376,44 +377,39 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
       onClick={() => setMemoryOpen(true)}
     />
   ) : null;
-  // Prompt capture lives with the other session-level actions (UI/UX §20.5): a send-time switch,
-  // shown only while this client owns the composer.
-  const promptCaptureAction = !readOnly ? (
-    <ToolbarAction
-      label={promptCaptureEnabled ? t("chat.disablePromptCapture") : t("chat.enablePromptCapture")}
-      active={promptCaptureEnabled}
-      onClick={() => setPromptCaptureEnabled(!promptCaptureEnabled)}
-      icon={<IconCircleDot size={18} stroke={1.8} />}
-      data-prompt-capture-toggle
-    />
-  ) : null;
-  // Notification preferences live with the other session-level actions (UI/UX §20.5).
-  const soundAction = onSoundToggle === undefined ? null : (
-    <ToolbarAction
-      label={soundEnabled ? t("chat.disableSound") : t("chat.enableSound")}
-      active={soundEnabled}
-      onClick={onSoundToggle}
-      icon={soundEnabled ? <IconVolume size={18} stroke={1.8} /> : <IconVolumeOff size={18} stroke={1.8} />}
-    />
-  );
-  const pushAction = onPushToggle === undefined ? null : (
-    <ToolbarAction
-      label={pushStatus === "on" ? t("chat.disablePush") : t("chat.enablePush")}
-      active={pushStatus === "on"}
-      disabled={["checking", "unsupported", "enabling", "disabling", "denied"].includes(pushStatus)}
-      onClick={onPushToggle}
-      icon={pushStatus === "on" ? <IconBell size={18} stroke={1.8} /> : <IconBellOff size={18} stroke={1.8} />}
-    />
-  );
+  const settingsAction = <DropdownMenu>
+    <DropdownMenuTrigger asChild><ToolbarAction data-chat-settings iconOnly={isMobile} label={t("chat.settings")} icon={<IconAdjustmentsHorizontal size={18} />} /></DropdownMenuTrigger>
+    <DropdownMenuContent align="end">
+      <DropdownMenuLabel>{t("chat.settings")}</DropdownMenuLabel>
+      {isMobile && !readOnly && memorySessionId !== null && <DropdownMenuItem data-session-memory-open onSelect={() => setMemoryOpen(true)}>
+        <IconNotebook size={18} />{t("topics.memoryPanel")}{memoryCount !== null && <span>{memoryCount}</span>}
+      </DropdownMenuItem>}
+      {isMobile && canCompact && (!sessionBusy || isCompacting) && <DropdownMenuItem
+        data-session-compact={isCompacting ? "running" : "idle"}
+        onSelect={() => { void (isCompacting ? handleAbortCompaction() : handleCompact()); }}>
+        {isCompacting ? <IconPlayerStop size={18} /> : <IconArrowsMinimize size={18} />}
+        {isCompacting ? t("chat.stopCompaction") : t("chat.compactContext")}
+      </DropdownMenuItem>}
+      {isMobile && <DropdownMenuSeparator />}
+      {!readOnly && <DropdownMenuCheckboxItem checked={promptCaptureEnabled} onSelect={event => event.preventDefault()} onCheckedChange={setPromptCaptureEnabled} data-prompt-capture-toggle>
+        <IconCircleDot size={18} />{t("chat.recordPrompts")}
+      </DropdownMenuCheckboxItem>}
+      {onSoundToggle && <DropdownMenuCheckboxItem checked={soundEnabled} onCheckedChange={onSoundToggle}>
+        <IconVolume size={18} />{t("chat.completionSound")}
+      </DropdownMenuCheckboxItem>}
+      {onPushToggle && <DropdownMenuCheckboxItem checked={pushStatus === "on"} onCheckedChange={onPushToggle}
+        disabled={["checking", "unsupported", "enabling", "disabling", "denied"].includes(pushStatus)}>
+        <IconBell size={18} />{t("chat.completionNotification")}
+      </DropdownMenuCheckboxItem>}
+    </DropdownMenuContent>
+  </DropdownMenu>;
   const compactAction = canCompact && (!sessionBusy || isCompacting) ? (
     <ToolbarAction
       label={isCompacting ? t("chat.stopCompaction") : t("chat.compactContext")}
       active={isCompacting}
       data-session-compact={isCompacting ? "running" : "idle"}
       onClick={() => { void (isCompacting ? handleAbortCompaction() : handleCompact()); }}
-      icon={isCompacting
-        ? <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><rect x="2" y="2" width="6" height="6" rx="1" fill="currentColor" /></svg>
-        : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" /><line x1="10" y1="14" x2="3" y2="21" /><line x1="21" y1="3" x2="14" y2="10" /></svg>}
+      icon={isCompacting ? <IconPlayerStop size={18} /> : <IconArrowsMinimize size={18} />}
     />
   ) : null;
 
@@ -505,7 +501,7 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
       onDrop={handleDrop}
     >
       {chatActionsSlot !== null && chatActionsSlot !== undefined && createPortal(
-        <>{sessionMemoryAction}{promptCaptureAction}{compactAction}{soundAction}{pushAction}</>, chatActionsSlot,
+        <>{!isMobile && sessionMemoryAction}{!isMobile && compactAction}{settingsAction}</>, chatActionsSlot,
       )}
       {memoryOpen && memorySessionId !== null && (
         <SessionMemoryDialog

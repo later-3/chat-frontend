@@ -7,8 +7,9 @@ import { InterfaceFeedback } from "./InterfaceFeedback";
 import { useI18n } from "@/hooks/useI18n";
 import { ModelSelection, ThinkingSelection } from "./ModelSelection";
 
-import { IconX } from "@tabler/icons-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { SurfaceDialog } from "./SurfaceDialog";
+import { Button } from "./ui/Button";
+import { useEffect, useMemo, useState } from "react";
 import type {
   AgentConfigSelection,
   WorkflowAgentToolPolicy,
@@ -305,10 +306,10 @@ function ModelConfigSection({
         <dd>{tr(`design.thinking.${inspection.agent.effectiveThinkingLevel}`)}
           {inspection.agent.thinkingSource !== null && ` · ${tr(MODEL_SOURCE_LABELS[inspection.agent.thinkingSource] ?? inspection.agent.thinkingSource)}`}</dd>
       </dl>
-      <ModelSelection models={catalogModels} value={durableModelKey} onChange={applyModel} inheritLabel={tr("interface.use.workflow.default")} disabled={busy || modelCatalog === null} />
+      <ModelSelection models={catalogModels} value={durableModelKey} inheritedModelKey={inspection.agent.effectiveModel ? `${inspection.agent.effectiveModel.provider}/${inspection.agent.effectiveModel.modelId}` : undefined} onChange={applyModel} inheritLabel={tr("interface.use.workflow.default")} disabled={busy || modelCatalog === null} />
       <ThinkingSelection value={durableThinking} onChange={applyThinking} inheritLabel={tr("interface.use.workflow.default")} disabled={busy || modelCatalog === null}
         levels={catalogModels.find(model => `${model.provider}/${model.modelId}` === (durableModelKey || (inspection.agent.effectiveModel ? `${inspection.agent.effectiveModel.provider}/${inspection.agent.effectiveModel.modelId}` : "")))?.thinkingLevels ?? []} />
-      <button type="button" disabled={busy || !hasDurableConfig} onClick={() => void apply("clear")}>{tr("interface.reset.model.and.thinking.level")}</button>
+      <Button variant="secondary" type="button" disabled={busy || !hasDurableConfig} onClick={() => void apply("clear")}>{tr("interface.reset.model.and.thinking.level")}</Button>
       {error && <small className="workflow-agent-model-error" role="alert"><InterfaceFeedback message={error} /></small>}
     </section>
   );
@@ -435,7 +436,7 @@ function ToolConfigSection({
           <small>{tr("interface.the.default.policy.enables.pi.tools.and.defaults.from.loaded.extensions.choose.explicit.selection.to.configure.each.tool")}</small>
         )}
       </div>
-      <button type="button" disabled={busy || durableTools === undefined} onClick={() => void apply("clear")}>{tr("interface.restore.workflow.default.tools")}</button>
+      <Button variant="secondary" type="button" disabled={busy || durableTools === undefined} onClick={() => void apply("clear")}>{tr("interface.restore.workflow.default.tools")}</Button>
       {error && <small className="workflow-agent-model-error" role="alert"><InterfaceFeedback message={error} /></small>}
     </section>
   );
@@ -556,7 +557,7 @@ function ResourceConfigSection({
           ))}
         </div>
       )}
-      <button type="button" disabled={busy || durableResources === undefined} onClick={() => void apply("clear")}>{tr("interface.restore.workflow.default.resources")}</button>
+      <Button variant="secondary" type="button" disabled={busy || durableResources === undefined} onClick={() => void apply("clear")}>{tr("interface.restore.workflow.default.resources")}</Button>
       {error && <small className="workflow-agent-model-error" role="alert"><InterfaceFeedback message={error} /></small>}
     </section>
   );
@@ -572,7 +573,6 @@ const CONFIG_TABS: readonly { readonly id: ConfigTab; readonly label: string }[]
 
 export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, proposals, onConfigsChange, onClose }: Props) {
   const { t: tr } = useI18n();
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const [agentId, setAgentId] = useState(workflow.agents[0]?.id ?? "");
   const [tab, setTab] = useState<ConfigTab>("runtime");
   const [inspection, setInspection] = useState<WorkflowAgentInspection | null>(null);
@@ -585,18 +585,6 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
   const agent = workflow.agents.find((candidate) => candidate.id === agentId) ?? workflow.agents[0];
   const selection = agent === undefined ? undefined : configs[agent.id];
   const selectionKey = JSON.stringify(selection ?? {});
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    dialog.showModal();
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      if (dialog.open) dialog.close();
-    };
-  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -613,6 +601,9 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
   useEffect(() => {
     if (agent === undefined) return;
     const controller = new AbortController();
+    setInspection(null);
+    setCatalog(null);
+    setLoading(true);
     const timer = window.setTimeout(() => {
       setLoading(true);
       setError(null);
@@ -620,13 +611,14 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
         inspectChatWorkflowAgent(workflow.id, agent.id, projectId, cwd, selection, controller.signal),
         inspectChatWorkflowAgentCatalog(workflow.id, agent.id, projectId, cwd, controller.signal),
       ]).then(([resolved, available]) => {
+        if (controller.signal.aborted) return;
         setInspection(resolved);
         setCatalog(available);
       }).catch((cause: unknown) => {
         if (!(cause instanceof DOMException && cause.name === "AbortError")) {
           setError(cause instanceof Error ? cause.message : String(cause));
         }
-      }).finally(() => setLoading(false));
+      }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     }, 180);
     return () => {
       window.clearTimeout(timer);
@@ -654,7 +646,7 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
             // Keep an unavailable selected resource visible below so the user can remove it.
           }
         }));
-        setPromptResources([...byAddress.values()]);
+        if (!controller.signal.aborted) setPromptResources([...byAddress.values()]);
       })
       .catch((cause: unknown) => {
         if (!(cause instanceof DOMException && cause.name === "AbortError")) {
@@ -704,27 +696,14 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
       )),
     });
   };
-  const closeDialog = () => {
-    if (dialogRef.current?.open) dialogRef.current.close();
-    onClose();
-  };
-
   return (
-    <dialog
-      ref={dialogRef}
-      className="workflow-agent-dialog configuration-dialog"
-      onCancel={(event) => { event.preventDefault(); closeDialog(); }}
-      onClick={(event) => { if (event.target === event.currentTarget) closeDialog(); }}
-    >
+    <SurfaceDialog title={translateWorkflowCopy(workflow.id, workflow.name, tr)}
+      description={translateWorkflowCopy(workflow.id, workflow.description, tr)} onClose={onClose}>
       <div className="workflow-agent-dialog-shell">
-        <header>
-          <div><strong>{translateWorkflowCopy(workflow.id, workflow.name, tr)}</strong><small>{translateWorkflowCopy(workflow.id, workflow.description, tr)}</small></div>
-          <button type="button" onClick={closeDialog} aria-label={tr("interface.close")}><IconX size={18} aria-hidden /></button>
-        </header>
         <nav aria-label={tr("interface.workflow.agents")}>
           {workflow.agents.map((item) => (
-            <button key={item.id} type="button" className={item.id === agent.id ? "active" : ""} onClick={() => setAgentId(item.id)}>
-              <strong>{item.name}</strong><small>{item.description}</small>
+            <button key={item.id} type="button" className={item.id === agent.id ? "active" : ""} onClick={() => { setInspection(null); setCatalog(null); setAgentId(item.id); }}>
+              <strong>{translateWorkflowCopy(workflow.id, item.name, tr)}</strong><small>{translateWorkflowCopy(workflow.id, item.description, tr)}</small>
             </button>
           ))}
         </nav>
@@ -732,7 +711,7 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
           <section className="workflow-agent-config-fields">
             <h2>{translateWorkflowCopy(workflow.id, agent.name, tr)}</h2>
             <p>{translateWorkflowCopy(workflow.id, agent.description, tr)}</p>
-            <p>{workflow.nodes.map((node) => `${translateWorkflowCopy(workflow.id, node.name, tr)}（${node.kind === "agent" ? node.agentId : tr("interface.regular.node")}）`).join(" → ")}</p>
+            <details className="workflow-agent-flow"><summary>{tr("design.workflowSteps")}</summary><p>{workflow.nodes.map((node) => `${translateWorkflowCopy(workflow.id, node.name, tr)}（${node.kind === "agent" ? node.agentId : tr("interface.regular.node")}）`).join(" → ")}</p></details>
           </section>
 
           <div className="workflow-agent-tabs" role="tablist" aria-label={tr("interface.agent.configuration.sections")}>
@@ -742,6 +721,17 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
                 type="button"
                 role="tab"
                 aria-selected={tab === item.id}
+                tabIndex={tab === item.id ? 0 : -1}
+                onKeyDown={event => {
+                  const index = CONFIG_TABS.findIndex(item => item.id === tab);
+                  const next = event.key === "Home" ? 0 : event.key === "End" ? CONFIG_TABS.length - 1
+                    : event.key === "ArrowRight" ? (index + 1) % CONFIG_TABS.length
+                    : event.key === "ArrowLeft" ? (index + CONFIG_TABS.length - 1) % CONFIG_TABS.length : -1;
+                  if (next < 0) return;
+                  event.preventDefault();
+                  setTab(CONFIG_TABS[next].id);
+                  event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+                }}
                 className={tab === item.id ? "active" : ""}
                 onClick={() => setTab(item.id)}
               >
@@ -758,6 +748,7 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
               <p className="workflow-agent-tab-note">{tr("interface.changes.save.automatically.to.this.project.and.apply.from.the.next.run")}</p>
               {inspection && (
                 <ModelConfigSection
+                  key={`${projectId}:${agent.id}`}
                   workflow={workflow}
                   agentId={agent.id}
                   projectId={projectId}
@@ -767,26 +758,30 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
                 />
               )}
               {inspection && catalog && (
+                <details className="workflow-agent-disclosure"><summary>{tr("design.toolSettings")}</summary>
                 <ToolConfigSection
+                  key={`${projectId}:${agent.id}`}
                   workflow={workflow}
                   agentId={agent.id}
                   projectId={projectId}
                   inspection={inspection}
                   catalog={catalog}
                   onConfigChanged={() => setModelConfigVersion((version) => version + 1)}
-                />
+                /></details>
               )}
               {inspection && catalog && (
+                <details className="workflow-agent-disclosure"><summary>{tr("design.resourceSettings")}</summary>
                 <ResourceConfigSection
+                  key={`${projectId}:${agent.id}`}
                   workflow={workflow}
                   agentId={agent.id}
                   projectId={projectId}
                   inspection={inspection}
                   catalog={catalog}
                   onConfigChanged={() => setModelConfigVersion((version) => version + 1)}
-                />
+                /></details>
               )}
-              {inspection && <RuntimeCapabilities inspection={inspection} />}
+              {inspection && <details className="workflow-agent-disclosure"><summary>{tr("design.effectiveCapabilities")}</summary><RuntimeCapabilities inspection={inspection} /></details>}
             </div>
           )}
 
@@ -795,7 +790,7 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
               <section className="workflow-agent-config-fields">
                 <div className="workflow-agent-config-actions">
                   <small>{tr("interface.changes.apply.to.this.workflow.agent.in.the.current.session.and.are.submitted.with.the.next.message")}</small>
-                  <button type="button" onClick={() => onConfigsChange({ ...configs, [agent.id]: {} })}>{tr("interface.restore.workflow.defaults")}</button>
+                  <Button variant="secondary" type="button" onClick={() => onConfigsChange({ ...configs, [agent.id]: {} })}>{tr("interface.restore.workflow.defaults")}</Button>
                 </div>
                 <label>{tr("interface.primary.configuration.file")}<input value={selection?.primary ?? ""} placeholder="/path/to/agent.json" onChange={(event) => updateSelection({ primary: event.target.value.trim() || undefined })} /></label>
                 <label>{tr("interface.additional.configuration.files.one.per.line")}<textarea value={lines(selection?.append)} onChange={(event) => updateSelection({ append: parseLines(event.target.value) })} /></label>
@@ -881,6 +876,6 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
           )}
         </main>
       </div>
-    </dialog>
+    </SurfaceDialog>
   );
 }

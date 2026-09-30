@@ -418,3 +418,12 @@
 /* Shared Radix modal layer: no per-page focus or close implementation. */
 .surface-overlay { position:fixed; inset:0; z-index:1100; background:var(--overlay); }
 .surface-dialog[data-ui-dialog] { position:fixed; inset:0; z-index:var(--layer-modal); display:flex; flex-direction:column; }
+
+/* Keep the title readable when a shared dialog also provides header actions. */
+.surface-header > .surface-actions { flex:0 0 auto; display:flex; align-items:center; flex-wrap:wrap; gap:12px; }
+@media (max-width:768px) {
+  .surface-header { display:grid; grid-template-columns:minmax(0,1fr) 44px; gap:12px; padding:max(16px,env(safe-area-inset-top)) 16px 16px; }
+  .surface-heading { grid-column:1; grid-row:1; }
+  .surface-close { grid-column:2; grid-row:1; align-self:start; }
+  .surface-actions { grid-column:1 / -1; grid-row:2; justify-content:flex-end; }
+}

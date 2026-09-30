@@ -33,7 +33,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { ToolbarAction } from "./ui/ToolbarAction";
 import { WorkflowPicker } from "./WorkflowPicker";
 import {
-  IconAdjustmentsHorizontal,
+  IconAdjustmentsHorizontal, IconPhoto, IconArrowUp, IconPlayerStop,
   IconX,
 } from "@tabler/icons-react";
 import {
@@ -1875,7 +1875,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             }
             rows={1}
             style={{
-              flex: 1,
+              flex: isMobile ? "1 0 100%" : 1,
               minWidth: 0,
               width: "100%",
               background: "none",
@@ -1899,7 +1899,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               disabled={!imagesAllowed}
               iconOnly
               onClick={() => fileInputRef.current?.click()}
-              icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>}
+              icon={<IconPhoto size={18} stroke={1.8} />}
             />
             {longAgentId === null && <ToolbarAction
               shape="frame"
@@ -1907,7 +1907,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               iconOnly
               onClick={() => setWorkflowAgentDialogOpen(true)}
               disabled={isStreaming || !cwd || selectedWorkflow?.agents.length === 0}
-              icon={<IconAdjustmentsHorizontal size={16} stroke={1.8} />}
+              icon={<IconAdjustmentsHorizontal size={18} stroke={1.8} />}
             />}
           {isStreaming ? (
             <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, alignSelf: "flex-end" }}>
@@ -1962,60 +1962,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               )}
             </div>
           ) : (
-            <button
-              onClick={handleSend}
-              disabled={!value.trim() && !attachedImages.length}
-              style={{
-                flexShrink: 0,
-                alignSelf: "flex-end",
-                display: "flex", alignItems: "center", gap: 6,
-                padding: isMobile ? "12px 18px" : "7px 14px",
-                minHeight: isMobile ? 44 : undefined,
-                background: (value.trim() || attachedImages.length) ? "var(--accent)" : "var(--bg-panel)",
-                border: "none",
-                borderRadius: 8,
-                color: (value.trim() || attachedImages.length) ? "var(--on-accent)" : "var(--text-dim)",
-                cursor: (value.trim() || attachedImages.length) ? "pointer" : "not-allowed",
-                fontSize: 13,
-                fontWeight: 600,
-                letterSpacing: "-0.01em",
-                boxShadow: (value.trim() || attachedImages.length) ? "0 1px 3px var(--accent-shadow)" : "none",
-                transition: "background var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard)",
-              }}
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="2" y1="7" x2="11" y2="7" />
-                <polyline points="7.5 3 12 7 7.5 11" />
-              </svg>
-              {t("chat.send")}
-            </button>
+            <Button variant="primary" className="composer-send" onClick={handleSend} disabled={!value.trim() && !attachedImages.length}>
+              <IconArrowUp size={18} aria-hidden="true" />{t("chat.send")}
+            </Button>
           )}
                       {isStreaming && (
-              <button
-                data-chat-stop
-                className="composer-stop"
-                onClick={onAbort}
-                disabled={stopping}
-                 title={stopLabel ?? t("chat.stopAgent")}
-                style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  padding: isMobile ? "12px 16px" : "8px 14px",
-                  height: 44,
-                  background: "rgba(239,68,68,0.08)",
-                  border: "1px solid rgba(239,68,68,0.3)",
-                  borderRadius: 9,
-                  color: "var(--danger)",
-                  cursor: "pointer",
-                  fontSize: 12, fontWeight: 600,
-                  whiteSpace: "nowrap", letterSpacing: "-0.01em",
-                  transition: "background var(--duration-fast) var(--ease-standard)",
-                }}
-              >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                  <rect x="1.5" y="1.5" width="7" height="7" rx="1.5" fill="currentColor" />
-                </svg>
-                 {stopLabel ?? t("chat.stop")}
-              </button>
+              <Button variant="danger" data-chat-stop className="composer-stop" onClick={onAbort} disabled={stopping}
+                aria-label={stopLabel ?? t("chat.stopAgent")}>
+                <IconPlayerStop size={18} aria-hidden="true" />{stopLabel ?? t("chat.stop")}
+              </Button>
             )}
             {/* Long Agent identity lives in the sidebar coworker panel; the composer never repeats it. */}
             <WorkflowPicker
