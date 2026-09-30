@@ -152,8 +152,8 @@ function SafeMarkdownBody({ children, className, ...props }: React.ComponentProp
 // push the conversation off screen; overflow scrolls inside the bubble.
 const USER_BUBBLE_MAX_HEIGHT = 300;
 
-function loadThinkingContent(sessionId: string, entryId: string, blockIndex: number): Promise<string> {
-  const key = `${sessionId}:${entryId}:${blockIndex}`;
+function loadThinkingContent(sessionId: string, entryId: string, blockIndex: number, projectId?: string): Promise<string> {
+  const key = `${projectId ?? ""}:${sessionId}:${entryId}:${blockIndex}`;
   const cached = thinkingContentCache.get(key);
   if (cached) {
     thinkingContentCache.delete(key);
@@ -161,8 +161,10 @@ function loadThinkingContent(sessionId: string, entryId: string, blockIndex: num
     return cached;
   }
 
+  const query = new URLSearchParams({ blockIndex: String(blockIndex) });
+  if (projectId !== undefined) query.set("projectId", projectId);
   const request = fetch(
-    `/api/sessions/${encodeURIComponent(sessionId)}/entries/${encodeURIComponent(entryId)}/thinking?blockIndex=${blockIndex}`,
+    `/api/sessions/${encodeURIComponent(sessionId)}/entries/${encodeURIComponent(entryId)}/thinking?${query.toString()}`,
   ).then(async (response) => {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json() as { thinking?: unknown };
@@ -196,6 +198,8 @@ interface Props {
   showTimestamp?: boolean;
   prevTimestamp?: number;
   sessionId?: string;
+  /** Storage project of this Session; scopes lazy deferred-thinking refetches to the right Project. */
+  projectId?: string;
   /**
    * Files this turn wrote, derived by the caller from the whole turn's
    * successful write/edit tool calls. ChatWindow computes this because the
@@ -251,12 +255,12 @@ function haveSameRelevantToolResults(
   return true;
 }
 
-export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, cwd, onOpenFile, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId, writtenFiles }: Props) {
+export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, cwd, onOpenFile, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId, projectId, writtenFiles }: Props) {
   if (message.role === "user") {
     return <UserMessageView message={message as UserMessage} cwd={cwd} onOpenFile={onOpenFile} entryId={entryId} onFork={onFork} forking={forking} onNavigate={onNavigate} prevAssistantEntryId={prevAssistantEntryId} onEditContent={onEditContent} />;
   }
   if (message.role === "assistant") {
-    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} cwd={cwd} onOpenFile={onOpenFile} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} entryId={entryId} writtenFiles={writtenFiles} />;
+    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} cwd={cwd} onOpenFile={onOpenFile} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} projectId={projectId} entryId={entryId} writtenFiles={writtenFiles} />;
   }
   if (message.role === "toolResult") {
     // Rendered inline under its toolCall — skip standalone rendering if paired
@@ -289,7 +293,8 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     && prev.onEditContent === next.onEditContent
     && prev.showTimestamp === next.showTimestamp
     && prev.prevTimestamp === next.prevTimestamp
-    && prev.sessionId === next.sessionId;
+    && prev.sessionId === next.sessionId
+    && prev.projectId === next.projectId;
 });
 
 function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent }: {
@@ -608,6 +613,7 @@ function AssistantMessageView({
   showTimestamp,
   prevTimestamp,
   sessionId,
+  projectId,
   entryId,
   writtenFiles,
 }: {
@@ -619,6 +625,7 @@ function AssistantMessageView({
   showTimestamp?: boolean;
   prevTimestamp?: number;
   sessionId?: string;
+  projectId?: string;
   entryId?: string;
   writtenFiles?: WrittenFile[];
 }) {
@@ -755,7 +762,7 @@ function AssistantMessageView({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* Model label */}
+      {/* Streaming progress; the turn's model is shown once in the TurnSummary bar. */}
       <div
         style={{
           fontSize: 11,
@@ -766,9 +773,6 @@ function AssistantMessageView({
           gap: 6,
         }}
       >
-        {message.provider && (
-          <span>{message.model}</span>
-        )}
         {isStreaming && (() => {
           const est = Math.round(estimatedTokens);
           return (
@@ -796,7 +800,7 @@ function AssistantMessageView({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {blockItems.map(({ block, originalIndex }) => (
-          <BlockView key={`${entryId ?? "stream"}-${originalIndex}`} block={block} toolResults={toolResults} isStreaming={isStreaming} streamingDuration={streamingDurations.get(originalIndex) ?? (block.type === "thinking" ? thinkingDurationFromFile : undefined)} toolCallDurations={toolCallDurations} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} entryId={entryId} blockIndex={originalIndex} />
+          <BlockView key={`${entryId ?? "stream"}-${originalIndex}`} block={block} toolResults={toolResults} isStreaming={isStreaming} streamingDuration={streamingDurations.get(originalIndex) ?? (block.type === "thinking" ? thinkingDurationFromFile : undefined)} toolCallDurations={toolCallDurations} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} projectId={projectId} entryId={entryId} blockIndex={originalIndex} />
         ))}
       </div>
 
@@ -874,12 +878,12 @@ function AssistantMessageView({
   );
 }
 
-function BlockView({ block, toolResults, isStreaming, streamingDuration, toolCallDurations, cwd, onOpenFile, sessionId, entryId, blockIndex }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; streamingDuration?: number; toolCallDurations?: Map<string, number>; cwd?: string; onOpenFile?: (filePath: string) => void; sessionId?: string; entryId?: string; blockIndex: number }) {
+function BlockView({ block, toolResults, isStreaming, streamingDuration, toolCallDurations, cwd, onOpenFile, sessionId, projectId, entryId, blockIndex }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; streamingDuration?: number; toolCallDurations?: Map<string, number>; cwd?: string; onOpenFile?: (filePath: string) => void; sessionId?: string; projectId?: string; entryId?: string; blockIndex: number }) {
   if (block.type === "text") {
     return <TextBlock block={block as TextContent} isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} />;
   }
   if (block.type === "thinking") {
-    return <ThinkingBlock block={block as ThinkingContent} duration={streamingDuration} sessionId={sessionId} entryId={entryId} blockIndex={blockIndex} />;
+    return <ThinkingBlock block={block as ThinkingContent} duration={streamingDuration} sessionId={sessionId} projectId={projectId} entryId={entryId} blockIndex={blockIndex} />;
   }
   if (block.type === "toolCall") {
     const tc = block as ToolCallContent;
@@ -894,10 +898,11 @@ function TextBlock({ block, isStreaming, cwd, onOpenFile }: { block: TextContent
   return <SafeMarkdownBody isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile}>{block.text}</SafeMarkdownBody>;
 }
 
-function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
+function ThinkingBlock({ block, duration, sessionId, projectId, entryId, blockIndex }: {
   block: ThinkingContent;
   duration?: number;
   sessionId?: string;
+  projectId?: string;
   entryId?: string;
   blockIndex: number;
 }) {
@@ -919,7 +924,7 @@ function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {
     setLoading(true);
     setError(null);
     try {
-      setContent(await loadThinkingContent(sessionId, entryId, blockIndex));
+      setContent(await loadThinkingContent(sessionId, entryId, blockIndex, projectId));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

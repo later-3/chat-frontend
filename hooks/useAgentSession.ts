@@ -446,6 +446,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const isNew = session === null && newSessionCwd !== null;
   const composerDraftKey = resolveComposerDraftKey(session?.id, session?.owner.type === "long-agent", contextProjectId, newSessionDraftKey, deviceId, projectId);
   const workflowConfigDraftKey = `${projectId}:${composerDraftKey ?? "new"}`;
+  // 顶栏上下文项目只携带注册用户项目；长期同事会话的存储项目就是 Agent 容器，
+  // 它作为协作上下文等价于"未选择"（受理时回落 Agent 容器），绝不作为 contextProjectId 发送。
+  const friendContextProjectId = contextProjectId !== undefined && contextProjectId !== null && contextProjectId !== projectId ? contextProjectId : null;
 
   const [data, setData] = useState<SessionData | null>(null);
   const [loading, setLoading] = useState(!isNew);
@@ -485,6 +488,21 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       if (next) window.localStorage.removeItem(key); else window.localStorage.setItem(key, "off");
     } catch { /* private mode: the switch still applies to this session */ }
   }, []);
+  // Prompt-capture switch: one UI setting flipped BEFORE sending. On = this round records every final
+  // provider payload (full prompt regions, tools) to the session's prompt captures. Off = nothing written.
+  const [promptCapturePreference, setPromptCaptureState] = useState(false);
+  const promptCaptureEnabled = promptCapturePreference;
+  // Read at the moment of the send, so a switch flipped in this render can never be missed by an
+  // already-memoized send callback (the value is the user's send-time intent, not a stale render).
+  const promptCaptureRef = useRef(promptCaptureEnabled);
+  promptCaptureRef.current = promptCaptureEnabled;
+  const setPromptCaptureEnabled = useCallback((next: boolean) => {
+    setPromptCaptureState(next);
+    try {
+      const key = `chat.prompt-capture:${sessionIdRef.current ?? "new"}`;
+      if (next) window.localStorage.setItem(key, "on"); else window.localStorage.removeItem(key);
+    } catch { /* private mode: the switch still applies to this session */ }
+  }, []);
   const [workflowId, setWorkflowIdState] = useState<ChatWorkflowId>(DEFAULT_CHAT_WORKFLOW_ID);
   const [longAgentCatalog, setLongAgentCatalog] = useState<{
     readonly projectId: string | null;
@@ -511,6 +529,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   useEffect(() => {
     try {
       setMemoryEnabledState(window.localStorage.getItem(`chat.session-memory:${sessionIdRef.current ?? "new"}`) !== "off");
+      setPromptCaptureState(window.localStorage.getItem(`chat.prompt-capture:${sessionIdRef.current ?? "new"}`) === "on");
     } catch { /* nothing persisted */ }
   }, [sessionIdRef.current]);
   const sessionLoadAbortRef = useRef<AbortController | null>(null);
@@ -1049,6 +1068,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           requestId: pendingId ?? crypto.randomUUID(),
           workflow: workflowId,
           ...(memoryEnabled ? {} : { sessionMemory: "off" as const }),
+          ...(promptCaptureRef.current ? { promptCapture: "on" as const } : {}),
           text: message,
           ...(images?.length ? { images: images.map(image => ({ type: "image" as const, data: image.data, mimeType: image.mimeType })) } : {}),
         }, controller.signal);
@@ -1066,8 +1086,9 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           ...(sessionIdRef.current === null ? {} : { sessionId: sessionIdRef.current }),
           text: message, ...(friendExecutionRef.current?.workId
             ? { contextProjectId: friendExecutionRef.current.contextProjectId }
-            : { contextProjectId: contextProjectId ?? null }),
+            : { contextProjectId: friendContextProjectId }),
           ...(memoryEnabled ? {} : { sessionMemory: "off" as const }),
+          ...(promptCaptureRef.current ? { promptCapture: "on" as const } : {}),
           ...(images?.length ? { images: images.map(image => ({ type: "image" as const, data:image.data, mimeType:image.mimeType })) } : {}),
         }, controller.signal);
         longAgentAccepted = true;
@@ -1102,6 +1123,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             : { agentConfigs: submittedAgentConfigs }),
           ...(sessionIdRef.current === null ? {} : { sessionId: sessionIdRef.current }),
           ...(memoryEnabled ? {} : { sessionMemory: "off" as const }),
+          ...(promptCaptureRef.current ? { promptCapture: "on" as const } : {}),
         },
         controller.signal,
         handleRunEvent,
@@ -1340,7 +1362,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             text: message,
             ...(friendExecutionRef.current?.workId
               ? { contextProjectId: friendExecutionRef.current.contextProjectId }
-              : { contextProjectId: contextProjectId ?? null }),
+              : { contextProjectId: friendContextProjectId }),
           });
           addNotice({
             type: "info",
@@ -1352,6 +1374,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             requestId: pendingId,
             workflow: reference.workflow?.id ?? workflowId,
             ...(memoryEnabled ? {} : { sessionMemory: "off" as const }),
+          ...(promptCaptureRef.current ? { promptCapture: "on" as const } : {}),
             text: message,
             ...(images?.length
               ? { images: images.map((image) => ({ type: "image" as const, data: image.data, mimeType: image.mimeType })) }
@@ -1364,10 +1387,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             sessionId: reference.sessionId,
             workflow: reference.workflow?.id ?? workflowId,
             ...(memoryEnabled ? {} : { sessionMemory: "off" as const }),
+          ...(promptCaptureRef.current ? { promptCapture: "on" as const } : {}),
             text: message,
             ...(friendExecutionRef.current?.workId
               ? { contextProjectId: friendExecutionRef.current.contextProjectId }
-              : { contextProjectId: contextProjectId ?? null }),
+              : { contextProjectId: friendContextProjectId }),
             ...(images?.length
               ? {
                   images: images.map((image) => ({ type: "image" as const, data: image.data, mimeType: image.mimeType })),
@@ -1382,7 +1406,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         addNotice({ type: "error", message: cause instanceof Error ? cause.message : String(cause) });
       }
     },
-    [addNotice, composerDraftKey, contextProjectId, longAgentId, memoryEnabled, restoreSubmission, topicNode, unsupported, workflowId],
+    [addNotice, composerDraftKey, contextProjectId, longAgentId, memoryEnabled, promptCaptureEnabled, restoreSubmission, topicNode, unsupported, workflowId],
   );
   const handleSteer = useCallback(
     (message: string, images?: AttachedImage[]) => {
@@ -1589,6 +1613,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     setWorkflowId, setWorkflowAgentConfigs,
     setActiveLeafId, setData, setMessages,
     memoryEnabled, setMemoryEnabled,
+    promptCaptureEnabled, setPromptCaptureEnabled,
     dispatch, setAgentRunning, setForkingEntryId: () => {},
     bashRunning: false, pendingBash: null as PendingBash | null, handleAgentEventRef,
     onSessionStatsPanelOpen,

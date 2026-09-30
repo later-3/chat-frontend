@@ -36,7 +36,7 @@ import { PlanReviewCard } from "./PlanReviewCard";
 import { SessionMemoryDialog } from "./SessionMemoryDialog";
 import { Button } from "./ui/Button";
 import { ToolbarAction } from "./ui/ToolbarAction";
-import { IconBell, IconBellOff, IconNotebook, IconVolume, IconVolumeOff } from "@tabler/icons-react";
+import { IconBell, IconBellOff, IconCircleDot, IconNotebook, IconVolume, IconVolumeOff } from "@tabler/icons-react";
 import { SurfaceDialog } from "./SurfaceDialog";
 import { TopicCreationRequests } from "./TopicCreationRequests";
 import {
@@ -187,6 +187,7 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
     loadSlashCommands,
     setWorkflowId, setWorkflowAgentConfigs,
     memoryEnabled, setMemoryEnabled,
+    promptCaptureEnabled, setPromptCaptureEnabled,
   } = useAgentSession({
     projectId, deviceId, contextProjectId, topicNode, session, sessionRunning, newSessionCwd, newSessionDraftKey, onAgentEnd: wrappedOnAgentEnd, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked,
     chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsPanelOpen,
@@ -373,6 +374,17 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
       onClick={() => setMemoryOpen(true)}
     />
   ) : null;
+  // Prompt capture lives with the other session-level actions (UI/UX §20.5): a send-time switch,
+  // shown only while this client owns the composer.
+  const promptCaptureAction = !readOnly ? (
+    <ToolbarAction
+      label={promptCaptureEnabled ? t("chat.disablePromptCapture") : t("chat.enablePromptCapture")}
+      active={promptCaptureEnabled}
+      onClick={() => setPromptCaptureEnabled(!promptCaptureEnabled)}
+      icon={<IconCircleDot size={18} stroke={1.8} />}
+      data-prompt-capture-toggle
+    />
+  ) : null;
   // Notification preferences live with the other session-level actions (UI/UX §20.5).
   const soundAction = onSoundToggle === undefined ? null : (
     <ToolbarAction
@@ -491,7 +503,7 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
       onDrop={handleDrop}
     >
       {chatActionsSlot !== null && chatActionsSlot !== undefined && createPortal(
-        <>{sessionMemoryAction}{compactAction}{soundAction}{pushAction}</>, chatActionsSlot,
+        <>{sessionMemoryAction}{promptCaptureAction}{compactAction}{soundAction}{pushAction}</>, chatActionsSlot,
       )}
       {memoryOpen && memorySessionId !== null && (
         <SessionMemoryDialog
@@ -664,6 +676,7 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
                     showTimestamp={showTimestamp}
                     prevTimestamp={idx > 0 ? (messages[idx - 1] as AgentMessage & { timestamp?: number }).timestamp : undefined}
                     sessionId={session?.id ?? sessionIdRef.current ?? undefined}
+                    projectId={projectId}
                     writtenFiles={options.writtenFiles}
                   />
                 );

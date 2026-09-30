@@ -728,7 +728,9 @@ export function AppShell({
     if (!cwd) return;
     const newProject = projectKey ?? projectRoot ?? cwd;
     projectIdsByCwd.current.set(cwd, newProject);
-    setActiveProjectId(projectKey ?? selectedSession?.projectId ?? null);
+    // 长期同事会话不占用顶部的上下文项目（同 handleSelectSession 的规则）：
+    // 它的存储项目是 Agent 容器，绝不能作为顶栏协作上下文被采用或持久化。
+    setActiveProjectId(projectKey ?? (selectedSession?.owner?.type === "long-agent" ? null : selectedSession?.projectId ?? null));
     const currentProject = activeProjectKeyRef.current
       ?? (selectedSession ? workspaceKeyOf(selectedSession) : null);
     activeProjectKeyRef.current = newProject;

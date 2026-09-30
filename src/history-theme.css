@@ -24,3 +24,11 @@ pre { overflow:auto; }
 .help-hint { color:var(--muted); }
 .header-toggle-btn,.download-json-btn { font-size:12px; }
 @media(max-width:768px) { .header-info { grid-template-columns:1fr; } .tree-node { min-height:44px; } }
+/* Align the Pi export with Chat's reading typography (density, radius, muted hierarchy). */
+.message { max-width: 100%; }
+.user-message,.assistant-message { padding:14px 16px; }
+.assistant-message { border:1px solid var(--border); }
+.tool-call,.tool-result,.tool-content { font-size:12.5px; }
+.message-timestamp { opacity:.75; }
+.tree-node:hover { background:var(--hover); }
+.system-prompt,.tools-list { font-size:12.5px; border-radius:10px; }

@@ -16,10 +16,12 @@ export function summarizeTurn(messages: readonly AgentMessage[], times: readonly
   let recordedUsage = 0;
   let assistantCount = 0;
   let endedAt: number | null = null;
+  let model: string | null = null;
   for (const [index, message] of messages.entries()) {
     if (message.role === "assistant" || message.role === "toolResult") endedAt = times[index] ?? null;
     if (message.role !== "assistant") continue;
     assistantCount++;
+    if (typeof message.model === "string" && message.model.length > 0) model = message.model;
     for (const block of message.content) {
       if (block.type === "toolCall") tools.add(`${message.chatWorkflow?.invocationId ?? ""}:${block.toolCallId}`);
     }
@@ -39,6 +41,7 @@ export function summarizeTurn(messages: readonly AgentMessage[], times: readonly
     usage, recordedUsage, assistantCount, toolCount: tools.size,
     tokens: usage.input + usage.output + usage.cacheRead + usage.cacheWrite,
     durationMs: startedAt != null && endedAt != null && endedAt >= startedAt ? endedAt - startedAt : null,
+    model,
   };
 }
 export type TurnSummaryData = ReturnType<typeof summarizeTurn>;

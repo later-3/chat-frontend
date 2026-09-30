@@ -75,6 +75,9 @@ export function LongAgentTopicsPanel({ initialAgentId, agents }: Props) {
   const [nodeState, setNodeState] = useState<NodeState | null>(null);
   const [nodeSession, setNodeSession] = useState<SessionInfo | null>(null);
   const [nodeSessionError, setNodeSessionError] = useState<string | null>(null);
+  // Session-level actions (memory, compact) portal into the node conversation's top bar (UI/UX §20.5);
+  // without this slot ChatWindow renders no session actions at all.
+  const [topicActionsSlot, setTopicActionsSlot] = useState<HTMLDivElement | null>(null);
   const [newTitle, setNewTitle] = useState("");
   const [newPurpose, setNewPurpose] = useState("");
   const [forkTitle, setForkTitle] = useState("");
@@ -285,6 +288,7 @@ export function LongAgentTopicsPanel({ initialAgentId, agents }: Props) {
         {detail === null ? <p className={styles.hint}>{t("topics.selectNodeHint")}</p> : <>
           {selectedNodeId !== null && <div className={styles.header}>
             <h3>{selectedNode?.title ?? ""}</h3>
+            <div ref={setTopicActionsSlot} className={`${styles.actionsSlot} workspace-chat-actions-slot`} />
             <Button variant="secondary" type="button" className={styles.secondary} data-topic-aux-open onClick={() => setAuxView("details")}>{t("topics.details")}</Button>
 
           </div>}
@@ -295,6 +299,7 @@ export function LongAgentTopicsPanel({ initialAgentId, agents }: Props) {
                 : nodeSession !== null
                   ? <ChatWindow
                       key={`${detail.topic.topicId}:${selectedNodeId}`}
+                      chatActionsSlot={topicActionsSlot}
                       projectId={longAgentId}
                       session={nodeSession}
                       topicNode={{ longAgentId, topicId: detail.topic.topicId, nodeId: selectedNodeId }}

@@ -18,6 +18,7 @@ export function TurnSummary({ summary, completed, children, defaultExpanded = fa
       <span>{summary.recordedUsage ? t("usage.tokens", { count: number(summary.tokens) }) : t("turnSummary.noUsage")}</span>
       <span>{t("turnSummary.tools", { count: summary.toolCount })}</span>
       {summary.durationMs !== null && <span title={t("turnSummary.durationHint")}>{t("turnSummary.seconds", { seconds: number(Math.round(summary.durationMs / 100) / 10) })}</span>}
+      {summary.model && <span title={t("design.model")}>{summary.model}</span>}
       <span className="turn-summary-disclosure">{t(children ? "chat.processDetails" : "turnSummary.details")}<IconChevronDown size={14} aria-hidden style={{ transform: expanded ? "rotate(180deg)" : undefined }} /></span>
     </button>
     {expanded && <div className="turn-summary-details">

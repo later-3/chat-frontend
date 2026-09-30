@@ -21,6 +21,20 @@ export function ConfirmationProvider({ children }: { children: ReactNode }) {
   }, []);
   const settle = (result: boolean) => { const resolve = pending.current; pending.current = null; setMessage(null); resolve?.(result); };
   useEffect(() => () => { pending.current?.(false); pending.current = null; }, []);
+  // The shared confirmation owns Escape. Radix hands the keydown to the top DismissableLayer,
+  // but a stale lower layer can consume it first and then no-op against this pending decision,
+  // leaving Escape dead (seen as a hang in switch-browser tests under load). One tick after any
+  // Escape, a still-pending confirmation is dismissed; the normal Radix path has already settled
+  // synchronously, so this only backstops the mis-routed case and never touches other modals.
+  useEffect(() => {
+    if (message === null) return;
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      queueMicrotask(() => { if (pending.current) settle(false); });
+    };
+    document.addEventListener("keydown", onEscape, true);
+    return () => document.removeEventListener("keydown", onEscape, true);
+  }, [message]);
   return <Context.Provider value={confirm}>{children}
     <AlertDialog.Root open={message !== null} onOpenChange={open => { if (!open) settle(false); }}>
       <AlertDialog.Portal><AlertDialog.Overlay className={styles.overlay} />
