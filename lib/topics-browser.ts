@@ -1,4 +1,5 @@
 import { workflowRequestSignal } from "./chat-workflow-browser.ts";
+import { parseSessionActivityMessages } from "./session-activity.ts";
 import type { AgentMessage, ChatTopicRelayProvenance } from "./types.ts";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -178,7 +179,7 @@ export async function fetchTopicNodeMessages(longAgentId: string, topicId: strin
   const rawMessages = list(context.messages, "节点消息");
   const ids = list(context.entryIds, "节点消息 entryIds").map((value) => text(value, "节点消息 entryId"));
   if (ids.length !== rawMessages.length) throw new Error("Chat返回了无效节点消息（entryIds 与 messages 不一致）");
-  return { sessionId, messages: rawMessages as AgentMessage[], entryIds: ids };
+  return { sessionId, messages: parseSessionActivityMessages(rawMessages), entryIds: ids };
 }
 
 export interface TopicNodeSessionInfo { readonly id: string; readonly cwd: string; readonly name: string | null }
@@ -218,7 +219,7 @@ export async function followTopicNodeTurn(longAgentId: string, turnId: string, s
     const status = execution.status;
     // While the round runs, the live snapshot is already the structured message projection: report the
     // same shapes the finished session will return, never a text-only placeholder.
-    const snapshot = isRecord(body.snapshot) && Array.isArray(body.snapshot.messages) ? body.snapshot.messages as AgentMessage[] : undefined;
+    const snapshot = isRecord(body.snapshot) && Array.isArray(body.snapshot.messages) ? parseSessionActivityMessages(body.snapshot.messages) : undefined;
     const state: FriendTurnStatus = {
       id: typeof execution.id === "string" ? execution.id : turnId,
       sessionId: typeof execution.sessionId === "string" ? execution.sessionId : "",

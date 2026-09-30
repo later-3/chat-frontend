@@ -5,7 +5,7 @@ import { InterfaceFeedback } from "./InterfaceFeedback";
 import { useContext } from "react";
 import { ToolActivityContext } from "./RunStatus";
 
-import { memo, useState, useRef, useEffect, useMemo } from "react";
+import { memo, useState, useRef, useEffect, useMemo, type ReactNode } from "react";
 import { MarkdownBody } from "./MarkdownBody";
 import { ImagePreview } from "./ImagePreview";
 import { copyText } from "@/lib/clipboard";
@@ -13,6 +13,8 @@ import { useI18n } from "@/hooks/useI18n";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { parseCompactionSummary } from "@/lib/compaction-summary";
 import { getAssistantErrorMessage, isEmptyThinkingBlock } from "@/lib/message-display";
+import { parseDailySummary } from "@/lib/session-activity";
+import { workflowRequestSignal } from "@/lib/chat-workflow-browser";
 import { parseUnifiedPatch, type SplitDiffCell } from "@/lib/patch";
 import { isEditToolName } from "@/lib/tool-names";
 import { TurnWrittenFiles } from "./TurnWrittenFiles";
@@ -165,6 +167,7 @@ function loadThinkingContent(sessionId: string, entryId: string, blockIndex: num
   if (projectId !== undefined) query.set("projectId", projectId);
   const request = fetch(
     `/api/sessions/${encodeURIComponent(sessionId)}/entries/${encodeURIComponent(entryId)}/thinking?${query.toString()}`,
+    { signal: workflowRequestSignal() },
   ).then(async (response) => {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json() as { thinking?: unknown };
@@ -196,7 +199,6 @@ interface Props {
   prevAssistantEntryId?: string;
   onEditContent?: (message: UserMessage) => void;
   showTimestamp?: boolean;
-  prevTimestamp?: number;
   sessionId?: string;
   /** Storage project of this Session; scopes lazy deferred-thinking refetches to the right Project. */
   projectId?: string;
@@ -255,12 +257,13 @@ function haveSameRelevantToolResults(
   return true;
 }
 
-export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, cwd, onOpenFile, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, prevTimestamp, sessionId, projectId, writtenFiles }: Props) {
+export const MessageView = memo(function MessageView({ message, isStreaming, toolResults, cwd, onOpenFile, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent, showTimestamp, sessionId, projectId, writtenFiles }: Props) {
   if (message.role === "user") {
     return <UserMessageView message={message as UserMessage} cwd={cwd} onOpenFile={onOpenFile} entryId={entryId} onFork={onFork} forking={forking} onNavigate={onNavigate} prevAssistantEntryId={prevAssistantEntryId} onEditContent={onEditContent} />;
   }
   if (message.role === "assistant") {
-    return <AssistantMessageView message={message as AssistantMessage} isStreaming={isStreaming} toolResults={toolResults} cwd={cwd} onOpenFile={onOpenFile} showTimestamp={showTimestamp} prevTimestamp={prevTimestamp} sessionId={sessionId} projectId={projectId} entryId={entryId} writtenFiles={writtenFiles} />;
+    const content = <AssistantMessageView message={message} isStreaming={isStreaming} toolResults={toolResults} cwd={cwd} onOpenFile={onOpenFile} showTimestamp={showTimestamp} sessionId={sessionId} projectId={projectId} entryId={entryId} writtenFiles={writtenFiles} />;
+    return message.chatSessionActivity ? <SessionActivityFrame message={message}>{content}</SessionActivityFrame> : content;
   }
   if (message.role === "toolResult") {
     // Rendered inline under its toolCall — skip standalone rendering if paired
@@ -292,10 +295,36 @@ export const MessageView = memo(function MessageView({ message, isStreaming, too
     && prev.prevAssistantEntryId === next.prevAssistantEntryId
     && prev.onEditContent === next.onEditContent
     && prev.showTimestamp === next.showTimestamp
-    && prev.prevTimestamp === next.prevTimestamp
     && prev.sessionId === next.sessionId
     && prev.projectId === next.projectId;
 });
+
+function SessionActivityFrame({ message, children }: { message: AssistantMessage; children: ReactNode }) {
+  const { t } = useI18n();
+  const activity = message.chatSessionActivity!;
+  return <details className="session-activity-message" data-session-activity={activity.kind}>
+    <summary>{t(activity.kind === "daily-summary" ? "sessionActivity.dailySummary" : "sessionActivity.dailyDraft")}{activity.date ? ` · ${activity.date}` : ""}</summary>
+    <div className="session-activity-content">
+      <p className="text-xs text-text-muted">{t("sessionActivity.description")}</p>
+      {children}
+    </div>
+  </details>;
+}
+
+function DailySummaryText({ block, cwd, onOpenFile }: { block: TextContent; cwd?: string; onOpenFile?: (path: string) => void }) {
+  const { t } = useI18n();
+  const summary = parseDailySummary(block.text);
+  if (summary === null) return <TextBlock block={block} cwd={cwd} onOpenFile={onOpenFile} />;
+  return <div className="daily-summary-sections">
+    {(["did", "reflections"] as const).map(key => <section key={key}>
+      <h3>{t(`sessionActivity.${key}`)}</h3>
+      {summary[key].length ? <ul>{summary[key].map((item, index) => <li key={index}><SafeMarkdownBody cwd={cwd} onOpenFile={onOpenFile}>{item}</SafeMarkdownBody></li>)}</ul>
+        : <p>{t("sessionActivity.empty")}</p>}
+    </section>)}
+    <section><h3>{t("sessionActivity.handoff")}</h3><SafeMarkdownBody cwd={cwd} onOpenFile={onOpenFile}>{summary.handoff || t("sessionActivity.empty")}</SafeMarkdownBody></section>
+    <details><summary>{t("sessionActivity.raw")}</summary><pre>{block.text}</pre></details>
+  </div>;
+}
 
 function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, onNavigate, prevAssistantEntryId, onEditContent }: {
   message: UserMessage;
@@ -611,7 +640,6 @@ function AssistantMessageView({
   cwd,
   onOpenFile,
   showTimestamp,
-  prevTimestamp,
   sessionId,
   projectId,
   entryId,
@@ -623,7 +651,6 @@ function AssistantMessageView({
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
   showTimestamp?: boolean;
-  prevTimestamp?: number;
   sessionId?: string;
   projectId?: string;
   entryId?: string;
@@ -668,28 +695,8 @@ function AssistantMessageView({
   const blockStartTimesRef = useRef<Map<number, number>>(new Map());
   const [streamingDurations, setStreamingDurations] = useState<Map<number, number>>(new Map());
 
-  // Thinking duration derived from file timestamps: time from prev message end to this message end
-  // This is the total generation time (thinking + any text before first tool call)
-  const thinkingDurationFromFile = useMemo<number | undefined>(() => {
-    if (!message.timestamp || !prevTimestamp) return undefined;
-    const secs = Math.round((message.timestamp - prevTimestamp) / 1000);
-    return secs > 0 ? secs : undefined;
-  }, [message.timestamp, prevTimestamp]);
-
-  // Tool call durations derived from session file timestamps (accurate for completed messages)
-  // assistant message timestamp = when generation ended = when tools started running
-  // toolResult timestamp = when tool execution finished
-  const toolCallDurations = useMemo<Map<string, number>>(() => {
-    const map = new Map<string, number>();
-    if (!toolResults || !message.timestamp) return map;
-    for (const [callId, result] of toolResults) {
-      if (result.timestamp && message.timestamp) {
-        const secs = Math.round((result.timestamp - message.timestamp) / 1000);
-        if (secs > 0) map.set(callId, secs);
-      }
-    }
-    return map;
-  }, [toolResults, message.timestamp]);
+  // Message timestamps are provider request times, not per-block start/end events.
+  // Only timings observed on this page may label thinking; history never guesses from message gaps.
 
   const textContent = blocks
     .filter((b): b is TextContent => b.type === "text")
@@ -800,7 +807,9 @@ function AssistantMessageView({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {blockItems.map(({ block, originalIndex }) => (
-          <BlockView key={`${entryId ?? "stream"}-${originalIndex}`} block={block} toolResults={toolResults} isStreaming={isStreaming} streamingDuration={streamingDurations.get(originalIndex) ?? (block.type === "thinking" ? thinkingDurationFromFile : undefined)} toolCallDurations={toolCallDurations} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} projectId={projectId} entryId={entryId} blockIndex={originalIndex} />
+          message.chatSessionActivity && !isStreaming && block.type === "text"
+            ? <DailySummaryText key={`${entryId}-${originalIndex}`} block={block} cwd={cwd} onOpenFile={onOpenFile} />
+            : <BlockView key={`${entryId ?? "stream"}-${originalIndex}`} block={block} toolResults={toolResults} isStreaming={isStreaming} streamingDuration={streamingDurations.get(originalIndex)} cwd={cwd} onOpenFile={onOpenFile} sessionId={sessionId} projectId={projectId} entryId={entryId} blockIndex={originalIndex} />
         ))}
       </div>
 
@@ -878,7 +887,7 @@ function AssistantMessageView({
   );
 }
 
-function BlockView({ block, toolResults, isStreaming, streamingDuration, toolCallDurations, cwd, onOpenFile, sessionId, projectId, entryId, blockIndex }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; streamingDuration?: number; toolCallDurations?: Map<string, number>; cwd?: string; onOpenFile?: (filePath: string) => void; sessionId?: string; projectId?: string; entryId?: string; blockIndex: number }) {
+function BlockView({ block, toolResults, isStreaming, streamingDuration, cwd, onOpenFile, sessionId, projectId, entryId, blockIndex }: { block: AssistantContentBlock; toolResults?: Map<string, ToolResultMessage>; isStreaming?: boolean; streamingDuration?: number; cwd?: string; onOpenFile?: (filePath: string) => void; sessionId?: string; projectId?: string; entryId?: string; blockIndex: number }) {
   if (block.type === "text") {
     return <TextBlock block={block as TextContent} isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile} />;
   }
@@ -888,8 +897,7 @@ function BlockView({ block, toolResults, isStreaming, streamingDuration, toolCal
   if (block.type === "toolCall") {
     const tc = block as ToolCallContent;
     const result = toolResults?.get(tc.toolCallId);
-    const duration = toolCallDurations?.get(tc.toolCallId);
-    return <ToolCallBlock block={tc} result={result} duration={duration} />;
+    return <ToolCallBlock block={tc} result={result} />;
   }
   return null;
 }
@@ -943,6 +951,7 @@ function ThinkingBlock({ block, duration, sessionId, projectId, entryId, blockIn
     >
       <button
         onClick={() => void toggle()}
+        aria-expanded={expanded}
         style={{
           display: "flex",
           alignItems: "center",
@@ -959,7 +968,7 @@ function ThinkingBlock({ block, duration, sessionId, projectId, entryId, blockIn
       >
          <span>{t("i18n.thinking")}</span>
         {duration !== undefined && (
-          <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{duration}s</span>
+          <span title={t("sessionActivity.observedThinkingTime")} style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-dim)", fontVariantNumeric: "tabular-nums" }}>{duration}s</span>
         )}
       </button>
       {expanded && (
@@ -974,14 +983,14 @@ function ThinkingBlock({ block, duration, sessionId, projectId, entryId, blockIn
             borderTop: "1px solid var(--border)",
           }}
         >
-           {loading ? t("i18n.loadingThinking") : error ?? (block.deferred ? content : block.thinking)}
+           {loading ? t("i18n.loadingThinking") : error ?? ((block.deferred ? content : block.thinking)?.trim() ? (block.deferred ? content : block.thinking) : t("i18n.thinkingUnavailable"))}
         </div>
       )}
     </div>
   );
 }
 
-function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; result?: ToolResultMessage; duration?: number }) {
+function ToolCallBlock({ block, result }: { block: ToolCallContent; result?: ToolResultMessage }) {
   const activity = useContext(ToolActivityContext);
   const liveTool = activity.tools[block.toolCallId];
   const toolState = result ? (result.isError ? "toolFailed" : "toolCompleted")
@@ -1015,6 +1024,7 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
     >
       {/* ── Tool call header ── */}
       <button
+        aria-expanded={expanded}
         onClick={() => setExpanded((v) => !v)}
         style={{
           display: "flex",
@@ -1038,9 +1048,6 @@ function ToolCallBlock({ block, result, duration }: { block: ToolCallContent; re
           {isStreamingInput ? t("chat.generatingToolInput") : getToolPreview(block)}
         </span>
         <span style={{ fontSize: 11, flexShrink: 0 }}>{t(`runStatus.${toolState}`)}</span>
-        {duration !== undefined && (
-          <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{duration}s</span>
-        )}
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--text-dim)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform var(--duration-fast) var(--ease-standard)" }}>
           <polyline points="2 3.5 5 6.5 8 3.5" />
         </svg>

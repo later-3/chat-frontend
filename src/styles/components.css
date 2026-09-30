@@ -1381,3 +1381,28 @@ span.token.table {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px;
   white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); background: var(--bg);
 }
+.session-activity-message {
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg-panel);
+}
+.session-activity-message summary {
+  padding: 10px 12px;
+  min-height: 44px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.session-activity-content { padding: 0 12px 12px; min-width: 0; }
+.daily-summary-sections h3 { font-size: 14px; margin: 16px 0 8px; }
+.daily-summary-sections ul { padding-left: 20px; }
+.daily-summary-sections pre {
+  max-height: 400px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-family: var(--font-mono);
+}

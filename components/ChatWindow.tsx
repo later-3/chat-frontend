@@ -16,6 +16,8 @@ import { TurnSummary } from "./TurnSummary";
 import { Hint } from "@/components/ui/Tooltip";
 import { RunStatus, ToolActivityContext } from "./RunStatus";
 import { MessageView } from "./MessageView";
+import { isSessionActivity } from "@/lib/session-activity";
+import { turnProcessIndices } from "@/lib/message-display";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
 import { ChatMinimap, useMessageRefs } from "./ChatMinimap";
 import { ExtensionStatusBar } from "./ExtensionStatusBar";
@@ -674,7 +676,6 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
                     prevAssistantEntryId={readOnly || sessionBusy ? undefined : prevAssistantEntryId}
                     onEditContent={readOnly ? undefined : handleEditContent}
                     showTimestamp={showTimestamp}
-                    prevTimestamp={idx > 0 ? (messages[idx - 1] as AgentMessage & { timestamp?: number }).timestamp : undefined}
                     sessionId={session?.id ?? sessionIdRef.current ?? undefined}
                     projectId={projectId}
                     writtenFiles={options.writtenFiles}
@@ -690,7 +691,8 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
                         <div className="pb-1 text-[11px] font-medium text-text-muted">
                           {workflowAgentId === "planner"
                             ? t("chat.plannerStage")
-                            : (workflowAgentId === "pi-coding-agent" ? t("interface.pi.coding.agent") : workflowAgentId)}
+                            : (workflowAgentId === "pi-coding-agent" ? t("interface.pi.coding.agent")
+                              : workflowAgentId === "session-memory-writer" ? t("sessionActivity.memoryWriter") : workflowAgentId)}
                         </div>
                         {messageView}
                       </div>
@@ -714,7 +716,7 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
 
                 const userIdx = idx;
                 let endIdx = userIdx + 1;
-                while (endIdx < messages.length && !isGroupAnchor(messages[endIdx])) endIdx += 1;
+                while (endIdx < messages.length && !isGroupAnchor(messages[endIdx]) && !isSessionActivity(messages[endIdx])) endIdx += 1;
 
                 const finalAssistantIdx = findFinalAssistantIndex(messages, userIdx, endIdx);
 
@@ -738,10 +740,7 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
                 rendered.push(renderMessage(userIdx));
 
                 const memoryRound = messages.slice(userIdx + 1, endIdx).some(isSessionMemoryResponse);
-                const processIndices: number[] = [];
-                for (let processIdx = userIdx + 1; processIdx < (memoryRound ? endIdx : finalAssistantIdx); processIdx++) {
-                  if (processIdx !== finalAssistantIdx) processIndices.push(processIdx);
-                }
+                const processIndices = turnProcessIndices(messages, userIdx, memoryRound ? endIdx : finalAssistantIdx + 1, finalAssistantIdx);
                 const visibleProcessIndices = processIndices.filter((processIdx) => hasDisplayableProcessMessage(messages[processIdx]));
                 const finalAssistant = messages[finalAssistantIdx] as AssistantMessage;
                 const finalSplit = splitFinalAssistantBlocks(finalAssistant);
@@ -757,8 +756,11 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
                   .find((value): value is number => typeof value === "number")
                   ?? (finalAnswerMessage ? undefined : visibleRefIndexByMessage.get(finalAssistantIdx));
                 const processContent = visibleProcessIndices.length || finalProcessMessage ? <>
-                  {visibleProcessIndices.map((processIdx) => renderMessage(processIdx, { attachRef: false, keyPrefix: "process" }))}
-                  {finalProcessMessage && renderMessage(finalAssistantIdx, { attachRef: false, keyPrefix: "process-final", messageOverride: finalProcessMessage, showTimestamp: false })}
+                  {visibleProcessIndices.map((processIdx) => renderMessage(processIdx, {
+                    attachRef: false, keyPrefix: "process",
+                    ...(processIdx === finalAssistantIdx && finalProcessMessage
+                      ? { messageOverride: finalProcessMessage, showTimestamp: false } : {}),
+                  }))}
                 </> : undefined;
                 if (finalAnswerMessage) {
                   // Each tool call is stored as its own assistant entry, so the
@@ -812,7 +814,8 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
                   <div className="pb-1 text-[11px] font-medium text-text-muted">
                     {activeRunStage.agentId === "planner"
                       ? t("chat.plannerStage")
-                      : (activeRunStage.agentId === "pi-coding-agent" ? t("interface.pi.coding.agent") : activeRunStage.agentId)}
+                      : (activeRunStage.agentId === "pi-coding-agent" ? t("interface.pi.coding.agent")
+                        : activeRunStage.agentId === "session-memory-writer" ? t("sessionActivity.memoryWriter") : activeRunStage.agentId)}
                   </div>
                 )}
                 <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming cwd={messageCwd} onOpenFile={onOpenFile} />

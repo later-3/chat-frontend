@@ -134,7 +134,7 @@ NanoClaw Agent Group与Agent Memory集中由`lib/long-agent-group-browser.ts`封
 
 - 输入框仅将 `lib/builtin-slash-commands.ts` 中登记的完整命令名交给前端命令处理；菜单与发送校验共用该定义。以 `/Users/...`、`/tmp` 等路径开头的输入，以及未登记的斜杠前缀文字，走普通消息 API，不能按首字符 `/` 拦截。当前会话不支持的已登记命令必须显示可见提示并保留草稿；原有 `!` Shell 快捷入口仍不支持，不因此开放浏览器执行命令。
 - Backend 和 Pi Session 是持久事实源；页面组件只拥有输入草稿、选中项、展开状态、加载状态等界面状态。
-- 消息滚动由 `ChatWindow` 和 `lib/chat-auto-scroll.ts` 管理：首次载入、新消息、流式增量、工具进度和运行阶段变化均跟随消息区底部；移除发送后固定用户提问位置的占位空间。相同内容的定时读取不算新活动，上翻及历史分页保留阅读位置；下一次真实活动恢复跟随。跟随时通过 `ResizeObserver` 处理延迟布局和输入区/视口尺寸变化，按动画帧合并定位，仅滚动消息容器。回归门禁为 `lib/chat-auto-scroll.test.mjs`。
+- 消息滚动由 `ChatWindow` 和 `lib/chat-auto-scroll.ts` 管理：首次载入、新消息、流式增量、工具进度和运行阶段变化均跟随消息区底部；移除发送后固定用户提问位置的占位空间。相同内容的定时读取不算新活动，上翻及历史分页保留阅读位置；主动展开/收起过程、Thinking、工具或日终总结时暂停布局跟随，保留阅读位置；下一次真实活动恢复跟随。跟随时通过 `ResizeObserver` 处理延迟布局和输入区/视口尺寸变化，按动画帧合并定位，仅滚动消息容器。回归门禁为 `lib/chat-auto-scroll.test.mjs`。
 - 未发送文字使用有版本的 sessionStorage，同标签页刷新恢复、不同窗口独立。键包含设备和所属 Project/Session；Friend 再含上下文 Project；新会话使用稳定 Project 键，未解析时以目录暂存。图片只在内存保留，刷新后显示附件缺失提示，不伪造附件引用。草稿不随导航卸载清除；存储不可用时保留内存内容，不承诺刷新恢复。
 - 发送前以同一草稿作用域保留待核实输入（`lib/pending-submission.ts`）。输入框可乐观清空，Workflow 明确接受或 Long Agent 成功响应才清对应记录，不能清掉用户后来写的草稿。确认前刷新显示保留文字并要求用户核对会话，可恢复或清除；未处理时阻止下一次发送，不自动补发，也不按正文去重来推断服务器接受状态。它是浏览器输入恢复，不是另一套投递/执行事实。附件只记录缺失数量。
 - 服务端状态变更必须通过 API 完成。刷新、切换 Project、重连和任务完成后，以重新读取的服务端结果校正界面。
@@ -206,11 +206,17 @@ Session 和 context 响应增加可选 `context.entryTimes`，与 messages/entry
 
 正常完成进入回复末尾的统一摘要栏，原始用量只在展开过程时按消息查看；活跃阶段、错误、取消、停止等待与未知仍由 `RunStatus` 表达。工具结果、复制、文件产物与聊天节点继续可访问。不可依据最后一条工具成功推断整轮已完成。
 
+`lib/session-activity` 在 Session/Topic 历史 HTTP 边界校验可选 `chatSessionActivity`，合同见父仓库模块合同。日终总结/草稿独立显示，不纳入上一用户轮次的最终答案、用量或记录用时。已明确归属的 `{did, reflections, handoff}` 按段展示并保留原始 JSON；格式不匹配时显示原文，不猜测、不丢弃。记忆 writer 回执仍属于对应工作轮次，显示为“会话记忆整理”。`turnProcessIndices` 保持过程原始顺序，不能把最终回答中的 Thinking 排到记忆回执之后。
+
+历史 Thinking 和工具不使用相邻消息 timestamp 推算耗时；流式 Thinking 的秒数仅表示页面观察时间。真实空 Thinking 不生成折叠框，延迟正文保留加载入口并采用有界请求，缺失或失败给出明确状态；短文本如 `Now respond.` 原样保留，不擅自删除。
+
 ### 页面适配入口
 
 全量页面归属表见父仓库 `docs/modules/web/chat-web.md` §4.1。顶栏由 `AppShell` 直接拥有：Project Portal、会话标题与操作在同一 Header，ChatWindow 保持原挂载；全局页隐藏这个 Header。设置分类只改变显示，不新增配置源。
 
 `SurfaceDialog` 为 Tools 与完整历史复用原生 Dialog 生命周期。`history-document` 只对 Backend 返回的 Pi HTML 增加阅读样式，校验 Session data 标记；HTTP 失败、非 HTML、无效 HTML 和超时都可重试。iframe 保留 `allow-downloads allow-scripts`，不放开 same-origin。主题映射来自 Chat 当前 CSS Token，Pi Session 数据与分支脚本不替换。
+
+完整历史的请求成功必须通过 React state 触发文档合成及首帧呈现；不能只修改 ref 等待无关重渲染。缓存按 Project/Session 隔离，切换及卸载取消旧请求，文档随组件释放；稳定的 srcDoc 仅在内容、主题或语言变化时更新，兼容不支持 sandbox Blob 导航的内嵌浏览器。首次点击后不切标签、不改主题就应出现 iframe，门禁覆盖 `prompt-capture-browser` 与 `group-browser`。
 
 目录类诊断与选中资源分离；可用条目仍可浏览。Tools 中的使用关系以 Project 配置覆盖 Workflow 默认，不并列伪造冲突状态。工具实际装配仍由 Backend 检查。首次自动打开 Friend 的异步响应在用户已操作列表后失效，不能覆盖用户选择。
 

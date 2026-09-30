@@ -29,6 +29,16 @@ export function observeChatAutoScroll(container: HTMLElement, content: HTMLEleme
     );
     previousTop = container.scrollTop;
   };
+  const onInspectHistory = (event: Event) => {
+    if (!(event.target instanceof Element) || !event.target.closest("summary, button[aria-expanded]")) return;
+    // A user opening a disclosure is reading history, not receiving new activity.
+    // Capture before the disclosure resizes, including keyboard-generated clicks.
+    attached = false;
+    activityPending = false;
+    if (frame !== null) cancelAnimationFrame(frame);
+    frame = null;
+  };
+  content.addEventListener("click", onInspectHistory, true);
   container.addEventListener("scroll", onScroll, { passive: true });
   const observer = new ResizeObserver(schedule);
   observer.observe(container);
@@ -54,6 +64,7 @@ export function observeChatAutoScroll(container: HTMLElement, content: HTMLEleme
       if (disposed) return;
       disposed = true;
       observer.disconnect();
+      content.removeEventListener("click", onInspectHistory, true);
       container.removeEventListener("scroll", onScroll);
       if (frame !== null) cancelAnimationFrame(frame);
       frame = null;

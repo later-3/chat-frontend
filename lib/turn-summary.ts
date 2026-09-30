@@ -1,4 +1,5 @@
 import type { AgentMessage } from "./types";
+import { isSessionActivity } from "./session-activity.ts";
 
 /** Entry write times, not model request-start timestamps. Absent on older servers. */
 export function parseEntryTimes(value: unknown, count: number): (number | null)[] {
@@ -18,6 +19,7 @@ export function summarizeTurn(messages: readonly AgentMessage[], times: readonly
   let endedAt: number | null = null;
   let model: string | null = null;
   for (const [index, message] of messages.entries()) {
+    if (isSessionActivity(message)) break;
     if (message.role === "assistant" || message.role === "toolResult") endedAt = times[index] ?? null;
     if (message.role !== "assistant") continue;
     assistantCount++;

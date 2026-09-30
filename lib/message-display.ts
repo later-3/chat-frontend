@@ -1,4 +1,5 @@
 import type { AgentMessage, AssistantContentBlock, AssistantMessage, ThinkingContent, ToolCallContent } from "./types";
+import { isSessionActivity } from "./session-activity.ts";
 
 export function isSessionMemoryResponse(message: AgentMessage): boolean {
   return message.role === "assistant" && message.chatWorkflow?.stageId === "remember";
@@ -9,12 +10,22 @@ export function findFinalAssistantIndex(messages: AgentMessage[], userIdx: numbe
   for (const requireAnswer of [true, false]) {
     for (let index = endIdx - 1; index > userIdx; index--) {
       const message = messages[index];
-      if (message.role !== "assistant" || isSessionMemoryResponse(message)) continue;
+      if (message.role !== "assistant" || isSessionMemoryResponse(message) || isSessionActivity(message)) continue;
       if (!requireAnswer || splitFinalAssistantBlocks(message).answerBlocks.some(block =>
         block.type === "image" || (block.type === "text" && block.text.trim().length > 0))) return index;
     }
   }
   return -1;
+}
+
+/** Include a split answer's process at its original position, ahead of any memory tail. */
+export function turnProcessIndices(messages: AgentMessage[], start: number, end: number, final: number): number[] {
+  return messages.slice(start + 1, end).flatMap((message, offset) => {
+    const index = start + offset + 1;
+    if (isSessionActivity(message)) return [];
+    if (index === final) return message.role === "assistant" && splitFinalAssistantBlocks(message).processBlocks.length > 0 ? [index] : [];
+    return [index];
+  });
 }
 
 interface DisplayOptions {

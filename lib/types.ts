@@ -100,6 +100,8 @@ export interface AssistantMessage {
   timestamp?: number;
   /** Chat-only provenance used for Agent messages produced inside a Workflow. */
   chatWorkflow?: ChatWorkflowMessageProvenance;
+  /** Backend projection of a native maintenance trigger, separate from user replies. */
+  chatSessionActivity?: ChatSessionActivity;
   /** Chat projection identity for a message synchronized through a LongAgent. */
   chatLongAgent?: ChatLongAgentMessageProvenance;
   usage?: {
@@ -125,6 +127,12 @@ export interface ToolResultMessage {
   isError?: boolean;
   details?: unknown;
   timestamp?: number;
+}
+
+export interface ChatSessionActivity {
+  kind: "daily-summary" | "daily-summary-draft";
+  triggerEntryId: string;
+  date?: string;
 }
 
 export interface CustomMessage {

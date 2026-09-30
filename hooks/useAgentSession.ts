@@ -91,6 +91,7 @@ import { composerDraftKey as resolveComposerDraftKey } from "@/lib/composer-cont
 import { takeProjectSessionPayload } from "@/lib/session-preload.ts";
 import { parseLongAgentActivity, type LongAgentActivity } from "@/lib/long-agent-activity";
 import { parseEntryTimes } from "@/lib/turn-summary";
+import { parseSessionActivityMessages } from "@/lib/session-activity";
 import { parseWorkflowOutcome, type WorkflowOutcome } from "@/lib/workflow-outcome";
 
 export interface SessionData {
@@ -390,7 +391,7 @@ function parseSessionData(body: unknown, projectId: string): SessionData {
     tree: body.tree as SessionTreeNode[],
     leafId: typeof body.leafId === "string" ? body.leafId : null,
     context: {
-      messages: body.context.messages as AgentMessage[],
+      messages: parseSessionActivityMessages(body.context.messages),
       entryIds: body.context.entryIds as string[],
       entryTimes: parseEntryTimes(body.context.entryTimes, body.context.entryIds.length),
       thinkingLevel: body.context.thinkingLevel,

@@ -1,4 +1,5 @@
 import type { AgentEventLike } from "./agent-event-wire";
+import { parseSessionActivity } from "./session-activity.ts";
 
 export interface ChatRunStage {
   readonly workflowId: string;
@@ -92,6 +93,10 @@ export function parsePlanReview(value: unknown): PlanReview {
 
 function isMessage(value: unknown): boolean {
   if (!isRecord(value) || typeof value.role !== "string") return false;
+  if (value.chatSessionActivity !== undefined) {
+    if (value.role !== "assistant") return false;
+    try { parseSessionActivity(value.chatSessionActivity); } catch { return false; }
+  }
   if (value.role === "bashExecution") return typeof value.command === "string" && typeof value.output === "string";
   if (value.role === "custom") return typeof value.customType === "string" && (typeof value.content === "string" || Array.isArray(value.content));
   if (value.role === "user") return typeof value.content === "string" || Array.isArray(value.content);

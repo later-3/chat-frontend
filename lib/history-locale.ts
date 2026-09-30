@@ -25,6 +25,8 @@ function localizeHistory(locale: Locale) {
     }
   } catch { /* Pi owns invalid export handling. Decoration never changes its data. */ }
   const apply = () => {
+    text('[data-chat-session-activity="daily-summary"] > .chat-agent-stage-header > span', chinese ? "日终总结" : "Daily summary");
+    text('[data-chat-session-activity="daily-summary-draft"] > .chat-agent-stage-header > span', chinese ? "日终总结草稿" : "Daily summary draft");
     if (sessionDate && Number.isFinite(Date.parse(sessionDate))) text(".header-info .info-item:first-child .info-value", new Date(sessionDate).toLocaleString(locale));
     document.querySelectorAll("#messages > [id] > .message-timestamp").forEach(element => {
       const date = dates.get(element.parentElement?.id ?? "");
