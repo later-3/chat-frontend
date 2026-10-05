@@ -9,9 +9,10 @@ import { InterfaceFeedback } from "./InterfaceFeedback";
 
 import { useState, useCallback, useRef, useEffect, useLayoutEffect } from "react";
 import { FriendInspector } from "./FriendInspector";
+import { LongAgentProjectTree } from "./LongAgentProjectTree";
 import { WorkspaceNavigation, type WorkspaceSection } from "./WorkspaceNavigation";
 import { WorkspaceSettings } from "./WorkspaceSettings";
-import { IconLayoutSidebar, IconFolder, IconX, IconCalendarStats, IconHistory, IconFileDescription, IconArrowsHorizontal } from "@tabler/icons-react";
+import { IconLayoutSidebar, IconFolder, IconX, IconCalendarStats, IconHistory, IconFileDescription, IconArrowsHorizontal, IconListTree } from "@tabler/icons-react";
 import { MeasureSlider } from "./ui/MeasureSlider";
 import { ToolbarAction } from "./ui/ToolbarAction";
 import { useBrowserRouter } from "@/lib/browser-router";
@@ -534,6 +535,8 @@ export function AppShell({
   // The Friend's tasks & archive is a full-height region docked inside the chat
   // column, opened from the top bar; the right panel stays project files only.
   const [friendPanelOpen, setFriendPanelOpen] = useState(false);
+  // LA→Project→Session 三级导航：项目树默认随会话展开。
+  const [projectTreeOpen, setProjectTreeOpen] = useState(true);
   const [friendDate, setFriendDate] = useState(() => friendDateFromUrl(window.location.href));
   useEffect(() => {
     const restore = () => setFriendDate(friendDateFromUrl(window.location.href));
@@ -884,6 +887,14 @@ export function AppShell({
     if (isMobile) setSidebarOpen(false);
     router.replace(`?cwd=${encodeURIComponent(cwd ?? "")}`, { scroll: false });
   }, [activateChat, invalidateWorkspaceRestore, router, isMobile, projectDraftKey]);
+
+  // LA→Project→Session：从项目树打开归属项目的会话；服务端归属校验与普通打开一致。
+  const handleOpenProjectSession = useCallback(async (projectId: string, sessionId: string) => {
+    try {
+      const next = await fetchProjectSessionById(projectId, sessionId);
+      handleSelectSession(next);
+    } catch (cause: unknown) { setNavigationError(cause instanceof Error ? cause.message : String(cause)); }
+  }, [handleSelectSession]);
 
   const creatingFriendSession = useRef(false);
   const newSessionInCurrentContext = (cwd: string) => {
@@ -1342,6 +1353,43 @@ export function AppShell({
     if (!mobile && !showChat) return null;
     return (
       <div style={{ display: "flex", alignItems: "stretch", height: "100%" }}>
+        {mobile && selectedSession?.owner.type === "long-agent" && <>
+          {/* 窄屏：项目树与会话面板入口收进 More 弹层，两个 dock 互斥打开。 */}
+          <ToolbarAction
+            iconOnly
+            label={translate("laProjectTree.toggle")}
+            icon={<IconListTree size={18} />}
+            active={projectTreeOpen}
+            aria-expanded={projectTreeOpen}
+            aria-controls="long-agent-project-tree"
+            data-project-tree-toggle={selectedSession.owner.longAgentId}
+            onClick={() => {
+              setProjectTreeOpen((open) => {
+                const next = !open;
+                if (next) setFriendPanelOpen(false);
+                return next;
+              });
+              if (isNarrowMobile) setMobileToolbarMoreOpen(true);
+            }}
+          />
+          <ToolbarAction
+            iconOnly
+            label={translate("friendInspector.heading")}
+            icon={<IconCalendarStats size={18} />}
+            active={friendPanelOpen}
+            aria-expanded={friendPanelOpen}
+            aria-controls="friend-tasks-archive"
+            data-friend-panel-toggle={selectedSession.owner.longAgentId}
+            onClick={() => {
+              setFriendPanelOpen((open) => {
+                const next = !open;
+                if (next) setProjectTreeOpen(false);
+                return next;
+              });
+              if (isNarrowMobile) setMobileToolbarMoreOpen(true);
+            }}
+          />
+        </>}
         <ToolbarAction
           iconOnly={mobile}
           label={selectedSession ? translate("history.full") : translate("history.unsaved")}
@@ -1656,8 +1704,9 @@ export function AppShell({
       <WorkspaceNavigation section={settingsVisible ? "settings" : workspaceView === "moments" ? "moments" : workspaceView === "groups" ? "groups" : workspaceView === "topics" ? "topics" : contentPanel === "long-agents" ? "coworkers" : "projects"} onSelect={handleNavigateSection} />
       <div className="workspace-stage">
         <header className="workspace-context-bar" hidden={workspaceView !== "chat" || settingsVisible} style={workspaceView !== "chat" || settingsVisible ? { display: "none" } : undefined}>
+          {/* 侧栏开关控制左侧列表（long agent/项目会话），固定在最左，与其控制的面板同侧。 */}
           <Button iconOnly variant="ghost" type="button" className="workspace-icon" onClick={handleSidebarToggle} aria-label={translate("layout.toggleList")} aria-expanded={sidebarOpen} aria-controls="session-sidebar"><IconLayoutSidebar size={20} /></Button>
-          <span className="workspace-context-label">{translate("workspaceNav.context")}</span>
+          {/* 项目选择器仍 Portal 到此 slot（普通项目会话）；无内容时由 CSS 收起，不留空位。 */}
           <div ref={setProjectSlot} className="workspace-project-slot" />
         {/* Top bar with sidebar toggle */}
         <div
@@ -1667,21 +1716,43 @@ export function AppShell({
           style={{ flexShrink: 0, background: "var(--bg-panel)" }}
         >
         <div className="workspace-conversation-toolbar">
-          {selectedSession?.owner.type === "long-agent" ? (
-            // The session-name title is replaced by the area that actually carries
-            // information here: this Friend's tasks and day archive.
-            <ToolbarAction
-              label={translate("friendInspector.heading")}
-              icon={<IconCalendarStats size={18} />}
-              active={friendPanelOpen}
-              aria-expanded={friendPanelOpen}
-              aria-controls="friend-tasks-archive"
-              data-friend-panel-toggle={selectedSession.owner.longAgentId}
-              onClick={() => setFriendPanelOpen(open => !open)}
-            />
-          ) : (
-            <h1 className="workspace-conversation-heading" title={selectedSession?.name || undefined}>{contentPanel === "long-agents" ? translate("workspaceNav.coworkers") : selectedSession?.name || translate("i18n.newSession")}</h1>
+          {/* LA→Project→Session 三级导航（桌面）：项目树随会话展示；窄屏移入 More 弹层。 */}
+          {!isMobile && selectedSession?.owner.type === "long-agent" && (
+            <>
+              <ToolbarAction
+                label={translate("laProjectTree.toggle")}
+                icon={<IconListTree size={18} />}
+                active={projectTreeOpen}
+                aria-expanded={projectTreeOpen}
+                aria-controls="long-agent-project-tree"
+                data-project-tree-toggle={selectedSession.owner.longAgentId}
+                onClick={() => {
+                  setProjectTreeOpen((open) => {
+                    const next = !open;
+                    if (next) setFriendPanelOpen(false);
+                    return next;
+                  });
+                }}
+              />
+              <ToolbarAction
+                label={translate("friendInspector.heading")}
+                icon={<IconCalendarStats size={18} />}
+                active={friendPanelOpen}
+                aria-expanded={friendPanelOpen}
+                aria-controls="friend-tasks-archive"
+                data-friend-panel-toggle={selectedSession.owner.longAgentId}
+                onClick={() => {
+                  setFriendPanelOpen((open) => {
+                    const next = !open;
+                    if (next) setProjectTreeOpen(false);
+                    return next;
+                  });
+                }}
+              />
+            </>
           )}
+          {/* 顶栏不显示会话名/分区标题（UI/UX §18.4）；占位符把会话动作推到右侧图标组。 */}
+          <div aria-hidden="true" style={{ flex: 1, minWidth: 0 }} />
           {/* This session's actions are portalled here (UI/UX §20.5). */}
           <div ref={setChatActionsSlot} className="workspace-chat-actions-slot" />
           {isMobile && (
@@ -2112,6 +2183,24 @@ export function AppShell({
         {/* Chat content */}
         <div className="workspace-chat-row">
         {selectedSession?.owner.type === "long-agent" && (
+          // LA→Project→Session 三级导航：与 Friend 面板同款 dock，展示绑定项目与项目内会话。
+          <aside
+            className={`workspace-dock workspace-project-tree ${projectTreeOpen ? "is-open" : "is-closed"}`}
+            id="long-agent-project-tree"
+            inert={!projectTreeOpen}
+            aria-hidden={!projectTreeOpen}
+          >
+            <div className="workspace-project-tree-inner">
+              <LongAgentProjectTree
+                longAgentId={selectedSession.owner.longAgentId}
+                activeSessionId={selectedSession.id}
+                activeProjectId={selectedSession.projectId ?? null}
+                onOpenSession={handleOpenProjectSession}
+              />
+            </div>
+          </aside>
+        )}
+        {selectedSession?.owner.type === "long-agent" && (
           // Stays mounted with an open/closed class so it reveals with the same
           // width transition as the project files panel (.workspace-dock).
           <aside
@@ -2141,7 +2230,11 @@ export function AppShell({
               chatActionsSlot={chatActionsSlot}
               projectId={currentProjectId}
               deviceId={deviceId}
-              contextProjectId={activeProjectId}
+              contextProjectId={selectedSession?.owner.type === "long-agent"
+                // LA 顶栏项目选择已退役：每日/额外会话无项目（Agent 容器），
+                // 项目归属会话的执行项目 = 会话归属（服务端推导冻结）。
+                ? (selectedSession.projectId !== selectedSession.owner.longAgentId ? selectedSession.projectId ?? null : null)
+                : activeProjectId}
               session={selectedSession}
               sessionRunning={Boolean(selectedSession && runningSessionIds.has(selectedSession.id))}
               newSessionCwd={effectiveNewSessionCwd}

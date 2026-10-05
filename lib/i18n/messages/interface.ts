@@ -1971,39 +1971,19 @@ export const interfaceCopy: Record<string, { en: string; "zh-CN": string; source
     "source": "会话记忆"
   },
   "workflowCopy.session-memory.description": {
-    "en": "Complete a work turn, then record session memory. Existing memory is read on demand.",
-    "zh-CN": "完成一轮工作后记录会话记忆；已有记忆按需读取，不自动注入上下文。",
-    "source": "在一个节点会话里跑完一轮工作（work），随后由会话记忆写入 agent 记录本轮（remember）。既有记忆按需读取，不注入上下文。"
-  },
-  "workflowCopy.session-memory.node.work.name": {
-    "en": "Work",
-    "zh-CN": "工作",
-    "source": "工作"
-  },
-  "workflowCopy.session-memory.node.work.description": {
-    "en": "Complete one work turn in this node session.",
-    "zh-CN": "在当前节点会话里正常干活的一轮。",
-    "source": "在当前节点会话里正常干活的一轮。"
+    "en": "Manually maintain this session's memory: read the whole session and add, revise or confirm entries on demand.",
+    "zh-CN": "手动整理当前会话的会话记忆：读取整个会话，按需新增、修订或确认记忆条目。",
+    "source": "手动整理当前会话的会话记忆：读取整个会话，按需新增、修订或确认记忆条目。"
   },
   "workflowCopy.session-memory.node.remember.name": {
-    "en": "Record session memory",
-    "zh-CN": "记录会话记忆",
-    "source": "记录会话记忆"
+    "en": "Session memory",
+    "zh-CN": "会话记忆",
+    "source": "会话记忆"
   },
   "workflowCopy.session-memory.node.remember.description": {
-    "en": "Update session memory using this turn’s messages and work results.",
-    "zh-CN": "只依据本轮（用户消息与工作阶段产物）维护本会话的会话记忆。",
-    "source": "只依据本轮（用户消息与工作阶段产物）维护本会话的会话记忆。"
-  },
-  "workflowCopy.session-memory.agent.session-memory-worker.name": {
-    "en": "Session worker",
-    "zh-CN": "会话工作",
-    "source": "会话工作"
-  },
-  "workflowCopy.session-memory.agent.session-memory-worker.description": {
-    "en": "Complete one work turn in a topic node session.",
-    "zh-CN": "主题节点会话里正常干活的一轮。",
-    "source": "主题节点会话里正常干活的一轮。"
+    "en": "Read the current session and maintain this session's memory.",
+    "zh-CN": "读取当前会话并维护本会话的会话记忆。",
+    "source": "读取当前会话并维护本会话的会话记忆。"
   },
   "workflowCopy.session-memory.agent.session-memory-writer.name": {
     "en": "Session memory writer",
@@ -2011,9 +1991,9 @@ export const interfaceCopy: Record<string, { en: string; "zh-CN": string; source
     "source": "会话记忆写入"
   },
   "workflowCopy.session-memory.agent.session-memory-writer.description": {
-    "en": "Record reusable facts from this turn in session memory.",
-    "zh-CN": "把本轮值得跨会话复用的事实写入本会话的会话记忆。",
-    "source": "把本轮值得跨会话复用的事实写入本会话的会话记忆。"
+    "en": "Read the whole session and record facts worth reusing across sessions in session memory.",
+    "zh-CN": "读取整个会话，把值得跨会话复用的事实写入本会话的会话记忆。",
+    "source": "读取整个会话，把值得跨会话复用的事实写入本会话的会话记忆。"
   },
   "workflowCopy.topic-session-create.name": {
     "en": "Create a topic session",

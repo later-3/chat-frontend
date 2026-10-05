@@ -1,0 +1,162 @@
+.tree {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  min-width: 0;
+}
+
+.heading {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.projects,
+.sessions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.project,
+.session,
+.activeProject,
+.activeSession {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+  transition: background var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
+  min-width: 0;
+}
+
+.project:hover,
+.session:hover {
+  background: var(--bg-hover);
+}
+
+.activeProject,
+.activeSession {
+  background: var(--accent-wash);
+  border-color: var(--accent-outline);
+}
+
+.projectName,
+.sessionRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rename {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.sessionRow:hover .rename { opacity: 1; }
+
+.sessionRename {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 6px;
+  background: var(--bg-hover);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  color: var(--text);
+  font: inherit;
+}
+
+.sessionTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.projectTag {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.project {
+  position: relative;
+}
+
+.unlink {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.unlink:hover {
+  background: var(--bg-hover);
+  color: var(--danger, #c0392b);
+}
+
+.sessionMeta {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.sessionsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  min-width: 0;
+}
+
+.newSession {
+  flex-shrink: 0;
+}
+
+.addProject {
+  margin-top: 2px;
+}
+
+.hint {
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+.error {
+  margin: 0;
+  font-size: 12px;
+}

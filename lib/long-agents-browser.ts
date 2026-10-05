@@ -82,9 +82,9 @@ export interface LongAgentConfigurationDocument {
     readonly avatar: LongAgentAvatar;
     readonly enabled: boolean;
     readonly defaultProjectId: string;
+    /** Web 三级导航的项目绑定；Agent Workspace 永远首位。 */
+    readonly boundProjectIds: readonly string[];
     readonly timeZone?: string;
-    /** 回复模板；null 表示使用默认（project 尾注）。 */
-    readonly responseTemplate: string | null;
     readonly effective: LongAgentEffectiveConfig;
     readonly definition: {
       readonly schemaVersion: 1;
@@ -112,12 +112,13 @@ export interface LongAgentConfigurationDocument {
 
 export interface LongAgentConfigurationUpdate {
   readonly name: string;
-  readonly responseTemplate?: string | null;
   readonly description: string;
   /** Display avatar; `undefined` keeps the current value, `image` avatars change only via the upload endpoint. */
   readonly avatar?: { readonly kind: "auto" } | { readonly kind: "emoji"; readonly emoji: string };
   readonly enabled: boolean;
   readonly defaultProjectId: string;
+  /** 完整替换目标绑定列表；undefined 表示不改。 */
+  readonly boundProjectIds?: readonly string[];
   readonly timeZone?: string;
   readonly definition: LongAgentConfigurationDocument["agent"]["definition"];
 }
@@ -292,12 +293,12 @@ function parseLongAgentConfiguration(value: unknown): LongAgentConfigurationDocu
   if (!isRecord(value) || value.schemaVersion !== 1 || !nonEmpty(value.revision)
     || !/^[a-f0-9]{64}$/.test(value.revision) || !isRecord(value.agent)
     || !nonEmpty(value.agent.id) || !nonEmpty(value.agent.name) || typeof value.agent.description !== "string"
-    || (value.agent.responseTemplate !== undefined && value.agent.responseTemplate !== null
-      && (typeof value.agent.responseTemplate !== "string" || value.agent.responseTemplate.length > 2_000))
     || (value.agent.timeZone !== undefined && !nonEmpty(value.agent.timeZone))
     || !isRecord(value.agent.avatar)
     || !isRecord(value.agent.effective)
     || typeof value.agent.enabled !== "boolean" || !nonEmpty(value.agent.defaultProjectId)
+    || !Array.isArray(value.agent.boundProjectIds)
+    || value.agent.boundProjectIds.some((entry) => !nonEmpty(entry))
     || !isRecord(value.agent.definition) || value.agent.definition.schemaVersion !== 1
     || value.agent.definition.id !== value.agent.id || value.agent.definition.name !== value.agent.name
     || value.agent.definition.description !== (value.agent.description || "Chat Long Agent")
@@ -347,8 +348,8 @@ function parseLongAgentConfiguration(value: unknown): LongAgentConfigurationDocu
       description: value.agent.description,
       avatar: parseAvatar(value.agent.avatar),
       enabled: value.agent.enabled,
-      responseTemplate: typeof value.agent.responseTemplate === "string" ? value.agent.responseTemplate : null,
       defaultProjectId: value.agent.defaultProjectId,
+      boundProjectIds: value.agent.boundProjectIds,
       ...(typeof value.agent.timeZone === "string" ? { timeZone: value.agent.timeZone } : {}),
       effective: parseEffective(value.agent.effective),
       definition: {
@@ -589,6 +590,7 @@ export async function saveLongAgentConfiguration(
       ...(update.avatar === undefined ? {} : { avatar: update.avatar }),
       enabled: update.enabled,
       defaultProjectId: update.defaultProjectId,
+      ...(update.boundProjectIds === undefined ? {} : { boundProjectIds: update.boundProjectIds }),
       ...(update.timeZone === undefined ? {} : { timeZone: update.timeZone }),
       definition,
     }),
@@ -722,4 +724,90 @@ export async function fetchLongAgentFeed(
     });
     return { id: value.id, longAgentId: value.longAgentId, date: value.date, text: value.text, createdAt: value.createdAt, comments };
   });
+}
+
+/** 项目归属会话（LA→Project→Session 第三级）的只读列表项。 */
+export interface LongAgentProjectSession {
+  readonly sessionId: string;
+  readonly projectId: string;
+  readonly kind: "independent" | "fork" | "daily" | "additional" | "work" | "topic";
+  readonly forkedFromSessionId: string | null;
+  readonly title: string;
+  readonly createdAt: string;
+  readonly updatedAt: string | null;
+  readonly messageCount: number;
+}
+
+function parseProjectSessions(value: unknown): LongAgentProjectSession[] {
+  if (typeof value !== "object" || value === null || !Array.isArray((value as { sessions?: unknown }).sessions)) {
+    throw new Error("无效的项目会话列表");
+  }
+  return (value as { sessions: unknown[] }).sessions.map((entry) => {
+    if (typeof entry !== "object" || entry === null) throw new Error("无效的项目会话列表");
+    const item = entry as Record<string, unknown>;
+    if (typeof item.sessionId !== "string" || typeof item.projectId !== "string"
+      || !["independent", "fork", "daily", "additional", "work", "topic"].includes(item.kind as string)
+      || (item.forkedFromSessionId !== null && typeof item.forkedFromSessionId !== "string")
+      || typeof item.title !== "string" || typeof item.createdAt !== "string"
+      || (item.updatedAt !== null && typeof item.updatedAt !== "string")
+      || typeof item.messageCount !== "number") {
+      throw new Error("无效的项目会话列表");
+    }
+    return item as unknown as LongAgentProjectSession;
+  });
+}
+
+/** 5s TTL cache: switching projects/agents/back-and-forth refetches less, so the project tree isn't a full session-directory rescan on every click. */
+const projectSessionsCache = new Map<string, { at: number; list: LongAgentProjectSession[] }>();
+const PROJECT_SESSIONS_TTL_MS = 5_000;
+
+export async function fetchLongAgentProjectSessions(
+  longAgentId: string,
+  projectId: string,
+  signal?: AbortSignal,
+  options: { readonly force?: boolean } = {},
+): Promise<LongAgentProjectSession[]> {
+  const key = `${longAgentId}\u0000${projectId}`;
+  if (options.force === undefined && !options.force) {
+    const cached = projectSessionsCache.get(key);
+    if (cached !== undefined && Date.now() - cached.at <= PROJECT_SESSIONS_TTL_MS) return cached.list;
+  }
+  const response = await fetch(
+    `/api/long-agents/${encodeURIComponent(longAgentId)}/project-sessions?projectId=${encodeURIComponent(projectId)}`,
+    { cache: "no-store", credentials: "same-origin", ...(signal === undefined ? {} : { signal }) },
+  );
+  if (!response.ok) throw new Error(await response.text().catch(() => "项目会话列表加载失败"));
+  const list = parseProjectSessions(await responseBody(response));
+  projectSessionsCache.set(key, { at: Date.now(), list });
+  return list;
+}
+
+export function clearProjectSessionsCache(longAgentId?: string): void {
+  if (longAgentId === undefined) projectSessionsCache.clear();
+  else for (const key of [...projectSessionsCache.keys()]) if (key.startsWith(`${longAgentId}\u0000`)) projectSessionsCache.delete(key);
+}
+
+export async function createLongAgentProjectSession(
+  longAgentId: string,
+  input: { readonly projectId: string; readonly requestId: string; readonly forkedFromSessionId?: string },
+  signal?: AbortSignal,
+): Promise<{ sessionId: string; isNewSession: boolean }> {
+  const response = await fetch(`/api/long-agents/${encodeURIComponent(longAgentId)}/project-sessions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      projectId: input.projectId,
+      requestId: input.requestId,
+      kind: input.forkedFromSessionId === undefined ? "independent" : "fork",
+      ...(input.forkedFromSessionId === undefined ? {} : { forkedFromSessionId: input.forkedFromSessionId }),
+    }),
+    credentials: "same-origin",
+    ...(signal === undefined ? {} : { signal }),
+  });
+  if (!response.ok) throw new Error(await response.text().catch(() => "项目会话创建失败"));
+  const body = await responseBody(response) as { sessionId?: unknown; isNewSession?: unknown };
+  if (typeof body.sessionId !== "string" || typeof body.isNewSession !== "boolean") {
+    throw new Error("无效的项目会话创建响应");
+  }
+  return { sessionId: body.sessionId, isNewSession: body.isNewSession };
 }
