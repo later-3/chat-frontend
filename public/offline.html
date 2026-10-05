@@ -14,7 +14,7 @@
         color: var(--text);
       }
 
-      :root[data-theme="dark"] { color-scheme:dark; --bg:#1C1B20; --text:#EEEDF2; --text-muted:#BDB7C8; --bg-panel:#242329; --border:#423D4B; --accent:#BEB0FF; --bg-hover:#302E36; }
+      :root[data-theme="dark"] { color-scheme:dark; --bg:#232327; --text:#efedf4; --text-muted:#c1bdc8; --bg-panel:#2b2b30; --border:#424047; --accent:#c5b7f0; --bg-hover:#36353c; }
       * {
         box-sizing: border-box;
       }
@@ -81,7 +81,7 @@
         try { preference = localStorage.getItem("pi-theme") || "auto"; } catch {}
         const dark = preference === "dark" || preference !== "light" && systemTheme.matches;
         document.documentElement.dataset.theme = dark ? "dark" : "light";
-        document.querySelector('meta[name="theme-color"]').content = dark ? "#1C1B20" : "#FAF9F7";
+        document.querySelector('meta[name="theme-color"]').content = dark ? "#232327" : "#FAF9F7";
       }
       applyTheme();
       systemTheme.addEventListener("change", applyTheme);

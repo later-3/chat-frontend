@@ -3,11 +3,10 @@ import { Button } from "./ui/Button";
 import { AppearanceSettings } from "./AppearanceSettings";
 
 import { InterfaceFeedback } from "./InterfaceFeedback";
-import { IconAdjustments, IconChevronRight, IconDeviceDesktop, IconMoon, IconSun, IconPalette, IconFolder, IconUser } from "@tabler/icons-react";
+import { IconAdjustments, IconChevronRight, IconPalette, IconFolder, IconUser } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { useToolbarLabels } from "@/hooks/useToolbarLabels";
-import type { ThemePreference } from "@/hooks/useTheme";
 import type { Locale } from "@/lib/i18n/types";
 import { SearchSelect, type SelectOption } from "./SearchSelect";
 
@@ -24,7 +23,7 @@ function currentSection(): Section {
   const section = new URL(window.location.href).searchParams.get("settings");
   return section === "personal" || section === "project" || section === "utilities" ? section : "appearance";
 }
-export function WorkspaceSettings({ items, wideContent, onContentWidth, theme, onTheme, language, onLanguage, onBack, onRefresh, onSelfCheck, projectId, projects, onProject, projectError, onRetryProjects }: {
+export function WorkspaceSettings({ items, wideContent, onContentWidth, language, onLanguage, onBack, onRefresh, onSelfCheck, projectId, projects, onProject, projectError, onRetryProjects }: {
   projectError: string | null;
   onRetryProjects: () => void;
   projectId: string;
@@ -33,8 +32,6 @@ export function WorkspaceSettings({ items, wideContent, onContentWidth, theme, o
   items: WorkspaceSetting[];
   wideContent: boolean;
   onContentWidth: () => void;
-  theme: ThemePreference;
-  onTheme: (theme:ThemePreference) => void;
   language: Locale;
   onLanguage: (language:Locale) => void;
   onBack: () => void;
@@ -71,12 +68,6 @@ export function WorkspaceSettings({ items, wideContent, onContentWidth, theme, o
         <h2>{sections.find(item => item.id === section)?.label}</h2>
         {section === "appearance" && <>
           <p className="workspace-settings-scope">{t("design.appearanceHint")}</p>
-          <section className="settings-section">
-            <h3>{t("workspaceNav.theme")}</h3><p>{t("design.themeHint")}</p>
-            <div className="settings-theme-choices" role="group" aria-label={t("workspaceNav.theme")}>{([
-              ["light",IconSun], ["dark",IconMoon], ["auto",IconDeviceDesktop],
-            ] as const).map(([value,Icon]) => <button key={value} type="button" aria-pressed={theme === value} onClick={() => onTheme(value)}><Icon size={26} stroke={1.4}/><span>{t(`design.theme.${value}`)}</span></button>)}</div>
-          </section>
           <AppearanceSettings />
           <section className="settings-section"><h3>{t("workspaceNav.contentWidth")}</h3><p>{t("design.densityHint")}</p>
             <div className="settings-segments" role="group" aria-label={t("workspaceNav.contentWidth")}>{[false,true].map(wide => <button key={String(wide)} type="button" aria-pressed={wideContent === wide} onClick={() => { if (wide !== wideContent) onContentWidth(); }}>{t(wide ? "workspaceNav.wide" : "workspaceNav.standard")}</button>)}</div>

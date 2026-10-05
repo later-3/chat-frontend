@@ -33,6 +33,14 @@
 6. **透明不应穿透正文**：实看玻璃深色后，发现背景聊天字形透到表单；正文恢复实色，只在导航/浮层外壳表达玻璃。浅色弱文字经自动对比度测试调深，不能用透明和低对比冒充精致。
 7. **动画和静止布局分别验收**：窗口宽度改变后，React 响应式状态和 Dock 过渡尚未完成，原输入框几何用例偶发失败。补充绘制/过渡等待，保留完整视口断言；不以此宣称动效逐帧无问题。见[回归案例](../../../docs/development/experiences/responsive-layout-readiness.md)。
 
+## 第二轮修订（2026-10-01，按设计样板对齐）
+
+用户审定 `docs/design-previews/workflow-settings/` 样板后明确：整体按样板实施，7 套主题与布局细节都要，几乎一样。据此产生两条覆盖与一条延续：
+
+1. **覆盖首轮修订 2（主题独立轴 → 7 套预设）**：外观系统改为 7 套绑定预设（paper/glacier/peach/instagram/graphite/obsidian/dracula，4 浅 3 深，明暗随预设），偏好键升 `chat:appearance:v2` 并确定性迁移 v1。实现与验收记录见[七套预设设计文档](./appearance-seven-presets.md)。首轮修订 6 的边界保留：正文实色、玻璃只用于导航/浮层外壳。
+2. **解除首轮修订 1（单节点采样参数以真实合同落地）**：后端新增 `generation` 合同（temperature 0–2 / topP 0–1 / maxOutputTokens 1–32000）并透传 Pi 运行时；`AgentConfigSelection` 支持会话级 model/thinkingLevel/generation 覆盖（最具体，最后应用），durable 配置与 model-config API 同步扩展。模型参数由此从"只能进共享模型定义"变为节点可配的真实合同，不再伪装。
+3. **配置页按样板重构**：三标签（模型与生成/指令与输出/工具与资源）+ 范围三档（当前会话/助手默认/项目默认）+ 底部摘要条，样式对齐样板；共享模型定义入口与模型目录继续由全局模型设置承载。实施与验收记录见[工作流设置对齐文档](./workflow-settings-sample-alignment-notes.md)。
+
 ## 验收记录
 
 验证在独立 checkout 与隔离 `CHAT_HOME` 运行，使用本地假模型。未覆盖正式实例的 `.output` / `frontend/dist`，未写正式项目配置。
@@ -70,3 +78,10 @@
 ## 下一批
 
 先验证本编辑器在项目与助手两个入口的效果，再分析助手身份设置；之后分析 Chat 顶栏/输入/过程。全局颜色覆盖不等于这些页面的流程已经重做或人工全量验收。
+
+## Phase C 验收数字（2026-10-01，配置对话框三标签重构）
+
+- `pnpm typecheck` 0 错误；`pnpm test` 295 通过 / 0 失败（基线 292 + 新增 3）；`git diff --check` 干净（frontend 与父仓库）。
+- 新增自动化门禁：generation 经 `parseAgentConfigSelection` 往返与越界拒绝；durable generation 的 PUT 请求体（设置与 `"generation":null` 清除）；三档互不覆盖的源码断言。
+- i18n 守卫处理：`Temperature`/`Top-P` 标签入 i18n 键，单位后缀 `tokens` 加入既有"计量单位"允许清单。
+- 详细记录见 `./workflow-settings-sample-alignment-notes.md`。

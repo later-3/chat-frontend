@@ -10,12 +10,15 @@ import { ModelSelection, ThinkingSelection } from "./ModelSelection";
 
 import { SurfaceDialog } from "./SurfaceDialog";
 import { Button } from "./ui/Button";
+import { IconCheck, IconChevronRight, IconCircleCheck, IconEye, IconInfoCircle, IconRestore, IconRobot, IconX } from "@tabler/icons-react";
 import { useEffect, useId, useMemo, useState } from "react";
 import type {
   AgentConfigSelection,
+  AgentGenerationConfig,
   WorkflowAgentToolPolicy,
   WorkflowAgentResources,
 } from "@/lib/chat-workflow-contract";
+import { parseAgentConfigSelection } from "@/lib/chat-workflow-contract";
 import {
   clearChatAgentResourceConfig,
   clearChatAgentToolConfig,
@@ -58,6 +61,16 @@ function parseLines(value: string): string[] {
   return [...new Set(value.split("\n").map((item) => item.trim()).filter(Boolean))];
 }
 
+/** Key-order-independent comparison so drafts and baselines compare by content, not insertion order. */
+function stableValue(value: unknown): string {
+  if (value === undefined || value === null) return "";
+  if (Array.isArray(value)) return `[${value.map(stableValue).join(",")}]`;
+  if (typeof value === "object") {
+    return `{${Object.keys(value as Record<string, unknown>).sort().map((key) => `${key}:${stableValue((value as Record<string, unknown>)[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
 function ResourceCheckbox({
   label,
   detail,
@@ -73,7 +86,7 @@ function ResourceCheckbox({
 }) {
   return (
     <label className="workflow-agent-resource-option">
-      <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
+      <input type="checkbox" role="switch" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
       <span>
         <strong>{label}</strong>
         <small>{detail}</small>
@@ -94,6 +107,9 @@ function InspectionDetails({ inspection }: { inspection: WorkflowAgentInspection
             ? `${inspection.agent.effectiveModel.provider}/${inspection.agent.effectiveModel.modelId}`
             : tr("interface.not.resolved")}</dd>
           <dt>{tr("interface.thinking.level")}</dt><dd>{tr(`design.thinking.${inspection.agent.effectiveThinkingLevel}`)}</dd>
+          <dt>{tr("workflowSettings.generationTitle")}</dt>
+          <dd>{formatGeneration(inspection.agent.effectiveGeneration, tr)}
+            {inspection.agent.generationSource !== null && ` · ${tr(MODEL_SOURCE_LABELS[inspection.agent.generationSource] ?? inspection.agent.generationSource)}`}</dd>
           <dt>{tr("interface.default.configuration")}</dt><dd>{inspection.agent.configPath ?? tr("interface.built.in.definition")}</dd>
           <dt>{tr("interface.configuration.sources")}</dt>
           <dd>{inspection.agent.sources.map((source) => source.path ?? source.kind).join(" → ")}</dd>
@@ -223,7 +239,212 @@ const MODEL_SOURCE_LABELS: Record<string, string> = {
   "config-file": "interface.configuration.file",
   "workflow-default": "interface.workflow.default",
   "chat-default": "interface.chat.default",
+  selection: "workflowSettings.sourceSelection",
 };
+
+/** Renders the effective generation values; all-absent means the agent inherits upstream defaults. */
+function formatGeneration(generation: AgentGenerationConfig | null, tr: (key: string, params?: Record<string, string | number>) => string): string {
+  if (!generation) return tr("workflowSettings.inheritsDefault");
+  const parts: string[] = [];
+  if (generation.temperature !== undefined) parts.push(`Temperature ${generation.temperature}`);
+  if (generation.topP !== undefined) parts.push(`Top-P ${generation.topP}`);
+  if (generation.maxOutputTokens !== undefined) parts.push(`≤${generation.maxOutputTokens.toLocaleString()} tokens`);
+  return parts.length > 0 ? parts.join(" · ") : tr("workflowSettings.inheritsDefault");
+}
+
+/**
+ * Controlled three-field generation editor shared by every scope. Empty inputs mean
+ * "inherit"; the writer decides the storage shape (`undefined` drops the field for
+ * selections, `null` clears it through the durable model-config API). Invalid input
+ * never reaches onChange; the message surfaces through onError into the footer.
+ */
+function GenerationConfigSection({ value, inherited, maxTokensHint, disabled = false, onChange, onError }: {
+  value: AgentGenerationConfig | null;
+  inherited: AgentGenerationConfig | null;
+  maxTokensHint: number | null;
+  disabled?: boolean;
+  onChange: (next: AgentGenerationConfig | null) => void;
+  onError: (message: string | null) => void;
+}) {
+  const { t: tr } = useI18n();
+  const fieldId = useId();
+  const [temperature, setTemperature] = useState(value?.temperature === undefined ? "" : String(value.temperature));
+  const [topP, setTopP] = useState(value?.topP === undefined ? "" : String(value.topP));
+  const [maxTokens, setMaxTokens] = useState(value?.maxOutputTokens === undefined ? "" : String(value.maxOutputTokens));
+  const serialized = JSON.stringify(value ?? null);
+  // Resync local strings when the stored value changes (undo, scope switch, save),
+  // but skip when the strings already represent the same numbers ("0.70" vs 0.7).
+  useEffect(() => {
+    const same = (local: string, saved: number | undefined) => local.trim() === "" ? saved === undefined : Number(local) === saved;
+    const current = value ?? undefined;
+    if (same(temperature, current?.temperature) && same(topP, current?.topP) && same(maxTokens, current?.maxOutputTokens)) return;
+    setTemperature(current?.temperature === undefined ? "" : String(current.temperature));
+    setTopP(current?.topP === undefined ? "" : String(current.topP));
+    setMaxTokens(current?.maxOutputTokens === undefined ? "" : String(current.maxOutputTokens));
+  }, [serialized]); // eslint-disable-line react-hooks/exhaustive-deps -- value identity is captured by serialized
+
+  const emit = (nextTemperature: string, nextTopP: string, nextMaxTokens: string) => {
+    const temperatureValue = nextTemperature.trim() === "" ? undefined : Number(nextTemperature);
+    if (temperatureValue !== undefined && (!Number.isFinite(temperatureValue) || temperatureValue < 0 || temperatureValue > 2)) {
+      onError(tr("workflowSettings.errorTemperature"));
+      return;
+    }
+    const topPValue = nextTopP.trim() === "" ? undefined : Number(nextTopP);
+    if (topPValue !== undefined && (!Number.isFinite(topPValue) || topPValue < 0 || topPValue > 1)) {
+      onError(tr("workflowSettings.errorTopP"));
+      return;
+    }
+    const maxTokensValue = nextMaxTokens.trim() === "" ? undefined : Number(nextMaxTokens);
+    if (maxTokensValue !== undefined && (!Number.isInteger(maxTokensValue) || maxTokensValue < 1 || maxTokensValue > 32000)) {
+      onError(tr("workflowSettings.errorMaxTokens"));
+      return;
+    }
+    onError(null);
+    if (temperatureValue === undefined && topPValue === undefined && maxTokensValue === undefined) {
+      onChange(null);
+      return;
+    }
+    onChange({
+      ...(temperatureValue === undefined ? {} : { temperature: temperatureValue }),
+      ...(topPValue === undefined ? {} : { topP: topPValue }),
+      ...(maxTokensValue === undefined ? {} : { maxOutputTokens: maxTokensValue }),
+    });
+  };
+
+  const restoreInheritance = () => {
+    setTemperature("");
+    setTopP("");
+    setMaxTokens("");
+    onError(null);
+    onChange(null);
+  };
+
+  return (
+    <>
+      <div className="workflow-section-heading workflow-section-separated">
+        <div>
+          <h3>{tr("workflowSettings.generationTitle")}</h3>
+          <p>{tr("workflowSettings.generationHint")}</p>
+        </div>
+        <button type="button" className="workflow-text-button muted" disabled={disabled} onClick={restoreInheritance}>
+          <IconRestore size={14} aria-hidden="true" />{tr("workflowSettings.restoreInheritance")}
+        </button>
+      </div>
+      <div className="workflow-parameter-grid">
+        <div className="workflow-parameter">
+          <label htmlFor={`${fieldId}-temperature`}>{tr("workflowSettings.temperatureLabel")} <span>{tr("workflowSettings.temperatureTag")}</span></label>
+          <div className="workflow-number-wrap">
+            <input id={`${fieldId}-temperature`} type="number" inputMode="decimal" step="0.1" min="0" max="2" disabled={disabled}
+              value={temperature}
+              placeholder={inherited?.temperature !== undefined
+                ? tr("workflowSettings.inheritWithValue", { value: String(inherited.temperature) })
+                : tr("workflowSettings.inheritPlaceholder")}
+              onChange={(event) => { setTemperature(event.target.value); emit(event.target.value, topP, maxTokens); }} />
+            <span>0 — 2</span>
+          </div>
+          <p>{tr("workflowSettings.temperatureHelp")}</p>
+        </div>
+        <div className="workflow-parameter">
+          <label htmlFor={`${fieldId}-top-p`}>{tr("workflowSettings.topPLabel")} <span>{tr("workflowSettings.topPTag")}</span></label>
+          <div className="workflow-number-wrap">
+            <input id={`${fieldId}-top-p`} type="number" inputMode="decimal" step="0.05" min="0" max="1" disabled={disabled}
+              value={topP}
+              placeholder={inherited?.topP !== undefined
+                ? tr("workflowSettings.inheritWithValue", { value: String(inherited.topP) })
+                : tr("workflowSettings.inheritPlaceholder")}
+              onChange={(event) => { setTopP(event.target.value); emit(temperature, event.target.value, maxTokens); }} />
+            <span>0 — 1</span>
+          </div>
+          <p>{tr("workflowSettings.topPHelp")}</p>
+        </div>
+      </div>
+      <div className="workflow-output-row">
+        <div>
+          <label htmlFor={`${fieldId}-max-tokens`}>{tr("workflowSettings.maxTokens")}</label>
+          <p>{tr("workflowSettings.maxTokensHelp", { limit: (maxTokensHint ?? 32000).toLocaleString() })}</p>
+        </div>
+        <div className="workflow-number-wrap budget">
+          <input id={`${fieldId}-max-tokens`} type="number" inputMode="numeric" min="1" max={maxTokensHint ?? 32000} disabled={disabled}
+            value={maxTokens}
+            placeholder={inherited?.maxOutputTokens !== undefined
+              ? tr("workflowSettings.inheritWithValue", { value: inherited.maxOutputTokens.toLocaleString() })
+              : tr("workflowSettings.inheritPlaceholder")}
+            onChange={(event) => { setMaxTokens(event.target.value); emit(temperature, topP, event.target.value); }} />
+          <span>tokens</span>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/**
+ * Model/thinking/generation bound to one AgentConfigSelection draft (session scope
+ * in project sessions, assistant-default scope in the assistant entry). Clears are
+ * expressed by omitting the field so the draft never stores explicit undefined.
+ */
+function SelectionModelSection({ inspection, modelCatalog, selection, onCatalogChanged, onChange, onGenerationError }: {
+  inspection: WorkflowAgentInspection;
+  modelCatalog: ChatModelCatalog | null;
+  selection: AgentConfigSelection | undefined;
+  onCatalogChanged: () => void;
+  onChange: (patch: Partial<AgentConfigSelection>) => void;
+  onGenerationError: (message: string | null) => void;
+}) {
+  const { t: tr } = useI18n();
+  const catalogModels = modelCatalog?.models ?? [];
+  const selectedModelKey = selection?.model ? `${selection.model.provider}/${selection.model.modelId}` : "";
+  const effectiveModelKey = inspection.agent.effectiveModel
+    ? `${inspection.agent.effectiveModel.provider}/${inspection.agent.effectiveModel.modelId}`
+    : undefined;
+  const activeModelKey = selectedModelKey || effectiveModelKey || "";
+  const activeCatalogModel = catalogModels.find((model) => `${model.provider}/${model.modelId}` === activeModelKey) ?? null;
+  const levels = activeCatalogModel?.thinkingLevels ?? [];
+  const inheritedGeneration = inspection.agent.generationSource === "selection" ? null : inspection.agent.effectiveGeneration;
+
+  const applyModel = (key: string) => {
+    if (key === "") {
+      onChange({ model: undefined });
+      return;
+    }
+    const model = catalogModels.find((item) => `${item.provider}/${item.modelId}` === key);
+    if (model !== undefined) onChange({ model: { provider: model.provider, modelId: model.modelId } });
+  };
+
+  return (
+    <section className="workflow-agent-runtime-capabilities">
+      <div>
+        <strong>{tr("workflowSettings.runModel")}</strong>
+        <small>{selectedModelKey ? tr("workflowSettings.scopeOverrideActive") : tr("workflowSettings.inheritsFromDefaults")}</small>
+      </div>
+      <div className="configuration-model-fields">
+        <ModelSelection
+          models={catalogModels}
+          value={selectedModelKey}
+          inheritedModelKey={effectiveModelKey}
+          onChange={applyModel}
+          inheritLabel={tr("interface.use.workflow.default")}
+          disabled={modelCatalog === null}
+          onCatalogChanged={onCatalogChanged}
+        />
+        <ThinkingSelection
+          value={selection?.thinkingLevel ?? ""}
+          levels={levels}
+          onChange={(level) => onChange({ thinkingLevel: level === "" ? undefined : level })}
+          inheritLabel={tr("interface.use.workflow.default")}
+          disabled={modelCatalog === null}
+        />
+      </div>
+      <GenerationConfigSection
+        value={selection?.generation ?? null}
+        inherited={inheritedGeneration}
+        maxTokensHint={activeCatalogModel?.maxTokens ?? null}
+        disabled={modelCatalog === null}
+        onChange={(next) => onChange({ generation: next ?? undefined })}
+        onError={onGenerationError}
+      />
+    </section>
+  );
+}
 
 /**
  * Project-scoped durable model configuration. The selects bind to the persisted
@@ -237,6 +458,7 @@ function ModelConfigSection({
   inspection,
   modelCatalog,
   onConfigChanged,
+  onGenerationError,
 }: {
   workflow: ChatWorkflowSummary;
   agentId: string;
@@ -244,20 +466,27 @@ function ModelConfigSection({
   inspection: WorkflowAgentInspection;
   modelCatalog: ChatModelCatalog | null;
   onConfigChanged: () => void;
+  onGenerationError: (message: string | null) => void;
 }) {
   const { t: tr } = useI18n();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const durableModel = inspection.agent.durableConfig?.model ?? null;
   const durableThinking = inspection.agent.durableConfig?.thinkingLevel ?? "";
-  const hasDurableConfig = durableModel !== null || durableThinking !== "";
+  const durableGeneration = inspection.agent.durableConfig?.generation ?? null;
+  const hasDurableConfig = durableModel !== null || durableThinking !== "" || durableGeneration !== null;
   const catalogModels = modelCatalog?.models ?? [];
   const durableModelKey = durableModel === null ? "" : `${durableModel.provider}/${durableModel.modelId}`;
+  const activeModelKey = durableModelKey
+    || (inspection.agent.effectiveModel ? `${inspection.agent.effectiveModel.provider}/${inspection.agent.effectiveModel.modelId}` : "");
+  const activeCatalogModel = catalogModels.find((model) => `${model.provider}/${model.modelId}` === activeModelKey) ?? null;
+  const inheritedGeneration = inspection.agent.generationSource === "selection" ? null : inspection.agent.effectiveGeneration;
 
   const apply = async (
     input: {
       model?: { provider: string; modelId: string } | null;
       thinkingLevel?: string | null;
+      generation?: AgentGenerationConfig | null;
     } | "clear",
   ) => {
     setBusy(true);
@@ -287,6 +516,9 @@ function ModelConfigSection({
     }
     void apply({ thinkingLevel: level });
   };
+  const applyGeneration = (next: AgentGenerationConfig | null) => {
+    void apply({ generation: next });
+  };
 
   return (
     <section className="workflow-agent-runtime-capabilities">
@@ -301,8 +533,16 @@ function ModelConfigSection({
       <div className="configuration-model-fields">
       <ModelSelection models={catalogModels} value={durableModelKey} inheritedModelKey={inspection.agent.effectiveModel ? `${inspection.agent.effectiveModel.provider}/${inspection.agent.effectiveModel.modelId}` : undefined} onChange={applyModel} inheritLabel={tr("interface.use.workflow.default")} disabled={busy || modelCatalog === null} onCatalogChanged={() => onConfigChanged()} />
       <ThinkingSelection value={durableThinking} onChange={applyThinking} inheritLabel={tr("interface.use.workflow.default")} disabled={busy || modelCatalog === null}
-        levels={catalogModels.find(model => `${model.provider}/${model.modelId}` === (durableModelKey || (inspection.agent.effectiveModel ? `${inspection.agent.effectiveModel.provider}/${inspection.agent.effectiveModel.modelId}` : "")))?.thinkingLevels ?? []} />
+        levels={catalogModels.find(model => `${model.provider}/${model.modelId}` === activeModelKey)?.thinkingLevels ?? []} />
       </div>
+      <GenerationConfigSection
+        value={durableGeneration}
+        inherited={inheritedGeneration}
+        maxTokensHint={activeCatalogModel?.maxTokens ?? null}
+        disabled={busy || modelCatalog === null}
+        onChange={applyGeneration}
+        onError={onGenerationError}
+      />
       <dl className="workflow-agent-facts">
         <dt>{tr("interface.effective.model")}</dt>
         <dd>{inspection.agent.effectiveModel
@@ -312,6 +552,9 @@ function ModelConfigSection({
         <dt>{tr("interface.effective.thinking.level")}</dt>
         <dd>{tr(`design.thinking.${inspection.agent.effectiveThinkingLevel}`)}
           {inspection.agent.thinkingSource !== null && ` · ${tr(MODEL_SOURCE_LABELS[inspection.agent.thinkingSource] ?? inspection.agent.thinkingSource)}`}</dd>
+        <dt>{tr("workflowSettings.generationTitle")}</dt>
+        <dd>{formatGeneration(inspection.agent.effectiveGeneration, tr)}
+          {inspection.agent.generationSource !== null && ` · ${tr(MODEL_SOURCE_LABELS[inspection.agent.generationSource] ?? inspection.agent.generationSource)}`}</dd>
       </dl>
 
       <Button variant="secondary" type="button" disabled={busy || !hasDurableConfig} onClick={() => void apply("clear")}>{tr("interface.reset.model.and.thinking.level")}</Button>
@@ -398,6 +641,11 @@ function ToolConfigSection({
     void apply({ mode: "explicit", names: [...names], exclude: [...exclude], addresses: selectedAddresses });
   };
 
+  const systemSelected = systemTools.filter((tool) => selectedAddresses.includes(tool.address as string)).length;
+  const piSelected = effectiveTools.mode === "pi-default"
+    ? piTools.length
+    : piTools.filter((tool) => selectedNames.includes(tool.name)).length;
+
   return (
     <section className="workflow-agent-runtime-capabilities">
       <div>
@@ -411,8 +659,8 @@ function ToolConfigSection({
           <option value="none">{tr("interface.no.tools")}</option>
         </select>
       </label>
-      <div className="workflow-agent-resource-groups">
-        <h3>{tr("interface.chat.system.tools")}</h3>
+      <div className="workflow-agent-resource-groups workflow-resource-rows">
+        <h3>{tr("interface.chat.system.tools")}<span className="workflow-count-label">{systemSelected}/{systemTools.length}</span></h3>
         {systemTools.map((tool) => {
           const address = tool.address as string;
           return (
@@ -426,7 +674,7 @@ function ToolConfigSection({
             />
           );
         })}
-        <h3>{tr("interface.pi.and.project.tools")}</h3>
+        <h3>{tr("interface.pi.and.project.tools")}<span className="workflow-count-label">{piSelected}/{piTools.length}</span></h3>
         {piTools.map((tool) => (
           <ResourceCheckbox
             key={tool.name}
@@ -526,8 +774,8 @@ function ResourceConfigSection({
         </select>
       </label>
       {effectiveResources.mode === "explicit" && (
-        <div className="workflow-agent-resource-groups">
-          <h3>{tr("interface.skills")}</h3>
+        <div className="workflow-agent-resource-groups workflow-resource-rows">
+          <h3>{tr("interface.skills")}<span className="workflow-count-label">{effectiveResources.skillPaths.length}</span></h3>
           {catalog.skills.map((skill) => (
             <ResourceCheckbox
               key={skill.filePath}
@@ -538,7 +786,7 @@ function ResourceConfigSection({
               onChange={(checked) => toggle("skillPaths", skill.filePath, checked)}
             />
           ))}
-          <h3>{tr("interface.extensions")}</h3>
+          <h3>{tr("interface.extensions")}<span className="workflow-count-label">{effectiveResources.extensionPaths.length}</span></h3>
           {catalog.extensions.map((extension) => (
             <ResourceCheckbox
               key={extension.resolvedPath}
@@ -549,7 +797,7 @@ function ResourceConfigSection({
               onChange={(checked) => toggle("extensionPaths", extension.resolvedPath, checked)}
             />
           ))}
-          <h3>{tr("interface.plugins")}</h3>
+          <h3>{tr("interface.plugins")}<span className="workflow-count-label">{effectiveResources.pluginSources.length}</span></h3>
           {catalog.plugins.map((plugin) => (
             <ResourceCheckbox
               key={`${plugin.scope}:${plugin.source}`}
@@ -568,21 +816,24 @@ function ResourceConfigSection({
   );
 }
 
-type ConfigTab = "runtime" | "resources" | "session" | "inspect";
+type ConfigTab = "model" | "prompt" | "tools";
 
 const CONFIG_TABS: readonly { readonly id: ConfigTab; readonly label: string }[] = [
-  { id: "runtime", label: "workflowSettings.model" },
-  { id: "resources", label: "workflowSettings.resources" },
-  { id: "session", label: "interface.session.overrides" },
-  { id: "inspect", label: "interface.inspect.configuration" },
+  { id: "model", label: "workflowSettings.tabModel" },
+  { id: "prompt", label: "workflowSettings.tabPrompt" },
+  { id: "tools", label: "workflowSettings.tabTools" },
 ];
+
+type ConfigScope = "session" | "assistant" | "project";
 
 export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, proposals, onConfigsChange, onClose, selectionScope = "session" }: Props) {
   const { t: tr } = useI18n();
   const panelId = useId();
   const [selectedNodeId, setSelectedNodeId] = useState(workflow.nodes.find(node => node.kind === "agent")?.id ?? "");
   const [agentId, setAgentId] = useState(workflow.nodes.find(node => node.kind === "agent")?.agentId ?? workflow.agents[0]?.id ?? "");
-  const [tab, setTab] = useState<ConfigTab>("runtime");
+  const [tab, setTab] = useState<ConfigTab>("model");
+  const [scope, setScope] = useState<ConfigScope>(selectionScope === "default" ? "assistant" : "session");
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const [inspection, setInspection] = useState<WorkflowAgentInspection | null>(null);
   const [catalog, setCatalog] = useState<WorkflowAgentInspection | null>(null);
   const [promptQuery, setPromptQuery] = useState("");
@@ -591,9 +842,17 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
   const [modelConfigVersion, setModelConfigVersion] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Baseline of the session-scope drafts at dialog open; powers 撤销修改 and the dirty count.
+  const [baseline, setBaseline] = useState<Record<string, AgentConfigSelection>>(configs);
+  const [footerNotice, setFooterNotice] = useState<string | null>(null);
+  const [footerError, setFooterError] = useState<string | null>(null);
   const agent = workflow.agents.find((candidate) => candidate.id === agentId) ?? workflow.agents[0];
   const selection = agent === undefined ? undefined : configs[agent.id];
   const selectionKey = JSON.stringify(selection ?? {});
+  const node = agent === undefined ? undefined : workflow.nodes.find((candidate) => candidate.kind === "agent" && candidate.agentId === agent.id);
+  /** The configs draft is writable for the session scope in project sessions and the assistant-default scope in the assistant entry. */
+  const configsEditable = (scope === "session" && selectionScope === "session") || (scope === "assistant" && selectionScope === "default");
+  const showSessionActions = selectionScope === "session" && scope === "session";
 
   useEffect(() => {
     const controller = new AbortController();
@@ -677,11 +936,53 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
 
   if (agent === undefined) return null;
 
+  const draft = selection ?? {};
+  const savedDraft = baseline[agent.id] ?? {};
+  const draftKeys = new Set([...Object.keys(draft), ...Object.keys(savedDraft)]);
+  const changedCount = [...draftKeys].filter((key) => (
+    stableValue((draft as Record<string, unknown>)[key]) !== stableValue((savedDraft as Record<string, unknown>)[key])
+  )).length;
+
   const updateSelection = (patch: Partial<AgentConfigSelection>) => {
-    onConfigsChange({
-      ...configs,
-      [agent.id]: { ...selection, ...patch },
-    });
+    const next = { ...selection, ...patch } as Record<string, unknown>;
+    for (const key of Object.keys(next)) {
+      if (next[key] === undefined) delete next[key];
+    }
+    onConfigsChange({ ...configs, [agent.id]: next as AgentConfigSelection });
+    setFooterNotice(null);
+    setFooterError(null);
+  };
+  const changeScope = (next: ConfigScope) => {
+    setScope(next);
+    setFooterNotice(null);
+    setFooterError(null);
+  };
+  const selectNode = (nextNodeId: string, nextAgentId: string) => {
+    setSelectedNodeId(nextNodeId);
+    setFooterNotice(null);
+    setFooterError(null);
+    if (nextAgentId !== agent.id) {
+      setInspection(null);
+      setCatalog(null);
+      setAgentId(nextAgentId);
+    }
+  };
+  const undoChanges = () => {
+    onConfigsChange({ ...configs, [agent.id]: savedDraft });
+    setFooterError(null);
+    setFooterNotice(tr("workflowSettings.undone"));
+  };
+  const applyToSession = () => {
+    try {
+      parseAgentConfigSelection(draft);
+    } catch (cause: unknown) {
+      setFooterNotice(null);
+      setFooterError(cause instanceof Error ? cause.message : String(cause));
+      return;
+    }
+    setFooterError(null);
+    setBaseline((current) => ({ ...current, [agent.id]: draft }));
+    setFooterNotice(tr("workflowSettings.appliedToSession"));
   };
   const updateExplicitResources = (
     key: "skillPaths" | "extensionPaths" | "pluginSources",
@@ -711,6 +1012,18 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
       )),
     });
   };
+
+  const scopeHint = tr(
+    scope === "session"
+      ? "workflowSettings.scopeSessionHint"
+      : scope === "assistant"
+        ? (selectionScope === "default" ? "workflowSettings.scopeAssistantHint" : "workflowSettings.scopeAssistantReadonlyHint")
+        : "workflowSettings.scopeProjectHint",
+  );
+  const roleLabel = node ? translateWorkflowCopy(workflow.id, node.name, tr) : tr("workflowSettings.standaloneAgent");
+  const sourceSuffix = (source: string | null) => source === null ? "" : ` · ${tr(MODEL_SOURCE_LABELS[source] ?? source)}`;
+  const effectiveAgent = inspection?.agent ?? null;
+
   return (
     <SurfaceDialog title={translateWorkflowCopy(workflow.id, workflow.name, tr)}
       description={tr("workflowSettings.subtitle")} onClose={onClose}>
@@ -718,15 +1031,15 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
         <nav className="workflow-node-navigation" aria-label={tr("interface.workflow.agents")}>
           <div className="workflow-navigation-heading"><span>{tr("design.workflowSteps")}</span><small>{tr("workflowSettings.stepsHint")}</small></div>
           <ol className="workflow-node-list">
-            {workflow.nodes.map((node, index) => <li key={node.id}>
-              {node.kind === "agent" ? <button type="button" aria-current={node.id === selectedNodeId ? "step" : undefined}
-                className={node.id === selectedNodeId ? "active" : ""}
-                onClick={() => { setSelectedNodeId(node.id); if (node.agentId !== agent.id) { setInspection(null); setCatalog(null); setAgentId(node.agentId); } }}>
+            {workflow.nodes.map((item, index) => <li key={item.id}>
+              {item.kind === "agent" ? <button type="button" aria-current={item.id === selectedNodeId ? "step" : undefined}
+                className={item.id === selectedNodeId ? "active" : ""}
+                onClick={() => selectNode(item.id, item.agentId)}>
                 <span className="workflow-node-number" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
-                <span><strong>{translateWorkflowCopy(workflow.id, node.name, tr)}</strong><small>{translateWorkflowCopy(workflow.id, node.description, tr)}</small></span>
+                <span><strong>{translateWorkflowCopy(workflow.id, item.name, tr)}</strong><small>{translateWorkflowCopy(workflow.id, item.description, tr)}</small></span>
               </button> : <div className="workflow-task-node">
                 <span className="workflow-node-number" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
-                <span><strong>{translateWorkflowCopy(workflow.id, node.name, tr)}</strong><small>{tr("workflowSettings.taskNode")}</small></span>
+                <span><strong>{translateWorkflowCopy(workflow.id, item.name, tr)}</strong><small>{tr("workflowSettings.taskNode")}</small></span>
               </div>}
             </li>)}
           </ol>
@@ -737,11 +1050,32 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
           <p className="workflow-navigation-note">{tr("workflowSettings.structureHint")}</p>
         </nav>
         <main>
-          <section className="workflow-agent-config-fields workflow-agent-intro">
-            <span className="workflow-scope-label">{tr(selectionScope === "default" ? "workflowSettings.homeScope" : "workflowSettings.projectScope")}</span>
-            <h2>{translateWorkflowCopy(workflow.id, agent.name, tr)}</h2>
-            <p>{translateWorkflowCopy(workflow.id, agent.description, tr)}</p>
-          </section>
+          <div className="workflow-scope-picker">
+            <label className="workflow-scope-control">
+              <span>{tr("workflowSettings.scopeLabel")}</span>
+              <select value={scope} aria-label={tr("workflowSettings.scopeLabel")} onChange={(event) => changeScope(event.target.value as ConfigScope)}>
+                {selectionScope === "session" && <option value="session">{tr("workflowSettings.scopeSession")}</option>}
+                <option value="assistant">{tr("workflowSettings.scopeAssistant")}</option>
+                <option value="project">{tr("workflowSettings.scopeProject")}</option>
+              </select>
+            </label>
+            <p className="workflow-scope-caption">{scopeHint}</p>
+          </div>
+
+          <div className="workflow-node-header">
+            <span className="workflow-node-avatar" aria-hidden="true"><IconRobot size={24} /></span>
+            <div className="workflow-node-title">
+              <div>
+                <h2>{translateWorkflowCopy(workflow.id, agent.name, tr)}</h2>
+                <span className="workflow-role-tag">{roleLabel}</span>
+              </div>
+              <p>{translateWorkflowCopy(workflow.id, agent.description, tr)}</p>
+            </div>
+            <button type="button" className={`workflow-inspect-toggle${inspectorOpen ? " active" : ""}`} aria-pressed={inspectorOpen}
+              aria-label={tr("workflowSettings.inspectToggle")} onClick={() => setInspectorOpen((open) => !open)}>
+              <IconEye size={19} />
+            </button>
+          </div>
 
           <div className="workflow-agent-tabs" role="tablist" aria-label={tr("interface.agent.configuration.sections")}>
             {CONFIG_TABS.map((item) => (
@@ -754,7 +1088,7 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
                 aria-selected={tab === item.id}
                 tabIndex={tab === item.id ? 0 : -1}
                 onKeyDown={event => {
-                  const index = CONFIG_TABS.findIndex(item => item.id === tab);
+                  const index = CONFIG_TABS.findIndex(candidate => candidate.id === tab);
                   const next = event.key === "Home" ? 0 : event.key === "End" ? CONFIG_TABS.length - 1
                     : event.key === "ArrowRight" ? (index + 1) % CONFIG_TABS.length
                     : event.key === "ArrowLeft" ? (index + CONFIG_TABS.length - 1) % CONFIG_TABS.length : -1;
@@ -766,7 +1100,7 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
                 className={tab === item.id ? "active" : ""}
                 onClick={() => setTab(item.id)}
               >
-                {tr(item.id === "session" && selectionScope === "default" ? "longAgentSettings.workflowDefaults" : item.label)}
+                {tr(item.label)}
               </button>
             ))}
           </div>
@@ -774,148 +1108,268 @@ export function WorkflowAgentConfigDialog({ workflow, projectId, cwd, configs, p
           {loading && <div className="workflow-agent-loading">{tr("interface.resolving.the.agent.through.pi.s.execution.path")}</div>}
           {error && <div className="workflow-agent-error" role="alert"><InterfaceFeedback message={error} /><Button variant="ghost" onClick={() => setModelConfigVersion(version => version + 1)}>{tr("common.retry")}</Button></div>}
 
-          {tab === "runtime" && (
-            <div className="workflow-agent-tab-panel" role="tabpanel" id={`${panelId}-panel`} aria-labelledby={`${panelId}-${tab}`} tabIndex={0} aria-label={tr("interface.model.and.tools")}>
-              <p className="workflow-agent-tab-note">{tr("interface.changes.save.automatically.to.this.project.and.apply.from.the.next.run")}</p>
-              {inspection && (
-                <ModelConfigSection
-                  key={`${projectId}:${agent.id}`}
-                  workflow={workflow}
-                  agentId={agent.id}
-                  projectId={projectId}
-                  inspection={inspection}
-                  modelCatalog={modelCatalog}
-                  onConfigChanged={() => setModelConfigVersion((version) => version + 1)}
-                />
-              )}
-            </div>
-          )}
+          <div className="workflow-editor-body" role="tabpanel" id={`${panelId}-panel`} aria-labelledby={`${panelId}-${tab}`} tabIndex={0}>
+            {tab === "model" && effectiveAgent && (
+              <>
+                {scope === "project" && (
+                  <ModelConfigSection
+                    key={`${projectId}:${agent.id}`}
+                    workflow={workflow}
+                    agentId={agent.id}
+                    projectId={projectId}
+                    inspection={inspection as WorkflowAgentInspection}
+                    modelCatalog={modelCatalog}
+                    onConfigChanged={() => setModelConfigVersion((version) => version + 1)}
+                    onGenerationError={setFooterError}
+                  />
+                )}
+                {configsEditable && (
+                  <SelectionModelSection
+                    key={`${scope}:${projectId}:${agent.id}`}
+                    inspection={inspection as WorkflowAgentInspection}
+                    modelCatalog={modelCatalog}
+                    selection={selection}
+                    onCatalogChanged={() => setModelConfigVersion((version) => version + 1)}
+                    onChange={updateSelection}
+                    onGenerationError={setFooterError}
+                  />
+                )}
+                {!configsEditable && scope === "assistant" && (
+                  <section className="workflow-agent-runtime-capabilities">
+                    <div>
+                      <strong>{tr("workflowSettings.scopeAssistant")}</strong>
+                      <small>{tr("workflowSettings.assistantReadonlyNote")}</small>
+                    </div>
+                    <dl className="workflow-agent-facts">
+                      <dt>{tr("interface.effective.model")}</dt>
+                      <dd>{effectiveAgent.effectiveModel
+                        ? `${effectiveAgent.effectiveModel.provider}/${effectiveAgent.effectiveModel.modelId}`
+                        : tr("interface.not.resolved")}{sourceSuffix(effectiveAgent.modelSource)}</dd>
+                      <dt>{tr("interface.effective.thinking.level")}</dt>
+                      <dd>{tr(`design.thinking.${effectiveAgent.effectiveThinkingLevel}`)}{sourceSuffix(effectiveAgent.thinkingSource)}</dd>
+                      <dt>{tr("workflowSettings.generationTitle")}</dt>
+                      <dd>{formatGeneration(effectiveAgent.effectiveGeneration, tr)}{sourceSuffix(effectiveAgent.generationSource)}</dd>
+                    </dl>
+                  </section>
+                )}
+                <button type="button" className="workflow-effective-summary" aria-expanded={inspectorOpen}
+                  onClick={() => setInspectorOpen(true)}>
+                  <span className="workflow-summary-icon" aria-hidden="true"><IconCircleCheck size={17} /></span>
+                  <span>
+                    <strong>{tr("workflowSettings.effectiveSummaryTitle")}</strong>
+                    <small>{effectiveAgent.effectiveModel
+                      ? `${effectiveAgent.effectiveModel.provider}/${effectiveAgent.effectiveModel.modelId}`
+                      : tr("interface.not.resolved")}
+                      {" · "}{tr(`design.thinking.${effectiveAgent.effectiveThinkingLevel}`)}
+                      {" · "}{formatGeneration(effectiveAgent.effectiveGeneration, tr)}</small>
+                  </span>
+                  <IconChevronRight size={17} />
+                </button>
+              </>
+            )}
 
-          {tab === "resources" && (
-            <div className="workflow-agent-tab-panel" role="tabpanel" id={`${panelId}-panel`} aria-labelledby={`${panelId}-${tab}`} tabIndex={0}>
-              <p className="workflow-agent-tab-note">{tr("interface.changes.save.automatically.to.this.project.and.apply.from.the.next.run")}</p>
-              {inspection && catalog && (
-                <div className="workflow-resource-section">
-                <ToolConfigSection
-                  key={`${projectId}:${agent.id}`}
-                  workflow={workflow}
-                  agentId={agent.id}
-                  projectId={projectId}
-                  inspection={inspection}
-                  catalog={catalog}
-                  onConfigChanged={() => setModelConfigVersion((version) => version + 1)}
-                /></div>
-              )}
-              {inspection && catalog && (
-                <ConfigurationSection title={tr("design.resourceSettings")}>
-                <ResourceConfigSection
-                  key={`${projectId}:${agent.id}`}
-                  workflow={workflow}
-                  agentId={agent.id}
-                  projectId={projectId}
-                  inspection={inspection}
-                  catalog={catalog}
-                  onConfigChanged={() => setModelConfigVersion((version) => version + 1)}
-                /></ConfigurationSection>
-              )}
-              {inspection && <ConfigurationSection title={tr("design.effectiveCapabilities")}><RuntimeCapabilities inspection={inspection} /></ConfigurationSection>}
-            </div>
-          )}
-
-          {tab === "session" && (
-            <div className="workflow-agent-tab-panel" role="tabpanel" id={`${panelId}-panel`} aria-labelledby={`${panelId}-${tab}`} tabIndex={0} aria-label={tr(selectionScope === "default" ? "longAgentSettings.workflowDefaults" : "interface.session.overrides")}>
+            {tab === "prompt" && inspection && (
               <section className="workflow-agent-config-fields">
-                <div className="workflow-agent-config-actions">
-                  <small>{tr(selectionScope === "default" ? "workflowSettings.defaultSaveHint" : "interface.changes.apply.to.this.workflow.agent.in.the.current.session.and.are.submitted.with.the.next.message")}</small>
-                  <Button variant="secondary" type="button" onClick={() => onConfigsChange({ ...configs, [agent.id]: {} })}>{tr("interface.restore.workflow.defaults")}</Button>
+                <div className="workflow-section-heading">
+                  <h3>{tr("workflowSettings.basePromptTitle")}</h3>
+                  <span className="workflow-source-label">{inspection.prompt.base.sourcePath ?? tr("workflowSettings.basePromptFromWorkflow")}</span>
+                </div>
+                <div className="workflow-instruction-preview">
+                  <p>{inspection.prompt.base.text ?? (inspection.prompt.base.mode === "pi-default" ? tr("workflowSettings.basePromptPiDefault") : tr("interface.no.content.to.display"))}</p>
                 </div>
 
+                {configsEditable && (
+                  <div className="workflow-agent-config-actions">
+                    <small>{tr(scope === "session" ? "interface.changes.apply.to.this.workflow.agent.in.the.current.session.and.are.submitted.with.the.next.message" : "workflowSettings.defaultSaveHint")}</small>
+                    <Button variant="secondary" type="button" onClick={() => onConfigsChange({ ...configs, [agent.id]: {} })}>{tr("interface.restore.workflow.defaults")}</Button>
+                  </div>
+                )}
 
-                <fieldset>
-                  <legend>{tr("interface.rule.and.experience.prompts.2")}</legend>
-                  <label className="workflow-resource-search">{tr("workflowSettings.searchPrompts")}<input type="search" value={promptQuery} onChange={event => setPromptQuery(event.target.value)} /></label>
-                  <div className="workflow-agent-resource-groups workflow-prompt-options">
-                    {proposals.filter((proposal) => (
-                      proposal.targetWorkflowId === workflow.id
-                      && proposal.targetAgentId === agent.id
-                      && proposal.resolution === undefined
-                    )).map((proposal) => (
-                      <article key={proposal.id} className="workflow-agent-prompt-proposal">
-                        <strong>{tr("interface.agent.suggestions.awaiting.confirmation")}</strong>
-                        <p>{proposal.summary}</p>
-                        <small>{proposal.promptResources.map((resource) => resource.reason ?? resource.id).join("；")}</small>
+                {configsEditable && (
+                  <fieldset>
+                    <legend>{tr("interface.rule.and.experience.prompts.2")}</legend>
+                    <label className="workflow-resource-search">{tr("workflowSettings.searchPrompts")}<input type="search" value={promptQuery} onChange={event => setPromptQuery(event.target.value)} /></label>
+                    <div className="workflow-agent-resource-groups workflow-prompt-options">
+                      {proposals.filter((proposal) => (
+                        proposal.targetWorkflowId === workflow.id
+                        && proposal.targetAgentId === agent.id
+                        && proposal.resolution === undefined
+                      )).map((proposal) => (
+                        <article key={proposal.id} className="workflow-agent-prompt-proposal">
+                          <strong>{tr("interface.agent.suggestions.awaiting.confirmation")}</strong>
+                          <p>{proposal.summary}</p>
+                          <small>{proposal.promptResources.map((resource) => resource.reason ?? resource.id).join("；")}</small>
+                        </article>
+                      ))}
+                      {visiblePrompts.map((resource) => {
+                        const address = promptResourceAddress(resource.target, resource.id);
+                        const selected = selection?.promptResources?.find((item) => (
+                          promptResourceAddress(item.target, item.id) === address
+                        ));
+                        return (
+                          <ResourceCheckbox
+                            key={address}
+                            label={`${resource.title}${selected?.selectedBy === "agent" ? tr("interface..suggested.by.agent") : ""}`}
+                            detail={`${address} · ${resource.kind === "rule" ? tr("interface.rule") : tr("interface.experience")} · v${resource.revision}${resource.status === "archived" ? tr("interface..archived") : ""} · ${selected?.reason ?? resource.purpose}`}
+                            checked={selected !== undefined}
+                            disabled={resource.status === "archived" && selected === undefined}
+                            onChange={(checked) => updatePromptResource(resource, checked)}
+                          />
+                        );
+                      })}
+                      {(selection?.promptResources ?? []).filter((selected) => (
+                        !promptResources.some((resource) => (
+                          promptResourceAddress(resource.target, resource.id)
+                          === promptResourceAddress(selected.target, selected.id)
+                        ))
+                      )).map((selected) => {
+                        const address = promptResourceAddress(selected.target, selected.id);
+                        return (
+                          <ResourceCheckbox
+                            key={address}
+                            label={`${selected.id}${selected.selectedBy === "agent" ? tr("interface..suggested.by.agent") : ""}`}
+                            detail={tr("inspection.unavailableResource", { address, reason: selected.reason ?? tr("interface.deselect.this.item.to.reconfigure.it") })}
+                            checked
+                            onChange={() => removePromptResource(selected.target, selected.id)}
+                          />
+                        );
+                      })}
+                      {promptResources.length > 0 && visiblePrompts.length === 0 && <small>{tr("workflowSettings.noMatches")}</small>}
+                      {promptResources.length === 0 && <small>{tr("interface.no.active.resources.yet.use.the.rules.and.experiences.workflow.to.create.them.through.conversation")}</small>}
+                    </div>
+                  </fieldset>
+                )}
+
+                {configsEditable && (
+                  <ConfigurationSection title={tr("workflowSettings.configFiles")}>
+                  <label>{tr("interface.primary.configuration.file")}<input value={selection?.primary ?? ""} placeholder="/path/to/agent.json" onChange={(event) => updateSelection({ primary: event.target.value.trim() || undefined })} /></label>
+                  <label>{tr("interface.additional.configuration.files.one.per.line")}<textarea value={lines(selection?.append)} onChange={(event) => updateSelection({ append: parseLines(event.target.value) })} /></label>
+                  <label>{tr("interface.additional.prompt.files.one.per.line")}<textarea value={lines(selection?.promptFiles)} onChange={(event) => updateSelection({ promptFiles: parseLines(event.target.value) })} /></label>
+                  </ConfigurationSection>
+                )}
+
+                <details className="workflow-advanced">
+                  <summary>{tr("workflowSettings.advancedTitle")}</summary>
+                  <div>
+                    <div>
+                      <strong>{tr("interface.configuration.sources")}</strong>
+                      <small>{inspection.agent.sources.map((source) => source.path ?? source.kind).join(" → ") || tr("interface.none")}</small>
+                    </div>
+                    {inspection.prompt.append.map((item, index) => (
+                      <article key={`${item.sourcePath ?? "inline"}-${index}`}>
+                        <strong>{tr("inspection.appendedSection", { number: index + 1 })}</strong>
+                        <small>{item.sourcePath ?? tr("interface.inline.content")}</small>
+                        <pre>{item.text}</pre>
                       </article>
                     ))}
-                    {visiblePrompts.map((resource) => {
-                      const address = promptResourceAddress(resource.target, resource.id);
-                      const selected = selection?.promptResources?.find((item) => (
-                        promptResourceAddress(item.target, item.id) === address
-                      ));
-                      return (
-                        <ResourceCheckbox
-                          key={address}
-                          label={`${resource.title}${selected?.selectedBy === "agent" ? tr("interface..suggested.by.agent") : ""}`}
-                          detail={`${address} · ${resource.kind === "rule" ? tr("interface.rule") : tr("interface.experience")} · v${resource.revision}${resource.status === "archived" ? tr("interface..archived") : ""} · ${selected?.reason ?? resource.purpose}`}
-                          checked={selected !== undefined}
-                          disabled={resource.status === "archived" && selected === undefined}
-                          onChange={(checked) => updatePromptResource(resource, checked)}
-                        />
-                      );
-                    })}
-                    {(selection?.promptResources ?? []).filter((selected) => (
-                      !promptResources.some((resource) => (
-                        promptResourceAddress(resource.target, resource.id)
-                        === promptResourceAddress(selected.target, selected.id)
-                      ))
-                    )).map((selected) => {
-                      const address = promptResourceAddress(selected.target, selected.id);
-                      return (
-                        <ResourceCheckbox
-                          key={address}
-                          label={`${selected.id}${selected.selectedBy === "agent" ? tr("interface..suggested.by.agent") : ""}`}
-                          detail={tr("inspection.unavailableResource", { address, reason: selected.reason ?? tr("interface.deselect.this.item.to.reconfigure.it") })}
-                          checked
-                          onChange={() => removePromptResource(selected.target, selected.id)}
-                        />
-                      );
-                    })}
-                    {promptResources.length > 0 && visiblePrompts.length === 0 && <small>{tr("workflowSettings.noMatches")}</small>}
-                    {promptResources.length === 0 && <small>{tr("interface.no.active.resources.yet.use.the.rules.and.experiences.workflow.to.create.them.through.conversation")}</small>}
+                    {inspection.prompt.contextFiles.map((item) => (
+                      <article key={item.path}>
+                        <strong>{tr("interface.project.context")}</strong><small>{item.path}</small><pre>{item.content}</pre>
+                      </article>
+                    ))}
                   </div>
-                </fieldset>
-
-                <fieldset>
-                  <legend>{tr("interface.skills.extensions.and.plugins")}</legend>
-                  <label className="workflow-agent-resource-mode">
-                    <input type="radio" checked={effectiveResources.mode === "inherit"} onChange={() => updateSelection({ resources: { mode: "inherit" } })} />{tr("interface.use.pi.default.resources")}</label>
-                  <label className="workflow-agent-resource-mode">
-                    <input type="radio" checked={effectiveResources.mode === "explicit"} onChange={() => updateSelection({ resources: { mode: "explicit", skillPaths: [], extensionPaths: [], pluginSources: [] } })} />{tr("interface.select.resources.for.this.agent")}</label>
-                  {effectiveResources.mode === "explicit" && catalog && (
-                    <div className="workflow-agent-resource-groups">
-                      <h3>{tr("interface.skills")}</h3>
-                      {catalog.skills.map((skill) => <ResourceCheckbox key={skill.filePath} label={skill.name} detail={skill.filePath} checked={effectiveResources.skillPaths.includes(skill.filePath)} onChange={(checked) => updateExplicitResources("skillPaths", skill.filePath, checked)} />)}
-                      <h3>{tr("interface.extensions")}</h3>
-                      {catalog.extensions.map((extension) => <ResourceCheckbox key={extension.resolvedPath} label={extension.resolvedPath.split("/").pop() ?? extension.resolvedPath} detail={extension.resolvedPath} checked={effectiveResources.extensionPaths.includes(extension.resolvedPath)} onChange={(checked) => updateExplicitResources("extensionPaths", extension.resolvedPath, checked)} />)}
-                      <h3>{tr("interface.plugins")}</h3>
-                      {catalog.plugins.map((plugin) => <ResourceCheckbox key={`${plugin.scope}:${plugin.source}`} label={plugin.source} detail={tr("inspection.pluginContents", { skills: plugin.skills.length, extensions: plugin.extensions.length, prompts: plugin.prompts.length })} checked={effectiveResources.pluginSources.includes(plugin.source)} onChange={(checked) => updateExplicitResources("pluginSources", plugin.source, checked)} />)}
-                    </div>
-                  )}
-                </fieldset>
-                <ConfigurationSection title={tr("workflowSettings.configFiles")}>
-                <label>{tr("interface.primary.configuration.file")}<input value={selection?.primary ?? ""} placeholder="/path/to/agent.json" onChange={(event) => updateSelection({ primary: event.target.value.trim() || undefined })} /></label>
-                <label>{tr("interface.additional.configuration.files.one.per.line")}<textarea value={lines(selection?.append)} onChange={(event) => updateSelection({ append: parseLines(event.target.value) })} /></label>
-                <label>{tr("interface.additional.prompt.files.one.per.line")}<textarea value={lines(selection?.promptFiles)} onChange={(event) => updateSelection({ promptFiles: parseLines(event.target.value) })} /></label>
-                </ConfigurationSection>
+                </details>
               </section>
-            </div>
+            )}
+
+            {tab === "tools" && (
+              <>
+                {inspection && catalog && (
+                  <div className="workflow-resource-section">
+                  <ToolConfigSection
+                    key={`${projectId}:${agent.id}`}
+                    workflow={workflow}
+                    agentId={agent.id}
+                    projectId={projectId}
+                    inspection={inspection}
+                    catalog={catalog}
+                    onConfigChanged={() => setModelConfigVersion((version) => version + 1)}
+                  /></div>
+                )}
+                {inspection && catalog && (
+                  <ConfigurationSection title={tr("design.resourceSettings")}>
+                  <ResourceConfigSection
+                    key={`${projectId}:${agent.id}`}
+                    workflow={workflow}
+                    agentId={agent.id}
+                    projectId={projectId}
+                    inspection={inspection}
+                    catalog={catalog}
+                    onConfigChanged={() => setModelConfigVersion((version) => version + 1)}
+                  /></ConfigurationSection>
+                )}
+                {inspection && <ConfigurationSection title={tr("design.effectiveCapabilities")}><RuntimeCapabilities inspection={inspection} /></ConfigurationSection>}
+                {configsEditable && inspection && catalog && (
+                  <ConfigurationSection title={tr(scope === "session" ? "workflowSettings.sessionResourceOverrides" : "longAgentSettings.workflowDefaults")}>
+                    <div className="workflow-agent-config-fields">
+                      <small>{tr(scope === "session" ? "interface.changes.apply.to.this.workflow.agent.in.the.current.session.and.are.submitted.with.the.next.message" : "workflowSettings.defaultSaveHint")}</small>
+                      <fieldset>
+                        <legend>{tr("interface.skills.extensions.and.plugins")}</legend>
+                        <label className="workflow-agent-resource-mode">
+                          <input type="radio" checked={effectiveResources.mode === "inherit"} onChange={() => updateSelection({ resources: { mode: "inherit" } })} />{tr("interface.use.pi.default.resources")}</label>
+                        <label className="workflow-agent-resource-mode">
+                          <input type="radio" checked={effectiveResources.mode === "explicit"} onChange={() => updateSelection({ resources: { mode: "explicit", skillPaths: [], extensionPaths: [], pluginSources: [] } })} />{tr("interface.select.resources.for.this.agent")}</label>
+                        {effectiveResources.mode === "explicit" && (
+                          <div className="workflow-agent-resource-groups workflow-resource-rows">
+                            <h3>{tr("interface.skills")}<span className="workflow-count-label">{effectiveResources.mode === "explicit" ? effectiveResources.skillPaths.length : 0}</span></h3>
+                            {catalog.skills.map((skill) => <ResourceCheckbox key={skill.filePath} label={skill.name} detail={skill.filePath} checked={effectiveResources.mode === "explicit" && effectiveResources.skillPaths.includes(skill.filePath)} onChange={(checked) => updateExplicitResources("skillPaths", skill.filePath, checked)} />)}
+                            <h3>{tr("interface.extensions")}<span className="workflow-count-label">{effectiveResources.mode === "explicit" ? effectiveResources.extensionPaths.length : 0}</span></h3>
+                            {catalog.extensions.map((extension) => <ResourceCheckbox key={extension.resolvedPath} label={extension.resolvedPath.split("/").pop() ?? extension.resolvedPath} detail={extension.resolvedPath} checked={effectiveResources.mode === "explicit" && effectiveResources.extensionPaths.includes(extension.resolvedPath)} onChange={(checked) => updateExplicitResources("extensionPaths", extension.resolvedPath, checked)} />)}
+                            <h3>{tr("interface.plugins")}<span className="workflow-count-label">{effectiveResources.mode === "explicit" ? effectiveResources.pluginSources.length : 0}</span></h3>
+                            {catalog.plugins.map((plugin) => <ResourceCheckbox key={`${plugin.scope}:${plugin.source}`} label={plugin.source} detail={tr("inspection.pluginContents", { skills: plugin.skills.length, extensions: plugin.extensions.length, prompts: plugin.prompts.length })} checked={effectiveResources.mode === "explicit" && effectiveResources.pluginSources.includes(plugin.source)} onChange={(checked) => updateExplicitResources("pluginSources", plugin.source, checked)} />)}
+                          </div>
+                        )}
+                      </fieldset>
+                    </div>
+                  </ConfigurationSection>
+                )}
+              </>
+            )}
+          </div>
+
+          {inspectorOpen && inspection && (
+            <section className="workflow-inspection-panel" aria-label={tr("workflowSettings.inspectPanelTitle")}>
+              <div className="workflow-inspection-heading">
+                <h3>{tr("workflowSettings.inspectPanelTitle")}</h3>
+                <button type="button" className="workflow-inspect-toggle" aria-label={tr("workflowSettings.inspectClose")} onClick={() => setInspectorOpen(false)}>
+                  <IconX size={16} />
+                </button>
+              </div>
+              <RuntimeCapabilities inspection={inspection} />
+              <InspectionDetails inspection={inspection} />
+            </section>
           )}
 
-          {tab === "inspect" && (
-            <div className="workflow-agent-tab-panel" role="tabpanel" id={`${panelId}-panel`} aria-labelledby={`${panelId}-${tab}`} tabIndex={0} aria-label={tr("interface.inspect.configuration")}>
-              {inspection && <RuntimeCapabilities inspection={inspection} />}
-              {inspection && <InspectionDetails inspection={inspection} />}
+          <footer className="workflow-editor-footer">
+            <div className="workflow-save-state" aria-live="polite">
+              {footerError ? (
+                <span className="workflow-status-error"><IconInfoCircle size={16} aria-hidden="true" />{footerError}</span>
+              ) : footerNotice ? (
+                <span className="workflow-status-success"><IconCheck size={16} aria-hidden="true" />{footerNotice}</span>
+              ) : showSessionActions ? (
+                <>
+                  <span className={changedCount > 0 ? "workflow-dirty-dot" : "workflow-neutral-dot"} aria-hidden="true" />
+                  <div>
+                    <strong>{changedCount > 0
+                      ? tr("workflowSettings.dirtyCount", { count: changedCount })
+                      : Object.keys(draft).length === 0 ? tr("workflowSettings.usingDefaults") : tr("workflowSettings.appliedState")}</strong>
+                    <small>{scopeHint}</small>
+                  </div>
+                </>
+              ) : (
+                <div>
+                  <strong>{tr("workflowSettings.savedImmediately")}</strong>
+                  <small>{scopeHint}</small>
+                </div>
+              )}
             </div>
-          )}
+            {showSessionActions && (
+              <div className="workflow-footer-actions">
+                <Button variant="secondary" type="button" disabled={changedCount === 0} onClick={undoChanges}>{tr("workflowSettings.undoChanges")}</Button>
+                <Button variant="primary" type="button" disabled={changedCount === 0} onClick={applyToSession}>{tr("workflowSettings.applyToSession")}</Button>
+              </div>
+            )}
+          </footer>
         </main>
       </div>
     </SurfaceDialog>

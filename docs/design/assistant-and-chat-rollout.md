@@ -54,3 +54,36 @@
 ### 下一轮
 
 先观察用户对这两页的反馈，再逐项改善运行中对话与已完成过程的可读性、助手任务和记忆详情。保持“场景 → 信息 → 关系 → 表达 → 视觉 → 验证”的记录，不因增加皮肤而跳过前面的判断。
+
+## 顶栏收敛：会话名回归修复与图标归组
+
+日期：2026-10-02。最小记录。
+
+- 任务与入口：用户在 Friend（长期助手）会话顶栏看到会话名 `Nexus · Ziji Content Lab · 新会话` 重新出现，且“Project”标签加空的 `workspace-project-slot` 在无选择器内容时仍占 112–240px 空位，侧栏收起开关单独占最左一格。入口：聊天顶栏（桌面与窄屏）。
+- 当前问题与证据：未提交改动把 `workspace-conversation-heading` 改为显示 long agent 会话名，违反 [ui-ux-guidelines §18.4/§620](../ui-ux-guidelines.md) 已固化的“Friend 会话顶栏不显示会话名”合同；slot 空置时仍保留 flex 基数形成死区域。
+- 信息清单与来源：会话名仅来自 Session 列表事实，顶栏不承载会话身份；项目选择器仍是普通项目会话的顶栏事实源（Portal 到 slot）；侧栏开关是面板控制，不是会话信息。
+- 关系推导：会话身份 → 会话列表/历史表达，顶栏只保留按用途命名的动作；无内容的 Portal 宿主 → 不参与布局（`:empty` 收起）；面板开关与其控制的面板同侧 → 侧栏开关固定最左，项目资料开关留在右端。
+- 实施映射：`AppShell` 移除独立左区（标签 + 空位）；heading 整体删除——顶栏不显示会话名，也不显示 "Friends" 分区标题，仅保留一个占位符把会话动作推到右侧图标组；`workspace.css` 删除 `.workspace-context-label` 与 `.workspace-conversation-heading` 全部规则，新增 `.workspace-project-slot:empty { display:none }`，分隔线改挂在非空 slot 上。
+- 验收：顶栏除功能图标外不显示任何文字标题；普通项目会话顶栏选择器、动作不变；窄屏与桌面、明暗主题下图标排列一致；`pnpm test`、`pnpm typecheck`、`pnpm build` 通过。
+- 修订（2026-10-02，用户纠正）：第一版把侧栏开关移到右侧图标组、并为 long agent/同事面板保留 "Friends" 分区标题，均为擅自发挥。用户明确：开关控制左侧列表，必须固定最左；顶栏彻底不显示任何标题文字，未要求的内容不得添加。规范同步见 ui-ux-guidelines §7 与 development.md §页面适配入口。
+
+## LA 项目树：添加项目接通打开/创建
+
+日期：2026-10-02。最小记录。
+
+- 任务与入口：用户在 Friend 项目树点击"＋ 添加项目"时按钮禁用（两个已注册项目都已绑定），且即使可用也只能从已注册列表挑选——无法像 VSCode 打开 workspace、Codex 桌面版打开/创建项目那样从磁盘引入新项目。
+- 当前问题与证据：`LongAgentProjectTree` 的 Add 按钮 `disabled={busy || bindable.length === 0}`，全部绑死后成为死端；绑定选择器只列已注册项目。这违反 [LA 项目树评审](../../../docs/history/reviews/2026-10-01-la-project-session-tree.md) 的验收口径："添加项目与现有项目注册流程一致，仅入口移位"——现有注册流程即 `POST /api/projects/open` 按路径登记或初始化。
+- 信息与关系：添加 = 先有项目事实（已注册或按路径打开登记），再写 LA 配置 `boundProjectIds`（revision 校验、后端 `resolveProjectContext` 验证可解析）。两条来源（已注册未绑定 / 按路径打开）殊途同归到同一绑定动作。
+- 实施：Add 按钮仅 `busy` 时禁用；点击**直接弹出** [DirectoryPicker](../../components/DirectoryPicker.tsx)——复用其底层文件系统能力（后端 `/api/cwd/browse` 列目录，浏览器拿不到绝对路径），选择目录 → `openChatProject` 登记或初始化 → 绑定 → 刷新项目列表 → 选中该项目；打开已注册目录幂等（返回既有项目），无需任何中间层。新增 i18n `laProjectTree.openProject`（随后随中间层一起移除）。
+- 修订（2026-10-02，用户两次纠正）：第一版用裸路径输入框，被否决——没有人逐字符输入路径；第二版加"打开项目…"中间按钮和已注册下拉，再被否决——打开项目就是打开一个目录，一步完成，不要两层。最终形态：Add project → 目录点选对话框 → 选完即绑定，单层直达。
+- 验收：全部已注册项目绑死后按钮仍可点击；点击 Add project 直接弹出目录点选对话框，可逐级浏览并选择目录登记绑定，名称即时解析；选择非法目录给出错误提示；`pnpm test`、`pnpm typecheck`、`pnpm build` 通过。
+
+## DirectoryPicker 展示修复（弹层内容烂尾迁移）
+
+日期：2026-10-02。最小记录。
+
+- 任务与入口：用户截图显示目录选择对话框条目全部居中悬浮、无行结构、无 hover 形状，判定为不可交付。
+- 当前问题与证据：commit `93d460c` 把 DirectoryPicker 迁入 SurfaceDialog 时删除了旧内联样式与 520px 面板 CSS，但替换样式从未补写——TSX 里的 `directory-picker-entry/back/action/footer` 类名在 CSS 中不存在（死类名），共享 Button 的 `justify-content:center` 使每行内容居中，形成"整行宽、内容居中"的幽灵行。属于迁移半途而废，不是新设计。
+- 信息与关系：SurfaceDialog 是固定尺寸 flex 列（§20.6 统一弹层，内容单独滚动 §412）；行模式采用既有 `catalog-item` 关系（左对齐、全宽、hover 背景、圆角 Token）；宽幅弹层用 auto-fill 网格填充，不留死空间。
+- 实施：重排内容为 nav（返回/路径/转到）+ 可滚列表（flex:1）+ footer 三段，全部成为弹层 flex 列的直接子级；在 `components.css` 补写 `.directory-picker-*` 全套样式（条目左对齐 mono、网格填充、hover、44px Compact 规则、footer 安全区）；错误提示移到 footer 上方常驻可见。
+- 验收：条目左对齐成行、hover 有形、列表独立滚动、宽幅下网格填充无空洞；`pnpm test`、`pnpm typecheck`、`pnpm build` 通过并回写浏览器实测截图。

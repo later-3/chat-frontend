@@ -1,134 +1,256 @@
-/* Palette owns color roles; material owns surface recipes. No page owns a theme. */
-html[data-palette="ocean"] {
-  --bg:#F4F7FB; --bg-panel:#EAF0F7; --bg-hover:#DFE8F3; --bg-selected:#E0EAFB;
-  --text:#202D40; --text-muted:#506078; --text-dim:#596982; --border:#CFD8E4; --border-control:#75849A;
-  --accent:#2858A4; --accent-hover:#204A8D; --accent-pressed:#173D78; --on-accent:#FFFFFF;
-}
-html.dark[data-palette="ocean"] {
-  --bg:#141D2C; --bg-panel:#1D2A3C; --bg-hover:#28374D; --bg-selected:#2A3E5E;
-  --text:#EEF4FC; --text-muted:#B4C4DC; --text-dim:#A4B6D0; --border:#354760; --border-control:#7489A8;
-  --accent:#A4C8FF; --accent-hover:#BCD7FF; --accent-pressed:#D1E3FF; --on-accent:#142844;
-}
-html[data-palette="rose"] {
-  --bg:#FBF6F3; --bg-panel:#F4EAE4; --bg-hover:#ECDFD7; --bg-selected:#F6E1D6;
-  --text:#392B27; --text-muted:#735A51; --text-dim:#70584F; --border:#E2D1C7; --border-control:#997C6E;
-  --accent:#9A4732; --accent-hover:#823B29; --accent-pressed:#6C3021; --on-accent:#FFFFFF;
-}
-html.dark[data-palette="rose"] {
-  --bg:#251C1B; --bg-panel:#332724; --bg-hover:#45332D; --bg-selected:#533931;
-  --text:#FBEFE9; --text-muted:#D4BDB3; --text-dim:#C6ABA0; --border:#594039; --border-control:#AD8B7D;
-  --accent:#FFC0A6; --accent-hover:#FFD1BD; --accent-pressed:#FFE0D2; --on-accent:#43231B;
-}
-html[data-palette="orchid"] {
-  --bg:#F8F6FC; --bg-panel:#EDE9F6; --bg-hover:#E1DCEC; --bg-selected:#E9DDFB;
-  --text:#312B41; --text-muted:#625A77; --text-dim:#675B7C; --border:#D7CEE5; --border-control:#8A7D9C;
-  --accent:#7042A6; --accent-hover:#5C358C; --accent-pressed:#4C2B76; --on-accent:#FFFFFF;
-}
-html.dark[data-palette="orchid"] {
-  --bg:#282A36; --bg-panel:#303341; --bg-hover:#3D4053; --bg-selected:#47415F;
-  --text:#F8F8F2; --text-muted:#C2BDD8; --text-dim:#B5AECC; --border:#504C66; --border-control:#9186AA;
-  --accent:#C4A3FA; --accent-hover:#D3BAFC; --accent-pressed:#E1CEFF; --on-accent:#2D1949;
-}
-html[data-palette="instagram"] {
-  --bg:#FCF8FB; --bg-panel:#F5EAF2; --bg-hover:#EEDCE9; --bg-selected:#F7DEED;
-  --text:#342633; --text-muted:#71586B; --text-dim:#71576A; --border:#E5CEDF; --border-control:#A47C96;
-  --accent:#A42C79; --accent-hover:#8C2567; --accent-pressed:#761D56; --on-accent:#FFFFFF;
-}
-html.dark[data-palette="instagram"] {
-  --bg:#231C29; --bg-panel:#312536; --bg-hover:#423048; --bg-selected:#503450;
-  --text:#FFF0FA; --text-muted:#D5B7CF; --text-dim:#C8A6C0; --border:#5B3C58; --border-control:#AB81A1;
-  --accent:#F6ABE0; --accent-hover:#FFC4EE; --accent-pressed:#FFDCF5; --on-accent:#45213B;
-}
-
+/* Seven presets own color roles AND surface recipes (sample: docs/design-previews/
+   workflow-settings/themes.css + appearance.css). Components only consume the token
+   names; no page owns a theme. The app's current preset lives on <html>; the same
+   blocks also scope to picker thumbnails so a card previews its preset exactly. */
 :root {
-  --surface-chrome:var(--bg-panel);
-  --surface-control:var(--bg);
-  --surface-elevated:var(--bg);
-  --material-blur:none;
-  --material-edge:inset 0 1px 0 color-mix(in srgb, var(--bg) 75%, transparent);
-  --brand-ink:#242328;
-  --brand-paper:#FFFFFF;
-  --ambient-background:radial-gradient(ellipse at 12% 0%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 65%);
-}
-html[data-material="glass"] {
-  --radius-control:14px;
-  --radius-panel:18px;
-  --radius-dialog:24px;
-  --ambient-background:radial-gradient(ellipse at 10% 0%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 65%), radial-gradient(ellipse at 95% 80%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 60%);
-}
-html[data-palette="instagram"] {
-  --ambient-background:radial-gradient(ellipse at 0% 0%, #FA9B6524, transparent 65%), radial-gradient(ellipse at 100% 80%, #AB65E522, transparent 65%);
-}
-@supports (backdrop-filter: blur(1px)) {
-  html[data-material="glass"][data-transparency="auto"] {
-    --surface-chrome:color-mix(in srgb, var(--bg-panel) 82%, transparent);
-    --surface-elevated:color-mix(in srgb, var(--bg) 94%, transparent);
-    --surface-control:color-mix(in srgb, var(--bg) 92%, transparent);
-    --material-blur:blur(22px) saturate(125%);
-  }
-}
-html[data-background="off"] { --ambient-background:none; }
-@media (prefers-reduced-transparency: reduce) {
-  html[data-material] { --surface-chrome:var(--bg-panel); --surface-elevated:var(--bg); --surface-control:var(--bg); --material-blur:none; }
+  --surface-chrome: var(--navigation);
+  --surface-control: var(--field-surface);
+  --surface-elevated: var(--portal);
+  --material-blur: none;
+  --material-edge: var(--control-shadow);
 }
 
-.workspace-rail, .workspace-settings, .workflow-node-navigation {
-  background-color:var(--surface-chrome);
-  background-image:var(--ambient-background);
+/* Paper base for thumbnails: identical values to :root in tokens.css, declared
+   unscoped so every thumbnail defaults to paper before its preset block wins. */
+.appearance-preset-sample {
+  --canvas: #f1f0ed;
+  --bg: #faf9f7;
+  --bg-panel: #f2f1ee;
+  --bg-hover: #eae8e5;
+  --bg-selected: #eeeaf9;
+  --text: #29272e;
+  --text-muted: #605c69;
+  --text-dim: #6c6673;
+  --border: #dbd7df;
+  --border-control: #898290;
+  --accent: #6551b8;
+  --accent-hover: #5743a4;
+  --accent-pressed: #49378f;
+  --on-accent: #ffffff;
+  --radius-control: 10px;
+  --radius-panel: 16px;
+  --radius-dialog: 22px;
+  --button-radius: var(--radius-control);
+  --surface: var(--bg);
+  --navigation: var(--bg-panel);
+  --portal: var(--bg);
+  --field-surface: var(--bg);
+  --edge-light: #ffffffbf;
+  --glass-edge: #ffffffa3;
+  --button-fill: var(--accent);
+  --button-ink: var(--on-accent);
+  --ambient-a: #e7e1d9;
+  --ambient-b: #e3e0eb;
+  --ambient-c: #efede8;
+  --wallpaper: radial-gradient(ellipse at 8% 15%, var(--ambient-a), transparent 58%),
+    radial-gradient(ellipse at 94% 85%, var(--ambient-b), transparent 60%), var(--canvas);
 }
-.workspace-rail, .surface-header, .ui-popover, .ui-menu {
-  -webkit-backdrop-filter:var(--material-blur);
-  backdrop-filter:var(--material-blur);
+
+html[data-preset="glacier"], .appearance-preset-sample[data-preset="glacier"] {
+  color-scheme: light;
+  --canvas: #d9e6f1; --bg: #f5f9fc; --bg-panel: #eaf0f6; --bg-hover: #dfeaf5; --bg-selected: #dceaf9;
+  --text: #202c40; --text-muted: #506178; --text-dim: #5b6980; --border: #c4d2e2; --border-control: #7c91ae;
+  --accent: #1559ba; --accent-hover: #124a9d; --accent-pressed: #103f86; --on-accent: #ffffff;
+  --radius-control: 14px; --radius-panel: 24px; --radius-dialog: 28px; --button-radius: 999px;
+  --surface: #f7faffec; --navigation: #f1f7ff55; --field-surface: #ffffffd9; --portal: #f8fbfff0;
+  --edge-light: #ffffffed; --glass-edge: #ffffffb3; --scrim: #172d4b38;
+  --material-blur: blur(var(--glass-blur)) saturate(135%);
+  --ambient-a: #9bb7e5; --ambient-b: #79b9d0; --ambient-c: #eacbda;
+  --wallpaper: radial-gradient(ellipse 42% 55% at 8% 18%, #bad0f8 20%, transparent 100%),
+    radial-gradient(ellipse 40% 55% at 96% 68%, #83b9cb 8%, transparent 90%),
+    radial-gradient(ellipse 75% 90% at 80% -35%, #f1e4ff 50%, transparent 51%),
+    radial-gradient(ellipse 65% 85% at 5% 120%, #e7c5dc 48%, transparent 49%),
+    linear-gradient(135deg, #cadbed, #dcebf5 45%, #b2cbdc);
+  --workspace-shadow: inset 0 1px 0 #ffffffeb, 0 3px 8px #2949780b, 0 28px 80px -30px #2949785c;
+  --control-shadow: inset 0 1px 0 #ffffff, 0 1px 2px #234e7812, 0 4px 10px -6px #234e7820;
 }
-.surface-dialog, .surface-sheet { background-color:var(--bg); }
-.ui-popover, .ui-menu { background-color:var(--surface-elevated); }
-.surface-header { background-color:var(--surface-chrome); background-image:var(--ambient-background); box-shadow:var(--material-edge); }
+
+html[data-preset="peach"], .appearance-preset-sample[data-preset="peach"] {
+  color-scheme: light;
+  --canvas: #f5e9e5; --bg: #fff9f6; --bg-panel: #f5e9e4; --bg-hover: #edded8; --bg-selected: #f2dbe4;
+  --text: #392d34; --text-muted: #71555f; --text-dim: #775b65; --border: #ddc8ca; --border-control: #a2838a;
+  --accent: #8b3f60; --accent-hover: #76314f; --accent-pressed: #64263f; --on-accent: #ffffff;
+  --radius-control: 16px; --radius-panel: 24px; --radius-dialog: 28px; --button-radius: 999px;
+  --surface: #fff9f6; --navigation: #f4e8e5; --field-surface: #f5e9e5; --portal: #fff7f3;
+  --ambient-a: #f6cfc2; --ambient-b: #e4d8ed; --ambient-c: #ffe9cb;
+  --wallpaper: radial-gradient(ellipse at 5% 20%, var(--ambient-a), transparent 62%),
+    radial-gradient(ellipse at 97% 95%, var(--ambient-b), transparent 70%), var(--canvas);
+  --workspace-shadow: 0 2px 4px #72445608, 0 18px 50px -28px #7244562e;
+  --control-shadow: none;
+}
+
+html[data-preset="instagram"], .appearance-preset-sample[data-preset="instagram"] {
+  color-scheme: light;
+  --canvas: #fafafa; --bg: #ffffff; --bg-panel: #f5f5f5; --bg-hover: #ededed; --bg-selected: #fceaf3;
+  --text: #171717; --text-muted: #626262; --text-dim: #707070; --border: #dedede; --border-control: #898989;
+  --accent: #b31770; --accent-hover: #941059; --accent-pressed: #7d0d4a; --on-accent: #ffffff;
+  --button-fill: #191919; --button-hover: #343434; --button-pressed: #080808; --button-ink: #ffffff;
+  --radius-control: 12px; --radius-panel: 18px; --radius-dialog: 24px;
+  --ambient-a: #ffe2d2; --ambient-b: #f3dbea; --ambient-c: #e9e0fa;
+  --social-gradient: linear-gradient(125deg, #e8a63d, #dc5950 32%, #c72587 64%, #7049bf);
+  --wallpaper: radial-gradient(ellipse 45% 50% at 0% 0%, #ffe7db, transparent 95%),
+    radial-gradient(ellipse 40% 55% at 100% 100%, #f6daee, transparent 100%), #fafafa;
+  --workspace-shadow: 0 1px 2px #00000004, 0 15px 45px -28px #41102622;
+  --control-shadow: none;
+}
+
+html[data-preset="graphite"], .appearance-preset-sample[data-preset="graphite"] {
+  color-scheme: dark;
+  --canvas: #19191d; --bg: #232327; --bg-panel: #2b2b30; --bg-hover: #36353c; --bg-selected: #3f394e;
+  --text: #efedf4; --text-muted: #c1bdc8; --text-dim: #ada6b8; --border: #424047; --border-control: #86808f;
+  --accent: #c5b7f0; --accent-hover: #d7c9ff; --accent-pressed: #b2a0df; --on-accent: #292037;
+  --success: #8ed9ad; --success-bg: #243b2e; --warning: #f1ca82; --warning-bg: #423523; --danger: #ffa4b3; --danger-bg: #472832;
+  --edge-light: #ffffff0c; --glass-edge: #ffffff26; --scrim: #08080dad;
+  --ambient-a: #343039; --ambient-b: #20252c; --ambient-c: #28232b;
+  --shadow-popover: 0 1px 1px #00000040, 0 10px 30px #00000040, 0 28px 65px -22px #00000099;
+  --shadow-dialog: 0 2px 8px #00000040, 0 20px 60px #00000066, 0 40px 110px -30px #00000088;
+  --workspace-shadow: inset 0 1px 0 #ffffff06, 0 18px 50px -26px #00000099;
+}
+
+html[data-preset="obsidian"], .appearance-preset-sample[data-preset="obsidian"] {
+  color-scheme: dark;
+  --canvas: #111d32; --bg: #19263a; --bg-panel: #23334c; --bg-hover: #304565; --bg-selected: #2c496b;
+  --text: #f1f5fc; --text-muted: #bdcbe0; --text-dim: #aebed6; --border: #455a75; --border-control: #8599b3;
+  --accent: #a9ceff; --accent-hover: #c5ddff; --accent-pressed: #91baf2; --on-accent: #122841;
+  --success: #86dfb2; --success-bg: #1c3d39; --warning: #f5d18d; --warning-bg: #443b2b; --danger: #ffadbc; --danger-bg: #492d42;
+  --radius-control: 14px; --radius-panel: 24px; --radius-dialog: 28px; --button-radius: 999px;
+  --surface: #162338eb; --navigation: #20354c69; --field-surface: #2a3c55d9; --portal: #203149f5;
+  --edge-light: #d5e6ff29; --glass-edge: #d5e6ff38; --scrim: #050b196b;
+  --material-blur: blur(var(--glass-blur)) saturate(135%);
+  --ambient-a: #26336a; --ambient-b: #1d6675; --ambient-c: #614260;
+  --wallpaper: radial-gradient(ellipse 55% 60% at 0% 0%, #41477d 5%, transparent 90%),
+    radial-gradient(ellipse 45% 60% at 100% 65%, #1c697b 0%, transparent 95%),
+    radial-gradient(ellipse 70% 80% at 80% -45%, #26304f 65%, transparent 66%),
+    radial-gradient(ellipse 65% 80% at 0% 122%, #694060 45%, transparent 46%),
+    linear-gradient(135deg, #182236, #111e32 50%, #18283e);
+  --shadow-popover: inset 0 1px 0 #ffffff16, 0 10px 35px #00000066, 0 30px 80px -20px #00000088;
+  --shadow-dialog: inset 0 1px 0 #ffffff24, 0 20px 60px #00000066, 0 45px 110px -25px #00000088;
+  --workspace-shadow: inset 0 1px 0 #ffffff24, 0 2px 8px #00000022, 0 32px 90px -32px #00000099;
+  --control-shadow: inset 0 1px 0 #ffffff12, 0 2px 5px #00000022;
+}
+
+html[data-preset="dracula"], .appearance-preset-sample[data-preset="dracula"] {
+  color-scheme: dark;
+  --canvas: #21222c; --bg: #282a36; --bg-panel: #30323f; --bg-hover: #44475a; --bg-selected: #403951;
+  --text: #f8f8f2; --text-muted: #c5c5d8; --text-dim: #b4b4ce; --border: #4a4d62; --border-control: #8185a3;
+  --accent: #bd93f9; --accent-hover: #d2b0ff; --accent-pressed: #ac80e8; --on-accent: #251c33;
+  --success: #8aefaa; --success-bg: #253c34; --warning: #f1d98b; --warning-bg: #403a2f; --danger: #ff9da9; --danger-bg: #492b3a;
+  --radius-control: 8px; --radius-panel: 12px; --radius-dialog: 16px;
+  --edge-light: #ffffff0a; --glass-edge: #ffffff26; --scrim: #171722a6;
+  --ambient-a: #383148; --ambient-b: #253b47; --ambient-c: #342c44;
+  --shadow-popover: 0 1px 2px #00000033, 0 10px 35px #00000055, 0 25px 65px -20px #00000088;
+  --shadow-dialog: 0 2px 8px #00000040, 0 20px 60px #00000055, 0 40px 100px -25px #00000099;
+  --workspace-shadow: 0 1px 3px #00000033, 0 20px 60px -30px #00000088;
+  --control-shadow: inset 0 1px 0 #ffffff05;
+}
+
+/* Page backdrop: the wallpaper paints the body so translucent glass chrome has
+   something to blur. Turning the ambient background off leaves the bare canvas. */
+body {
+  background: var(--wallpaper);
+}
+html[data-background="off"] body {
+  background: var(--canvas);
+}
+
+/* Chrome surfaces: rails and headers are the navigation layer (glass gets the
+   blur); long-form content keeps solid surfaces so text stays readable. */
+.workspace-rail, .workflow-node-navigation {
+  background-color: var(--surface-chrome);
+}
+.workspace-settings {
+  background-color: var(--surface);
+}
+.workspace-rail, .workflow-node-navigation, .surface-header, .ui-popover, .ui-menu {
+  -webkit-backdrop-filter: var(--material-blur);
+  backdrop-filter: var(--material-blur);
+}
+.surface-dialog, .surface-sheet { background-color: var(--bg); }
+.ui-popover, .ui-menu { background-color: var(--surface-elevated); }
+.surface-header { background-color: var(--surface-chrome); box-shadow: var(--material-edge); }
 .surface-heading h1, .workspace-page-header h1 { font-weight:650; letter-spacing:-.025em; }
 .workspace-brand {
   width:36px; height:36px; margin:2px auto 22px;
-  background:var(--brand-ink); color:var(--brand-paper);
+  background:var(--button-fill); color:var(--button-ink);
   border-radius:var(--radius-control); box-shadow:var(--material-edge);
 }
-.workspace-brand svg { fill:currentColor; stroke:var(--brand-ink); }
+.workspace-brand svg { fill:currentColor; stroke:var(--button-fill); }
 .settings-section h3 { font-size:15px; font-weight:650; }
 .configuration-dialog :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) { background-color:var(--surface-control); }
 [data-ui-button="secondary"] { background-color:var(--surface-control); box-shadow:var(--material-edge); }
 
-.appearance-materials { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px; }
-.appearance-materials button, .appearance-palettes button {
-  display:flex; align-items:center; gap:12px; text-align:left; padding:14px;
-  color:var(--text); background:var(--surface-control); border:1px solid var(--border);
-  border-radius:var(--radius-panel); cursor:pointer;
+/* Preset catalog: light/dark groups, thumbnail preview, roving-tabindex radios. */
+.appearance-preset-group + .appearance-preset-group { margin-top:20px; }
+.appearance-preset-group-title { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--text-muted); margin-bottom:10px; }
+.appearance-preset-group-title small { margin-left:auto; font-variant-numeric:tabular-nums; }
+.appearance-preset-options { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:10px; }
+.appearance-preset {
+  min-width:0; padding:5px; text-align:left; color:var(--text); cursor:pointer;
+  border:1px solid var(--border); border-radius:12px; background:var(--bg);
   transition:background var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
 }
-.appearance-materials button:hover, .appearance-palettes button:hover { background:var(--bg-hover); }
-.appearance-materials button[aria-pressed="true"], .appearance-palettes button[aria-pressed="true"] { border-color:var(--accent); background:var(--bg-selected); }
-.appearance-materials button > span:nth-child(2) { flex:1; min-width:0; }
-.appearance-materials strong, .appearance-effects strong { display:block; font-size:14px; font-weight:600; }
-.appearance-materials small, .appearance-effects small { display:block; margin-top:5px; font-size:12px; line-height:1.6; color:var(--text-muted); }
-.appearance-material-sample { display:grid; place-items:center; flex:0 0 44px; height:48px; border:1px solid var(--border); border-radius:var(--radius-control); background:var(--bg); box-shadow:var(--material-edge); }
-.appearance-material-sample.is-glass { background:linear-gradient(145deg, var(--bg-selected), var(--bg)); color:var(--accent); }
-.appearance-palettes { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; }
-.appearance-palettes button { min-width:0; min-height:76px; flex-direction:column; gap:8px; position:relative; font-size:12px; }
-.appearance-palettes button > svg { position:absolute; right:6px; top:6px; color:var(--accent); }
-.appearance-swatch { display:flex; height:19px; border-radius:99px; overflow:hidden; }
-.appearance-swatch i { width:20px; background:var(--swatch-accent); }
-.appearance-swatch i:first-child { background:var(--swatch-bg); }
-.appearance-swatch i:last-child { background:var(--swatch-ink); }
-[data-palette-choice="classic"] { --swatch-bg:#F2F1EE; --swatch-accent:#6551B8; --swatch-ink:#29272E; }
-[data-palette-choice="ocean"] { --swatch-bg:#EAF0F7; --swatch-accent:#699BE0; --swatch-ink:#202D40; }
-[data-palette-choice="rose"] { --swatch-bg:#F4EAE4; --swatch-accent:#E7A087; --swatch-ink:#392B27; }
-[data-palette-choice="orchid"] { --swatch-bg:#EDE9F6; --swatch-accent:#BB9AE8; --swatch-ink:#282A36; }
-[data-palette-choice="instagram"] { --swatch-bg:#FAB990; --swatch-accent:#CE6BAB; --swatch-ink:#513659; }
-.appearance-effects label { display:flex; justify-content:space-between; align-items:center; gap:24px; padding:14px 0; cursor:pointer; }
+.appearance-preset:hover { border-color:var(--border-control); background:var(--bg-hover); }
+.appearance-preset[aria-checked="true"] { outline:2px solid var(--accent); outline-offset:2px; }
+.appearance-preset-title { display:flex; align-items:center; justify-content:space-between; gap:3px; margin:9px 3px 5px; font-size:12px; font-weight:600; }
+.appearance-preset-title svg { color:var(--accent); }
+.appearance-preset > small { display:block; min-height:29px; font-size:10px; color:var(--text-muted); line-height:1.5; padding:0 3px 3px; }
+.appearance-preset-sample { display:grid; place-items:center; height:75px; border-radius:8px; padding:11px 9px; background:var(--wallpaper); overflow:hidden; }
+.appearance-mini-window {
+  width:100%; height:100%; display:grid; grid-template-columns:25% 1fr; position:relative;
+  border:1px solid var(--glass-edge); border-radius:6px; background:var(--surface); box-shadow:0 4px 9px #00000033;
+}
+.appearance-mini-sidebar { display:flex; flex-direction:column; gap:6px; padding:8px 3px; background:var(--navigation); border-right:1px solid var(--border); border-radius:5px 0 0 5px; }
+.appearance-mini-sidebar i { height:3px; background:var(--border); border-radius:2px; }
+.appearance-mini-sidebar i:first-child { background:var(--accent); }
+.appearance-mini-content { display:flex; flex-direction:column; align-items:flex-start; gap:4px; padding:8px; }
+.appearance-mini-content b { width:68%; height:3px; background:var(--text); border-radius:2px; }
+.appearance-mini-content > i { width:82%; height:2px; background:var(--border); }
+.appearance-mini-input { height:8px; width:100%; border:1px solid var(--border); background:var(--field-surface); border-radius:3px; }
+.appearance-mini-action { height:8px; width:45%; background:var(--button-fill); border-radius:var(--button-radius); }
+.appearance-preset-sample[data-preset="instagram"] .appearance-mini-action { background:var(--social-gradient); }
+.appearance-mini-menu {
+  position:absolute; right:-4px; bottom:2px; width:36%; height:23px; padding:5px;
+  display:flex; flex-direction:column; gap:4px; background:var(--portal);
+  border:1px solid var(--border); box-shadow:0 2px 4px #00000022; border-radius:4px;
+}
+.appearance-mini-menu i { height:3px; background:var(--border); }
+.appearance-mini-menu i:first-child { background:var(--accent); }
+
+/* Comfort & effects. */
+.appearance-effects label { display:flex; justify-content:space-between; align-items:center; gap:24px; padding:14px 0; min-height:58px; cursor:pointer; }
+.appearance-effects strong { display:block; font-size:14px; font-weight:600; }
+.appearance-effects small { display:block; margin-top:5px; font-size:12px; line-height:1.6; color:var(--text-muted); }
 .appearance-effects input { width:20px; height:20px; accent-color:var(--accent); flex-shrink:0; }
-html[data-motion="reduced"] *, html[data-motion="reduced"] *::before, html[data-motion="reduced"] *::after {
-  animation-duration:0.01ms !important; animation-iteration-count:1 !important;
-  transition-duration:0.01ms !important; scroll-behavior:auto !important;
+.appearance-effects input:disabled { cursor:default; }
+.appearance-note { font-size:11px; line-height:1.7; color:var(--text-muted); padding-top:14px; margin-top:7px; border-top:1px solid var(--border); }
+
+/* Reduced transparency (the opaque switch), missing backdrop-filter support and
+   the system preference all restore solid surfaces. Scoped to the glass presets;
+   the other five already use solid values, so their look never shifts. */
+html[data-transparency="reduced"][data-preset="glacier"],
+html[data-transparency="reduced"][data-preset="obsidian"] {
+  --surface: var(--bg); --navigation: var(--bg-panel); --portal: var(--bg); --field-surface: var(--bg-panel);
+  --material-blur: none;
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  html[data-preset="glacier"], html[data-preset="obsidian"] {
+    --surface: var(--bg); --navigation: var(--bg-panel); --portal: var(--bg); --field-surface: var(--bg-panel);
+    --material-blur: none;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  html[data-preset="glacier"], html[data-preset="obsidian"] {
+    --surface: var(--bg); --navigation: var(--bg-panel); --portal: var(--bg); --field-surface: var(--bg-panel);
+    --material-blur: none;
+  }
+}
+
+/* Manual reduced motion (UI/UX §8): the system preference below always wins. */
+html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="off"] *::after {
+  animation: none !important; transition: none !important;
 }
 @media (max-width:600px) {
-  .appearance-materials { grid-template-columns:minmax(0,1fr); }
-  .appearance-palettes { grid-template-columns:repeat(3,minmax(0,1fr)); }
-  .appearance-materials button { min-height:72px; }
-  .appearance-effects label { min-height:58px; }
+  .appearance-preset-options { grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px; }
+  .appearance-preset > small { font-size:11px; min-height:auto; }
+  .appearance-preset-sample { height:86px; }
 }

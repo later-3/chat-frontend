@@ -20,16 +20,40 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/lifeos-astronaut-apple-touch-icon.png" />
     <title>Chat</title>
     <script>
-      // 在 React 渲染前应用已保存的主题，避免深色模式下启动 PWA 时先闪现浅色页面。
+      // 在 React 渲染前应用已保存的外观，避免启动 PWA 时先闪现错误的明暗与配色。
+      // 迁移表必须与 lib/appearance.ts 的 migrateV1Appearance 保持一致（mobile-pwa-layout.test.mjs 门禁逐格校验）。
       (function () {
+        var DARK_PRESETS = ["graphite", "obsidian", "dracula"];
+        var MIGRATION = {
+          paper: { classic: ["paper", "paper"], ocean: ["glacier", "glacier"], rose: ["peach", "peach"], orchid: ["glacier", "dracula"], instagram: ["instagram", "instagram"] },
+          glass: { classic: ["glacier", "obsidian"], ocean: ["glacier", "obsidian"], rose: ["peach", "peach"], orchid: ["glacier", "dracula"], instagram: ["instagram", "instagram"] }
+        };
+        function resolvePreset() {
+          try {
+            var saved = JSON.parse(localStorage.getItem("chat:appearance:v2") || "null");
+            if (saved && saved.version === 2 && DARK_PRESETS.concat(["paper", "glacier", "peach", "instagram"]).indexOf(saved.preset) >= 0) return saved.preset;
+          } catch (_error) { /* fall through to v1 */ }
+          try {
+            var v1 = JSON.parse(localStorage.getItem("chat:appearance:v1") || "null");
+            if (!v1 || typeof v1 !== "object") return null;
+            var preference = null;
+            try { preference = localStorage.getItem("pi-theme"); } catch (_error) { /* light */ }
+            var dark = preference === "dark"
+              || ((preference == null || preference === "" || preference === "auto")
+                && window.matchMedia("(prefers-color-scheme: dark)").matches);
+            var material = v1.material === "glass" ? "glass" : "paper";
+            var palette = MIGRATION[material][v1.palette] ? v1.palette : "classic";
+            return MIGRATION[material][palette][dark ? 1 : 0];
+          } catch (_error) { return null; }
+        }
         try {
-          var preference = localStorage.getItem("pi-theme");
-          var dark = preference === "dark"
-            || ((preference == null || preference === "" || preference === "auto")
-              && window.matchMedia("(prefers-color-scheme: dark)").matches);
-          if (dark) document.documentElement.classList.add("dark");
+          var preset = resolvePreset();
+          if (preset) {
+            document.documentElement.dataset.preset = preset;
+            document.documentElement.classList.toggle("dark", DARK_PRESETS.indexOf(preset) >= 0);
+          }
         } catch (_error) {
-          // 隐私浏览模式可能禁止访问存储；React 启动后还会重新解析一次主题。
+          // 隐私浏览模式可能禁止访问存储；React 启动后还会重新解析一次外观。
         }
       })();
     </script>

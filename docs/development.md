@@ -216,7 +216,7 @@ Session 和 context 响应增加可选 `context.entryTimes`，与 messages/entry
 
 ### 页面适配入口
 
-全量页面归属表见父仓库 `docs/modules/web/chat-web.md` §4.1。顶栏由 `AppShell` 直接拥有：Project Portal、会话标题与操作在同一 Header，ChatWindow 保持原挂载；全局页隐藏这个 Header。设置分类只改变显示，不新增配置源。
+全量页面归属表见父仓库 `docs/modules/web/chat-web.md` §4.1。顶栏由 `AppShell` 直接拥有：Project Portal 与操作在同一 Header，ChatWindow 保持原挂载；全局页隐藏这个 Header。顶栏不显示会话名或分区标题；侧栏开关固定最左（与其控制的列表同侧），项目 slot 无内容时整体收起（`:empty`），会话动作经占位符推到右侧图标组。设置分类只改变显示，不新增配置源。
 
 `SurfaceDialog` 为 Tools 与完整历史复用原生 Dialog 生命周期。`history-document` 只对 Backend 返回的 Pi HTML 增加阅读样式，校验 Session data 标记；HTTP 失败、非 HTML、无效 HTML 和超时都可重试。iframe 保留 `allow-downloads allow-scripts`，不放开 same-origin。主题映射来自 Chat 当前 CSS Token，Pi Session 数据与分支脚本不替换。
 
@@ -224,7 +224,7 @@ Session 和 context 响应增加可选 `context.entryTimes`，与 messages/entry
 
 目录类诊断与选中资源分离；可用条目仍可浏览。Tools 中的使用关系以 Project 配置覆盖 Workflow 默认，不并列伪造冲突状态。工具实际装配仍由 Backend 检查。首次自动打开 Friend 的异步响应在用户已操作列表后失效，不能覆盖用户选择。
 
-Friend 简介在创建和编辑均可为空。配置响应的 `agent.description` 保留空串，`definition.description` 按 Backend 既有合同使用 `Chat Long Agent` 占位；不得把这个占位显示成用户简介。`responseTemplate` 为 null 时使用默认，字符串最长 2000；保存返回 revision 必须与重读一致。相关读取/保存/重置回归位于 Long Agent 前后端合同测试。
+Friend 简介在创建和编辑均可为空。配置响应的 `agent.description` 保留空串，`definition.description` 按 Backend 既有合同使用 `Chat Long Agent` 占位；不得把这个占位显示成用户简介。保存返回 revision 必须与重读一致。相关读取/保存/重置回归位于 Long Agent 前后端合同测试。
 
 ## Friend 本轮上下文（P2）
 
@@ -378,10 +378,10 @@ Friend / Workflow 使用同一个 `ConfigurationSection` 折叠行和模型、�
 - Full history 保留原生 HTML、分支与压缩记录；请求取消、错误重试及 Session 切换隔离必须保留。耗时分请求总时间和缓存生成时间，不能以生成耗时冒充缓存命中耗时。
 
 
-### 可组合外观与工作流配置（2026-09-30）
+### 七预设外观与工作流配置（2026-09-30，2026-10-01 升级七预设）
 
-全局外观由既有 `useTheme` 唯一管理，明暗继续用 `pi-theme`；`chat:appearance:v1` 保存 version=1 的 material、palette、motion、background、opaque 浏览器偏好。`lib/appearance.ts` 校验与首屏应用，head module 在 React 前调用；存储失败仍可用，storage 事件同步其他窗口。系统减少动效和手动减少动效均阻止主题圆形揭示。离线壳保留经典明暗降级。
+全局外观由既有 `useTheme` 唯一管理，按七套预设组织：`chat:appearance:v2` 保存 version=2 的 `preset`（paper/glacier/peach/instagram/graphite/obsidian/dracula，明暗绑定预设）、`motion`、`background`、`opaque` 浏览器偏好。`lib/appearance.ts` 校验、v1（material/palette + `pi-theme`）到 v2 的确定性迁移与首屏应用，head module 在 React 前调用（`index.html` 内联脚本镜像同一迁移表，由 `mobile-pwa-layout.test.mjs` 逐格校验等价性）；存储失败仍可用，storage 事件同步其他窗口。`pi-theme` 保留为写入时的 light/dark 派生镜像，供离线壳继续工作；系统减少动效和手动减少动效均阻止主题圆形揭示。离线壳明暗分别取 paper 与 graphite 调色板。
 
-`AppearanceSettings` 在设置外观页提供两种材质、五种配色和效果选项；`appearance.css` 定义全局角色与表面配方，`workflow-settings.css` 只负责信息布局，两个文件均列入 `style-sources.ts` 门禁。不要让原型七套预设变成生产中的七份组件。
+`AppearanceSettings` 在设置外观页提供七个带缩略视觉的预设卡（浅/深两组 radiogroup）和三个效果开关（背景、细腻动效、不透明——仅玻璃预设 glacier/obsidian 可用）；预设值唯一事实源是 `docs/design-previews/workflow-settings/themes.css`，移植为 `appearance.css` 的 `html[data-preset]` 块；`workflow-settings.css` 只负责信息布局，两个文件均列入 `style-sources.ts` 门禁。组件只消费 token 名，不要让七套预设变成七份组件树。
 
 `WorkflowAgentConfigDialog` 以完整有序 Node 导航、选中 Agent 详情、模型/工具资源/会话或默认选择/检查四个入口组织已有 API。Task 没有模型编辑器；配置文件降为高级折叠。持久模型/工具/资源仍自动保存项目或 Home，第三分类依 `selectionScope` 区分会话随消息提交与助手默认持久保存。检查仍使用公共装配，不在浏览器重算。完整推导、范围和验收见[实施记录](./design/workflow-configuration-rollout.md)。

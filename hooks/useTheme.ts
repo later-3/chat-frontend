@@ -1,116 +1,78 @@
 "use client";
 
 import { useCallback, useSyncExternalStore } from "react";
-import { APPEARANCE_KEY, DEFAULT_APPEARANCE, applyAppearance, initializeAppearance, readAppearance, type Appearance } from "@/lib/appearance";
+import { APPEARANCE_KEY, DEFAULT_APPEARANCE, PRESET_MODE, applyAppearance, initializeAppearance, readAppearance, writeAppearance, type Appearance, type Preset } from "@/lib/appearance";
 
-export type ThemePreference = "light" | "dark" | "auto";
 export type ResolvedTheme = "light" | "dark";
 
 type ThemeState = {
-  preference: ThemePreference;
   theme: ResolvedTheme;
   appearance: Appearance;
 };
 
 type ToggleOrigin = { x: number; y: number };
 
-const STORAGE_KEY = "pi-theme";
-const PREFERENCE_CYCLE: ThemePreference[] = ["light", "dark", "auto"];
-const SERVER_SNAPSHOT: ThemeState = { preference: "auto", theme: "light", appearance: { ...DEFAULT_APPEARANCE } };
+const SERVER_SNAPSHOT: ThemeState = { theme: "light", appearance: { ...DEFAULT_APPEARANCE } };
 
 const listeners = new Set<() => void>();
 let state: ThemeState | null = null;
-let systemListening = false;
+let storageListening = false;
+// Quick-toggle memory: the most recent preset of each mode (session only, not persisted).
+let lastLightPreset: Preset = "paper";
+let lastDarkPreset: Preset = "graphite";
 
 function emit(): void {
   listeners.forEach((cb) => cb());
 }
 
-function getSystemTheme(): ResolvedTheme {
-  if (typeof window === "undefined") return "light";
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+function resolveTheme(appearance: Appearance): ResolvedTheme {
+  return PRESET_MODE[appearance.preset] === "dark" ? "dark" : "light";
 }
 
-function readStoredPreference(): ThemePreference {
-  try {
-    const value = localStorage.getItem(STORAGE_KEY);
-    if (value === "light" || value === "dark" || value === "auto") return value;
-  } catch {
-    // ignore storage errors (private mode, quota, etc.)
-  }
-  return "auto";
-}
-
-function resolveTheme(preference: ThemePreference): ResolvedTheme {
-  return preference === "auto" ? getSystemTheme() : preference;
-}
-
-function applyDomTheme(theme: ResolvedTheme): void {
-  if (typeof document === "undefined") return;
-  document.documentElement.classList.toggle("dark", theme === "dark");
+function rememberPreset(appearance: Appearance): void {
+  if (PRESET_MODE[appearance.preset] === "dark") lastDarkPreset = appearance.preset;
+  else lastLightPreset = appearance.preset;
 }
 
 function ensureState(): ThemeState {
   if (typeof window === "undefined") return SERVER_SNAPSHOT;
   if (state) return state;
-
-  const preference = readStoredPreference();
-  const theme = resolveTheme(preference);
-  applyDomTheme(theme);
-  state = { preference, theme, appearance: initializeAppearance() };
+  const appearance = initializeAppearance();
+  rememberPreset(appearance);
+  state = { theme: resolveTheme(appearance), appearance };
   return state;
 }
 
-function setThemeState(preference: ThemePreference, theme: ResolvedTheme, persist: boolean): void {
-  applyDomTheme(theme);
-  if (persist) {
-    try {
-      localStorage.setItem(STORAGE_KEY, preference);
-    } catch {
-      // ignore storage errors (private mode, quota, etc.)
-    }
+function commitAppearance(appearance: Appearance): void {
+  applyAppearance(document.documentElement, appearance);
+  try {
+    writeAppearance(window.localStorage, appearance);
+  } catch {
+    // keep in-memory preference usable
   }
-  state = { preference, theme, appearance: ensureState().appearance };
+  rememberPreset(appearance);
+  state = { theme: resolveTheme(appearance), appearance };
   emit();
 }
 
-function syncAutoThemeFromSystem(): void {
-  const current = ensureState();
-  if (current.preference !== "auto") return;
-  const theme = getSystemTheme();
-  if (theme === current.theme) return;
-  setThemeState("auto", theme, false);
-}
-
-function ensureSystemListener(): void {
-  if (systemListening || typeof window === "undefined" || !window.matchMedia) return;
-
-  const mql = window.matchMedia("(prefers-color-scheme: dark)");
-  mql.addEventListener("change", syncAutoThemeFromSystem);
+function ensureStorageListener(): void {
+  if (storageListening || typeof window === "undefined") return;
   window.addEventListener("storage", event => {
-    if (event.key !== null && event.key !== STORAGE_KEY && event.key !== APPEARANCE_KEY) return;
-    const preference = readStoredPreference();
+    if (event.key !== null && event.key !== APPEARANCE_KEY) return;
     let appearance = { ...DEFAULT_APPEARANCE };
     try { appearance = readAppearance(window.localStorage); } catch { /* blocked storage */ }
     applyAppearance(document.documentElement, appearance);
-    const theme = resolveTheme(preference);
-    applyDomTheme(theme);
-    state = { preference, theme, appearance };
+    rememberPreset(appearance);
+    state = { theme: resolveTheme(appearance), appearance };
     emit();
   });
-  // Some browsers delay or miss scheme events while backgrounded.
-  window.addEventListener("focus", syncAutoThemeFromSystem);
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") syncAutoThemeFromSystem();
-  });
-  systemListening = true;
+  storageListening = true;
 }
 
 function subscribe(cb: () => void): () => void {
   listeners.add(cb);
   ensureState();
-  ensureSystemListener();
-  syncAutoThemeFromSystem();
+  ensureStorageListener();
   return () => {
     listeners.delete(cb);
   };
@@ -124,32 +86,20 @@ function getServerSnapshot(): ThemeState {
   return SERVER_SNAPSHOT;
 }
 
-function nextPreference(preference: ThemePreference): ThemePreference {
-  const index = PREFERENCE_CYCLE.indexOf(preference);
-  return PREFERENCE_CYCLE[(index + 1) % PREFERENCE_CYCLE.length];
-}
-
 export function useTheme() {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const setAppearance = useCallback((patch: Partial<Appearance>) => {
     const current = ensureState();
-    const appearance = { ...current.appearance, ...patch };
-    applyAppearance(document.documentElement, appearance);
-    try { localStorage.setItem(APPEARANCE_KEY, JSON.stringify({ version: 1, ...appearance })); } catch { /* keep in-memory preference usable */ }
-    state = { ...current, appearance };
-    emit();
-  }, []);
-  const setTheme = useCallback((preference: ThemePreference) => {
-    setThemeState(preference, resolveTheme(preference), true);
+    commitAppearance({ ...current.appearance, ...patch });
   }, []);
 
   const toggleTheme = useCallback((origin?: ToggleOrigin) => {
     const current = ensureState();
-    const nextPref = nextPreference(current.preference);
-    const nextTheme = resolveTheme(nextPref);
+    const nextPreset = current.theme === "dark" ? lastLightPreset : lastDarkPreset;
+    const nextAppearance: Appearance = { ...current.appearance, preset: nextPreset };
 
     const apply = () => {
-      setThemeState(nextPref, nextTheme, true);
+      commitAppearance(nextAppearance);
     };
 
     const reduceMotion = current.appearance.motion === "reduced" || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -191,11 +141,9 @@ export function useTheme() {
 
   return {
     theme: snapshot.theme,
-    preference: snapshot.preference,
     appearance: snapshot.appearance,
     setAppearance,
     toggleTheme,
-    setTheme,
     isDark: snapshot.theme === "dark",
   };
 }

@@ -388,7 +388,7 @@ Agent 或开发者必须：
 
 - 桌面导航 64px，列表默认 280px（224–360），资料默认 360px（320–720），资料默认折叠；主交流区域保留至少 480px。可见内联面板各计 1px 分隔线。
 - Expanded ≥960px；面板容纳不下时先收资料、再收列表，仍不足则资料覆盖显示。Medium 使用抽屉，Compact 延续宽度 ≤768px 或粗指针短横屏规则，采用底部 64px 导航与单屏内容。
-- 项目选择、交流标题和操作合为唯一 48px 顶栏，短横屏可收紧到 44px；Friend 行最小 64px，按名称、简介和真实状态自适应增高，头像 40px。消息正文 16px/27px，输入 16px/24px，内容列上限 880px、正文段落上限 800px。
+- 侧栏开关、项目选择和操作合为唯一 48px 顶栏，短横屏可收紧到 44px；顶栏不显示会话名或分区标题（会话身份只在会话列表/历史表达），侧栏开关固定最左（与其控制的列表同侧），项目 Portal 无内容时整体收起（`:empty` 不占位），会话动作经占位符推到右侧图标组；Friend 行最小 64px，按名称、简介和真实状态自适应增高，头像 40px。消息正文 16px/27px，输入 16px/24px，内容列上限 880px、正文段落上限 800px。
 - 明暗均用暖中性底色、紫色强调；背景、正文、弱文字、控件边界、强调按压及成功/警告/错误分别使用语义 Token。`--on-accent` 用于强调底色上的文字，不固定写白色。
 - 控件 hover 120ms、面板 200ms；焦点为 2px 强调色外轮廓，粗指针主要目标至少 44px，减少动画偏好关闭动效。
 - 拖拽、键盘调整和双击复位保留；临时窄屏尺寸不覆盖用户偏好。宽内容模式在设置中切换，正文段落仍限 800px；模态层提供焦点循环与 Escape 关闭。实际验证平台和剩余限制见父仓库验收记录。
@@ -496,18 +496,18 @@ Agent 或开发者必须：
 
 ### 17.1 明暗主题与尺寸
 
-下表是默认经典配色，不再限制全局只有一种配色。所有变体都覆盖相同语义 Token，页面不自行定义色板。
+下表是纸白基准（paper）与石墨深色（graphite）两套锚点配色；其余五套预设（glacier/peach/instagram/obsidian/dracula）在 `src/styles/appearance.css` 覆盖相同语义 Token，页面不自行定义色板。
 
-| 角色 | 浅色 | 深色 |
+| 角色 | 浅色（paper） | 深色（graphite） |
 |---|---|---|
-| 页面 / 面板 | `#FAF9F7` / `#F2F1EE` | `#1C1B20` / `#242329` |
-| 正文 / 次文字 | `#29272E` / `#605C69` | `#EEEDF2` / `#BDB7C8` |
-| 弱文字 | `#6C6673` | `#ACA5B7` |
-| 强调 / 强调底上的文字 | `#6551B8` / `#FFFFFF` | `#BEB0FF` / `#251D40` |
-| 选中背景 | `#EEEAF9` | `#363047` |
-| 控件边界 | `#898290` | `#817889` |
+| 页面 / 面板 | `#FAF9F7` / `#F2F1EE` | `#232327` / `#2B2B30` |
+| 正文 / 次文字 | `#29272E` / `#605C69` | `#EFEDF4` / `#C1BDC8` |
+| 弱文字 | `#6C6673` | `#ADA6B8` |
+| 强调 / 强调底上的文字 | `#6551B8` / `#FFFFFF` | `#C5B7F0` / `#292037` |
+| 选中背景 | `#EEEAF9` | `#3F394E` |
+| 控件边界 | `#898290` | `#86808F` |
 
-全局 `--radius-control:10px`、`--radius-panel:14px`、`--radius-dialog:20px`为纸质默认值；玻璃通过同一组 Token 统一覆盖为 14/18/24px。工具栏、按钮、输入、浮层使用同一体系，页面不能自创值。列表可保留紧凑圆角；浮层使用共享阴影，普通内容不逐卡加投影。消息列 `workspace-message-column`、运行状态与输入框 `workspace-composer-column` 共用同一个 `var(--conversation-measure,var(--measure-prose,42rem))` 和同一条居中轴（右侧 `--composer-gutter:36px` 为 ChatMinimap 预留，Compact 置 0）；`--conversation-measure` 只由顶栏宽度滑杆写入（§20.7），默认自适应。只改一侧、或给输入框硬编码像素宽度，会让消息区与下方输入框出现两条宽度和中心都不同的边（本轮缺陷）。宽屏模式仍是显式 opt-in，打开时消息列与输入框一起放宽。普通表单输入 40px、按钮至少 36px；Compact 主要触控 44px，输入字 16px。隐藏 radio 不继承可见输入的最小高度。
+全局 `--radius-control:10px`、`--radius-panel:16px`、`--radius-dialog:22px`为纸白基准值；各预设通过同一组 Token 覆盖为自己档位（§18.5 圆角行）。工具栏、按钮、输入、浮层使用同一体系，页面不能自创值。列表可保留紧凑圆角；浮层使用共享阴影，普通内容不逐卡加投影。消息列 `workspace-message-column`、运行状态与输入框 `workspace-composer-column` 共用同一个 `var(--conversation-measure,var(--measure-prose,42rem))` 和同一条居中轴（右侧 `--composer-gutter:36px` 为 ChatMinimap 预留，Compact 置 0）；`--conversation-measure` 只由顶栏宽度滑杆写入（§20.7），默认自适应。只改一侧、或给输入框硬编码像素宽度，会让消息区与下方输入框出现两条宽度和中心都不同的边（本轮缺陷）。宽屏模式仍是显式 opt-in，打开时消息列与输入框一起放宽。普通表单输入 40px、按钮至少 36px；Compact 主要触控 44px，输入字 16px。隐藏 radio 不继承可见输入的最小高度。
 
 离线页、Manifest 启动画面与应用采用同一基础色。状态颜色使用已有 success/warning/danger 角色；diff、工具错误与成功反馈同样遵守明暗主题。品牌标记、用户头像、图片、代码高亮保留其内容语义，不能机械替换。
 
@@ -519,7 +519,7 @@ Agent 或开发者必须：
 - Friend / Workflow 的折叠配置统一使用 `ConfigurationSection`；关闭时只占一行（52px），内部间距只在展开内容上设置，禁止给 `details` 设置 Flex 导致收起后仍保留空白。
 - Agent 模型区提供“模型参数”入口，直接定位当前模型，并在入口与编辑器说明全局共享范围；关闭子弹窗保留 Agent 草稿，保存模型后刷新能力与检查。
 - Provider 编辑器按连接、模型能力/规格、高级设置分组；价格与高级兼容项折叠。模型参数与运行时等级选择是两个不同任务。保存配置影响后续运行，不宣称改变在途运行。
-- 设置通过 `view=settings` 与 `settings` 恢复类别；项目资源在本页显式选项目。外观使用浅色/深色/跟随系统明确选项，语言与内容宽度同样显示当前值，避免循环点击猜测。
+- 设置通过 `view=settings` 与 `settings` 恢复类别；项目资源在本页显式选项目。外观使用七套预设卡（浅色：纸白/冰川/桃雾/Instagram，深色：石墨/黑曜/Dracula，radiogroup 键盘可选）加背景、细腻动效、不透明三个效果开关，语言与内容宽度同样显示当前值，避免循环点击猜测。
 
 ### 17.3 六个任务面与共享入口
 
@@ -631,7 +631,7 @@ Friend 会话的顶栏用“任务与归档”动作取代会话名标题（后�
 |---|---|---|
 | 阅读行长与节奏 | `--measure-prose:42rem` 为默认值，`--conversation-measure` 为顶栏滑杆写入的用户值（§20.7）、`--rhythm-body:1.7`、`--tracking-body:0.002em`（`precision.css`）；`.markdown-body`、设置正文、目录详情共享；消息列、运行状态与输入框（`workspace-composer-column`）严格共用同一变量、同一居中轴与同一 `--composer-gutter` | 逐页自定行长、连续 1px 字号微调、只给消息列或输入框单独设宽度、给输入框再写一个像素上限、绕开滑杆直接写会话宽度 |
 | 表面分层 | 常驻面板背景 + `--surface-fine` 细边；浮层才用 `--shadow-popover` / `--shadow-dialog` 两档 | 常驻内容逐卡加投影、自造单层阴影 |
-| 圆角 | `--radius-control:10px` / `--radius-panel:14px` / `--radius-dialog:20px` 唯一体系 | 5/6/8/9px 自创值 |
+| 圆角 | `--radius-control` / `--radius-panel` / `--radius-dialog` 三档由预设声明：paper/graphite 10/16/22px、glacier/obsidian 14/24/28px（`--button-radius:999px`）、peach 16/24/28px（999px）、instagram 12/18/24px、dracula 8/12/16px；未覆盖预设继承 paper `:root` 值 | 5/6/8/9px 自创值、组件内硬编码圆角 |
 | 语义色 | `--on-accent`、`--danger`、`--success`、`--warning`、`--accent`；t/s 徽标用 `--bg-selected` + `--text-muted` | `v2.3 §4.1` 所列硬编码色直写 |
 | 动效 | `§8.1` 三档时长 + 双缓动；Dialog 入场 `surface-dialog-in`（`--duration-overlay` + `--ease-out`，上浮 6px 缩放 0.99） | 魔法时长、持续发光、弹跳、大缩放 |
 | 嵌套浮层 | 主 Dialog 共享 overlay 1100 / 内容 1101；嵌套 picker/editor 提到 1110 并保留各自焦点域 | 与主层同 z 抢焦点 |
@@ -775,8 +775,8 @@ Compact 下记忆、压缩也进入聊天设置菜单，避免顶栏按钮相互
 配置浮层的公共头部在窄屏将操作按钮放在标题说明下方，关闭按钮保持右上角；不能通过挤窄标题列来容纳按钮。验收同时检查标题有效宽度、头部高度和横向溢出。
 
 
-### 21. 业务推导与可组合外观（2026-09-30）
+### 21. 业务推导与可组合外观（2026-09-30，2026-10-01 升级七预设）
 
 [前端设计方法与案例](./frontend-design-method.md)是新增前置规范；不能只完成视觉检查而缺少信息与关系记录。工作流配置是首个真实验证案例，见[实施与修订](./design/workflow-configuration-rollout.md)。
 
-全局材质、配色、明暗和效果相互独立。`useTheme` 是唯一状态入口，语义颜色与材质配方位于 `appearance.css`；经典明暗 Token 保留在 `tokens.css`。外观改变不能改变 API、执行范围、表单值和焦点。按钮仍是共享 Button，模态仍是 SurfaceDialog；玻璃只改变表面，不生成新控件库。离线壳与隔离历史阅读器暂采用经典明暗降级，不扩大 iframe 权限。
+全局外观由七套预设表达：明暗绑定预设（paper/glacier/peach/instagram 浅色，graphite/obsidian/dracula 深色），预设值唯一事实源是样板 `docs/design-previews/workflow-settings/themes.css`，移植为 `appearance.css` 的 `html[data-preset]` 块；背景、细腻动效、不透明（仅玻璃预设 glacier/obsidian）三个效果开关独立于预设。`useTheme` 是唯一状态入口，`chat:appearance:v2` 持久化，`lib/appearance.ts` 负责 v1 迁移。外观改变不能改变 API、执行范围、表单值和焦点。按钮仍是共享 Button，模态仍是 SurfaceDialog；玻璃只改变表面配方（导航/浮层外壳），正文与长文本表面保持实色，不生成新控件库。离线壳以 paper/graphite 锚点色保持明暗降级，不扩大 iframe 权限。

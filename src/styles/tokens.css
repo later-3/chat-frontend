@@ -26,8 +26,9 @@
   --accent-outline: color-mix(in srgb, var(--accent) 45%, transparent);
   --accent-shadow: color-mix(in srgb, var(--accent) 20%, transparent);
   --radius-control: 10px;
-  --radius-panel: 14px;
-  --radius-dialog: 20px;
+  --radius-panel: 16px;
+  --radius-dialog: 22px;
+  --button-radius: var(--radius-control);
   /* Motion tokens (UI/UX §8): one duration scale plus shared easings. New
      transitions and animations must use these instead of magic values. */
   --duration-fast: 120ms;    /* hover/press feedback, small reveals */
@@ -36,10 +37,15 @@
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   /* Layered shadows: an ambient layer for depth plus a direct layer for the
-     contact edge, following the UI/UX spec §4.4. */
-  --shadow-popover: 0 1px 1px #15101f0a, 0 4px 12px #15101f14, 0 12px 36px #15101f22;
-  --shadow-dialog: 0 2px 6px #15101f14, 0 16px 40px #15101f26, 0 32px 90px #15101f30;
-  --overlay: #17132166;
+     contact edge, following the UI/UX spec §4.4. Values come from the sample
+     theme collection (docs/design-previews/workflow-settings/themes.css). */
+  --shadow-popover: 0 1px 2px #1711210c, 0 8px 24px #1711211a, 0 24px 70px -24px #1711213d;
+  --shadow-composer: 0 -6px 20px #15101f1f;
+  --shadow-dialog: 0 1px 2px #17112112, 0 18px 52px #17112126, 0 44px 100px -30px #17112138;
+  --scrim: #19162559;
+  --overlay: var(--scrim);
+  --workspace-shadow: 0 1px 2px #20152905, 0 16px 50px -30px #20152935;
+  --control-shadow: inset 0 1px 0 var(--edge-light), 0 1px 2px #20152905;
   /* iOS safe-area insets (usable from JS/CSS everywhere) */
   --safe-area-top: env(safe-area-inset-top, 0px);
   --safe-area-right: env(safe-area-inset-right, 0px);
@@ -65,10 +71,44 @@
   --warning-bg: #FFF4D6;
   --danger: #B42332;
   --danger-bg: #FDECEF;
+  /* Semantic surface derivations. Defined once from the palette roles above, so every palette
+     and both modes inherit them; components must reference these instead of hand-rolled rgba(). */
+  --success-wash: color-mix(in srgb, var(--success) 8%, var(--bg));
+  --success-outline: color-mix(in srgb, var(--success) 40%, transparent);
+  --warning-wash: color-mix(in srgb, var(--warning) 10%, var(--bg));
+  --warning-outline: color-mix(in srgb, var(--warning) 40%, transparent);
+  --danger-wash: color-mix(in srgb, var(--danger) 8%, var(--bg));
+  --danger-outline: color-mix(in srgb, var(--danger) 40%, transparent);
+  --diff-add-wash: color-mix(in srgb, var(--success) 14%, transparent);
+  --diff-remove-wash: color-mix(in srgb, var(--danger) 14%, transparent);
+  --diff-hunk-wash: color-mix(in srgb, var(--accent) 12%, transparent);
+  --media-outline: var(--accent-outline);
   --user-bg: var(--bg-selected);
   --assistant-bg: var(--bg);
   --tool-bg: var(--bg-panel);
   --bg-subtle: var(--bg-panel);
+
+  /* Sample surface roles (paper base): wallpaper paints the page backdrop,
+     navigation/portal/field-surface own rails, float layers and inputs. Every
+     preset block in appearance.css overrides the whole set; components only
+     consume these names. */
+  --canvas: #f1f0ed;
+  --surface: var(--bg);
+  --navigation: var(--bg-panel);
+  --portal: var(--bg);
+  --field-surface: var(--bg);
+  --edge-light: #ffffffbf;
+  --glass-edge: #ffffffa3;
+  --glass-blur: 24px;
+  --button-fill: var(--accent);
+  --button-ink: var(--on-accent);
+  --button-hover: var(--accent-hover);
+  --button-pressed: var(--accent-pressed);
+  --ambient-a: #e7e1d9;
+  --ambient-b: #e3e0eb;
+  --ambient-c: #efede8;
+  --wallpaper: radial-gradient(ellipse at 8% 15%, var(--ambient-a), transparent 58%),
+    radial-gradient(ellipse at 94% 85%, var(--ambient-b), transparent 60%), var(--canvas);
 
   /* Mobile shell tokens: future themes override these without changing layout. */
   --mobile-surface: var(--bg);
@@ -83,34 +123,7 @@
   --mobile-header-height: calc(var(--safe-area-top) + var(--mobile-nav-height));
 }
 
-html.dark {
-  --bg: #1C1B20;
-  --bg-panel: #242329;
-  --bg-hover: #302E36;
-  --bg-selected: #363047;
-  --text: #EEEDF2;
-  --text-muted: #BDB7C8;
-  --text-dim: #ACA5B7;
-  --border: #423D4B;
-  --border-control: #817889;
-  --accent: #BEB0FF;
-  --accent-hover: #CBBDFF;
-  --accent-pressed: #D3C7FF;
-  --on-accent: #251D40;
-  --success: #79D5A2;
-  --success-bg: #20382B;
-  --warning: #F1C56B;
-  --warning-bg: #3B311E;
-  --danger: #FF9BA5;
-  --danger-bg: #40272E;
-  --user-bg: var(--bg-selected);
-  --assistant-bg: var(--bg);
-  --tool-bg: var(--bg-panel);
-  --bg-subtle: var(--bg-panel);
-  --mobile-surface: var(--bg);
-  --mobile-surface-muted: var(--bg-panel);
-  --mobile-control: var(--bg-panel);
-  --mobile-border: var(--border);
-  --mobile-accent: var(--accent);
-  --mobile-positive: var(--success);
-}
+/* Dark mode no longer has its own token block: the .dark class (still consumed
+   by shiki, file icons and native form controls) is driven by the preset, and
+   dark presets (graphite/obsidian/dracula) declare their full token set in
+   appearance.css. */

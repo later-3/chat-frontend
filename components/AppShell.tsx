@@ -145,7 +145,7 @@ export function AppShell({
   const { view: workspaceView, openMoments, openGroups, openTopics, openSettings, showChat: activateChat } = useWorkspaceView();
   const settingsVisible = workspaceView === "settings";
   const setSettingsVisible = (visible: boolean) => visible ? openSettings() : activateChat();
-  const { preference, toggleTheme, setTheme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
   const [settingsProject, setSettingsProject] = useState<ChatProjectSummary | null | undefined>(undefined);
   const [settingsProjects, setSettingsProjects] = useState<readonly ChatProjectSummary[]>([]);
   const [settingsProjectsError, setSettingsProjectsError] = useState<string | null>(null);
@@ -168,8 +168,7 @@ export function AppShell({
     window.addEventListener("popstate", restore);
     return () => window.removeEventListener("popstate", restore);
   }, []);
-  const themeLabelKey =
-    preference === "light" ? "theme.light" : preference === "dark" ? "theme.dark" : "theme.auto";
+  const themeLabelKey = theme === "dark" ? "theme.dark" : "theme.light";
   const { locale, setLocale, t: translate, supportedLocales } = useI18n();
   const isMobile = useIsMobile();
   const isNarrowMobile = useIsNarrowMobile();
@@ -1282,7 +1281,7 @@ export function AppShell({
       onMouseLeave={(event) => { event.currentTarget.style.color = "var(--text-muted)"; }}
       data-mobile-toolbar-action={mobile ? "theme" : undefined}
     >
-      {preference === "light" ? (
+      {theme === "light" ? (
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <circle cx="12" cy="12" r="5" />
           <line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" />
@@ -1290,15 +1289,9 @@ export function AppShell({
           <line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" />
           <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
         </svg>
-      ) : preference === "dark" ? (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-        </svg>
       ) : (
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <rect x="2" y="3" width="20" height="14" rx="2" />
-          <line x1="8" y1="21" x2="16" y2="21" />
-          <line x1="12" y1="17" x2="12" y2="21" />
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
         </svg>
       )}
     </button>
@@ -2431,7 +2424,7 @@ export function AppShell({
           window.history.pushState({workspaceNavigation:true}, "", `${url.pathname}${url.search}${url.hash}`);
         }}
         wideContent={wideContent} onContentWidth={toggleContentWidth} items={settingsItems}
-        theme={preference} onTheme={setTheme} language={locale} onLanguage={setLocale} onBack={returnToChatView}
+        language={locale} onLanguage={setLocale} onBack={returnToChatView}
         onRefresh={() => { setRefreshKey(key => key + 1); setExplorerRefreshKey(key => key + 1); }}
         onSelfCheck={isMobile ? () => { activateChat(); setSidebarOpen(false); setRightPanelOpen(false); setMobileDebugOpen(true); } : undefined} />}
     </div>
