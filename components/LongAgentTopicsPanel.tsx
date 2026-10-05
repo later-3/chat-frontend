@@ -303,10 +303,6 @@ export function LongAgentTopicsPanel({ initialAgentId, agents }: Props) {
                       projectId={longAgentId}
                       session={nodeSession}
                       topicNode={{ longAgentId, topicId: detail.topic.topicId, nodeId: selectedNodeId }}
-                      onSessionMemoryChanged={() => {
-                        void loadGraph().catch(cause => setError(String(cause)));
-                        void loadDetail(detail.topic.topicId).catch(cause => setError(String(cause)));
-                      }}
                       newSessionCwd={null}
                       newSessionDraftKey={null}
                     />

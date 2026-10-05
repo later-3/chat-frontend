@@ -10,8 +10,10 @@ export interface ExecutionSettlement {
 }
 
 export function friendSettlement(reference: FriendExecution, status: ExecutionSettlement["status"]): ExecutionSettlement {
+  // 一轮一次完成事件：键固定在「接受的轮次」上。轮中途绑定 Workflow runId 也不换键，
+  // 否则同一轮会以 run:<runId> 与 turn:<id> 两个键各响一次完成音。
   return { projectId: reference.projectId, sessionId: reference.sessionId,
-    executionId: reference.workflow?.runId ? `run:${reference.workflow.runId}` : `turn:${reference.id}`, status };
+    executionId: `turn:${reference.id}`, status };
 }
 
 /** Active observation and background revalidation share this delivery claim. No execution state is stored here. */

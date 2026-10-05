@@ -1,11 +1,12 @@
 import type {
   AgentConfigSelection,
+  AgentGenerationConfig,
   ChatRootConfig,
   ChatWorkflowId,
   WorkflowAgentToolPolicy,
   WorkflowAgentResources,
 } from "./chat-workflow-contract";
-import { parseChatRootConfig, parseWorkflowAgentToolPolicy } from "./chat-workflow-contract.ts";
+import { parseChatRootConfig, parseGenerationConfig, parseWorkflowAgentToolPolicy } from "./chat-workflow-contract.ts";
 
 interface BrowserSourceInfo {
   readonly path: string;
@@ -77,7 +78,8 @@ function readOptionalString(value: unknown, field: string): string | undefined {
 
 function readModelSource(value: unknown, field: string): WorkflowAgentInspection["agent"]["modelSource"] {
   if (value === undefined || value === null) return null;
-  if (value !== "workflow-default" && value !== "config-file" && value !== "durable" && value !== "chat-default") {
+  if (value !== "workflow-default" && value !== "config-file" && value !== "durable" && value !== "selection"
+    && value !== "chat-default") {
     throw new Error(`Chat返回了无效的${field}`);
   }
   return value;
@@ -235,11 +237,14 @@ export interface WorkflowAgentInspection {
     readonly sources: readonly { readonly kind: string; readonly path?: string }[];
     readonly effectiveModel: { readonly provider: string; readonly modelId: string } | null;
     readonly effectiveThinkingLevel: string;
-    readonly modelSource: "workflow-default" | "config-file" | "durable" | "chat-default" | null;
-    readonly thinkingSource: "workflow-default" | "config-file" | "durable" | "chat-default" | null;
+    readonly modelSource: "workflow-default" | "config-file" | "durable" | "selection" | "chat-default" | null;
+    readonly thinkingSource: "workflow-default" | "config-file" | "durable" | "selection" | "chat-default" | null;
+    readonly effectiveGeneration: AgentGenerationConfig | null;
+    readonly generationSource: "workflow-default" | "config-file" | "durable" | "selection" | "chat-default" | null;
     readonly durableConfig: {
       readonly model?: { readonly provider: string; readonly modelId: string };
       readonly thinkingLevel?: string;
+      readonly generation?: AgentGenerationConfig;
       readonly tools?: WorkflowAgentToolPolicy;
       readonly resources?: WorkflowAgentResources;
     } | null;
@@ -383,6 +388,9 @@ export function parseWorkflowAgentInspection(value: unknown, field: string): Wor
       ...(rawAgent.durableConfig.thinkingLevel === undefined
         ? {}
         : { thinkingLevel: readString(rawAgent.durableConfig.thinkingLevel, `${field}.agent.durableConfig.thinkingLevel`) }),
+      ...(rawAgent.durableConfig.generation === undefined
+        ? {}
+        : { generation: parseGenerationConfig(rawAgent.durableConfig.generation) }),
       ...(rawAgent.durableConfig.tools === undefined
         ? {}
         : { tools: parseWorkflowAgentToolPolicy(rawAgent.durableConfig.tools) }),
@@ -391,6 +399,9 @@ export function parseWorkflowAgentInspection(value: unknown, field: string): Wor
         : { resources: parseBrowserResources(rawAgent.durableConfig.resources) }),
     };
   }
+  const effectiveGeneration = rawAgent.effectiveGeneration === null
+    ? null
+    : parseGenerationConfig(rawAgent.effectiveGeneration);
   const agent: WorkflowAgentInspection["agent"] = {
     ...agentSummary,
     sources,
@@ -398,6 +409,8 @@ export function parseWorkflowAgentInspection(value: unknown, field: string): Wor
     effectiveThinkingLevel: readString(rawAgent.effectiveThinkingLevel, `${field}.agent.effectiveThinkingLevel`),
     modelSource: readModelSource(rawAgent.modelSource, `${field}.agent.modelSource`),
     thinkingSource: readModelSource(rawAgent.thinkingSource, `${field}.agent.thinkingSource`),
+    effectiveGeneration,
+    generationSource: readModelSource(rawAgent.generationSource, `${field}.agent.generationSource`),
     durableConfig,
   };
 
@@ -694,6 +707,7 @@ export async function saveChatAgentModelConfig(
   config: {
     readonly model?: { readonly provider: string; readonly modelId: string } | null;
     readonly thinkingLevel?: string | null;
+    readonly generation?: AgentGenerationConfig | null;
   },
   signal?: AbortSignal,
 ): Promise<void> {
@@ -706,6 +720,7 @@ export async function saveChatAgentModelConfig(
         projectId,
         ...(config.model === undefined ? {} : { model: config.model }),
         ...(config.thinkingLevel === undefined ? {} : { thinkingLevel: config.thinkingLevel }),
+        ...(config.generation === undefined ? {} : { generation: config.generation }),
       }),
       credentials: "same-origin",
       signal,

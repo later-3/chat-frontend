@@ -1,5 +1,6 @@
 "use client";
 import { Button } from "./ui/Button";
+import { Hint } from "./ui/Tooltip";
 
 import { translateWorkflowCopy } from "@/lib/i18n/workflow-copy";
 
@@ -1415,26 +1416,16 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
         </div>}
         {/* Retry banner */}
         {retryInfo && (
-          <div style={{
-            marginBottom: 8, padding: "5px 10px",
-            background: "rgba(234,179,8,0.08)", border: "1px solid rgba(234,179,8,0.25)",
-            borderRadius: 6, fontSize: 12, color: "rgba(180,130,0,0.9)",
-            display: "flex", alignItems: "center", gap: 6,
-          }}>
+          <div className="ui-note-inline is-warning" role="status">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
               <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
               <path d="M3 3v5h5" />
             </svg>
-             {t("chat.retrying", { attempt: retryInfo.attempt, max: retryInfo.maxAttempts })}{retryInfo.errorMessage && <span style={{ opacity: 0.7, marginLeft: 4 }}>— {retryInfo.errorMessage}</span>}
+             {t("chat.retrying", { attempt: retryInfo.attempt, max: retryInfo.maxAttempts })}{retryInfo.errorMessage && <span className="ui-note-detail">— {retryInfo.errorMessage}</span>}
           </div>
         )}
         {compactResultText && (
-          <div style={{
-            marginBottom: 8, padding: "5px 10px",
-            background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.24)",
-            borderRadius: 6, fontSize: 12, color: "rgba(5,150,105,0.95)",
-            display: "flex", alignItems: "center", gap: 6,
-          }}>
+          <div className="ui-note-inline is-success" role="status">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
               <polyline points="20 6 9 17 4 12" />
             </svg>
@@ -1442,22 +1433,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           </div>
         )}
         {compactError && (
-          <div
-            role="alert"
-            style={{
-              marginBottom: 8,
-              padding: "7px 10px",
-              background: "rgba(239,68,68,0.07)",
-              border: "1px solid rgba(239,68,68,0.3)",
-              borderRadius: 6,
-              color: "var(--danger)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 12,
-              lineHeight: 1.5,
-              whiteSpace: "pre-wrap",
-              overflowWrap: "anywhere",
-            }}
-          >
+          <div className="ui-note-inline is-danger" role="alert">
             <InterfaceFeedback message={compactError} />
           </div>
         )}
@@ -1505,7 +1481,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 background: "var(--bg)",
                 border: "1px solid var(--border)",
                 borderRadius: 8,
-                boxShadow: "0 -6px 20px rgba(0,0,0,0.12)",
+                boxShadow: "var(--shadow-composer)",
                 overflow: "hidden",
                 maxHeight: "min(44vh, 360px)",
               }}
@@ -1592,7 +1568,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                 background: "var(--bg)",
                 border: "1px solid var(--border)",
                 borderRadius: 8,
-                boxShadow: "0 -6px 20px rgba(0,0,0,0.12)",
+                boxShadow: "var(--shadow-composer)",
                 overflow: "hidden",
                 boxSizing: "border-box",
                 display: "flex",
@@ -1750,7 +1726,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
                   background: "var(--bg)",
                   border: "1px solid var(--border)",
                   borderRadius: 8,
-                  boxShadow: "0 -6px 20px rgba(0,0,0,0.12)",
+                  boxShadow: "var(--shadow-composer)",
                   overflow: "hidden",
                   maxHeight: "min(48vh, 400px)",
                 }}
@@ -1911,53 +1887,37 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
           {isStreaming ? (
             <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, alignSelf: "flex-end" }}>
               {onSteer && (
-                <button
+                <Hint label={t("interface.interrupt.the.current.run.and.send.this.message.now")}>
+                <Button
+                  variant="secondary"
+                  className="composer-queue-action is-interrupt"
                   onClick={() => sendQueued("steer")}
                   disabled={!canQueueStreamingMessage}
-                  title={t("interface.interrupt.the.current.run.and.send.this.message.now")}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 5,
-                    padding: isMobile ? "12px 14px" : "7px 12px",
-                    minHeight: isMobile ? 44 : undefined,
-                    background: canQueueStreamingMessage ? "rgba(234,179,8,0.12)" : "none",
-                    border: "1px solid rgba(234,179,8,0.35)",
-                    borderRadius: 8,
-                    color: canQueueStreamingMessage ? "rgba(180,130,0,1)" : "var(--text-dim)",
-                    cursor: canQueueStreamingMessage ? "pointer" : "not-allowed",
-                    fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
-                    transition: "background var(--duration-fast) var(--ease-standard)",
-                  }}
+                  data-composer-queue="steer"
                 >
                   <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M5 1 L9 5 L5 9" /><line x1="1" y1="5" x2="9" y2="5" />
                   </svg>
                   {t("chat.steer")}
-                </button>
+                </Button>
+                </Hint>
               )}
               {onFollowUp && (
-                <button
+                <Hint label={t("interface.send.this.message.after.the.agent.finishes")}>
+                <Button
+                  variant="secondary"
+                  className="composer-queue-action"
                   onClick={() => sendQueued("followup")}
                   disabled={!canQueueStreamingMessage}
-                  title={t("interface.send.this.message.after.the.agent.finishes")}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 5,
-                    padding: isMobile ? "12px 14px" : "7px 12px",
-                    minHeight: isMobile ? 44 : undefined,
-                    background: canQueueStreamingMessage ? "rgba(129,140,248,0.12)" : "none",
-                    border: "1px solid rgba(129,140,248,0.35)",
-                    borderRadius: 8,
-                    color: canQueueStreamingMessage ? "rgba(99,102,241,1)" : "var(--text-dim)",
-                    cursor: canQueueStreamingMessage ? "pointer" : "not-allowed",
-                    fontSize: 13, fontWeight: 600, letterSpacing: "-0.01em",
-                    transition: "background var(--duration-fast) var(--ease-standard)",
-                  }}
+                  data-composer-queue="followup"
                 >
                   <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="5" y1="1" x2="5" y2="6" /><polyline points="2.5 3.5 5 1 7.5 3.5" />
                     <line x1="2" y1="9" x2="8" y2="9" />
                   </svg>
                   {t("chat.followUp")}
-                </button>
+                </Button>
+                </Hint>
               )}
             </div>
           ) : (

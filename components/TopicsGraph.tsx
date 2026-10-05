@@ -35,7 +35,7 @@ const ORIGIN_X = 26;
 
 interface LaidNode {
   readonly topicId: string; readonly nodeId: string; readonly agentId: string; readonly title: string; readonly status: string;
-  readonly sessionMemory: string; readonly depth: number; readonly x: number; readonly y: number; readonly childCount: number;
+  readonly depth: number; readonly x: number; readonly y: number; readonly childCount: number;
 }
 interface LaidEdge { readonly id: string; readonly from: { x: number; y: number }; readonly to: { x: number; y: number }; readonly anchored: boolean }
 interface LaidTopic { readonly topicId: string; readonly title: string; readonly status: string; readonly x: number; readonly y: number; readonly count: number; readonly agentId: string }
@@ -93,7 +93,7 @@ function layout(groups: readonly TopicsGraphGroup[]): { nodes: LaidNode[]; edges
       const row = indexInDepth.get(node.nodeId) ?? 0;
       const x = ORIGIN_X + 14 + level * (CARD_W + GAP_X);
       const y = topicTop + row * (CARD_H + GAP_Y);
-      nodes.push({ topicId: topic.topicId, nodeId: node.nodeId, agentId: group.agentId, title: node.title, status: node.status, sessionMemory: node.sessionMemory,
+      nodes.push({ topicId: topic.topicId, nodeId: node.nodeId, agentId: group.agentId, title: node.title, status: node.status,
         depth: level, x, y, childCount: topic.nodes.filter((candidate) => candidate.parents.some((parent) => parent.parentNodeId === node.nodeId)).length });
       maxX = Math.max(maxX, x + CARD_W);
       for (const parent of node.parents) {
@@ -169,12 +169,11 @@ export function TopicsGraph({ groups, selectedAgentId, selectedTopicId, selected
                 className={`${styles.node} ${active ? styles.nodeActive : ""} ${node.status !== "active" ? styles.nodeArchived : ""}`}
                 style={{ left: node.x, top: node.y, width: CARD_W, height: CARD_H }}
                 onClick={() => onSelect(node.agentId, node.topicId, node.nodeId)}>
-                <span className={node.status === "archived" ? styles.dotArchived : node.sessionMemory === "off" ? styles.dotMemoryOff : styles.dotActive} />
+                <span className={node.status === "archived" ? styles.dotArchived : styles.dotActive} />
                 <span className={styles.nodeTitle}>{node.title}</span>
                 <span className={styles.nodeMeta}>
                   {node.depth === 0 ? t("topics.rootNode") : t("topics.branchNode")}
                   {node.childCount > 0 ? ` · ${String(node.childCount)} ${t("topics.childrenSuffix")}` : ""}
-                  {node.sessionMemory === "off" ? ` · ${t("topics.memoryOff")}` : ""}
                 </span>
               </button>
             );

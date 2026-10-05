@@ -20,6 +20,8 @@ import { TurnSummary } from "./TurnSummary";
 import { Hint } from "@/components/ui/Tooltip";
 import { RunStatus, ToolActivityContext } from "./RunStatus";
 import { MessageView } from "./MessageView";
+import { TurnPromptCaptures } from "./TurnPromptCaptures";
+import { groupPromptCaptures, parsePromptCaptureList, type PromptCaptureTurnGroup } from "@/lib/prompt-captures";
 import { isSessionActivity } from "@/lib/session-activity";
 import { turnProcessIndices } from "@/lib/message-display";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
@@ -27,7 +29,6 @@ import { ChatMinimap, useMessageRefs } from "./ChatMinimap";
 import { ExtensionStatusBar } from "./ExtensionStatusBar";
 import { useI18n } from "@/hooks/useI18n";
 import { useAgentSession, type NoticeItem } from "@/hooks/useAgentSession";
-import { useTopicMemoryControl } from "@/hooks/useTopicMemoryControl";
 import { useSessionMemoryCount } from "@/hooks/useSessionMemoryCount";
 import { sessionMemoryCountKey } from "@/lib/session-memory-count";
 import { useDragDrop } from "@/hooks/useDragDrop";
@@ -62,7 +63,6 @@ interface Props {
   contextProjectId?: string | null;
   /** Topic node target: sends go through the node route, everything else uses the shared Session surface. */
   topicNode?: TopicNodeTarget;
-  onSessionMemoryChanged?: () => void;
   session: SessionInfo | null;
   sessionRunning?: boolean;
   /** DOM slot in the conversation top bar that hosts this session's actions. */
@@ -145,11 +145,10 @@ function withAssistantBlocks(
   return next;
 }
 
-export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjectId, topicNode: requestedTopicNode, onSessionMemoryChanged, session, sessionRunning, newSessionCwd, newSessionDraftKey, onExecutionSettled, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onConnectionFailure, soundEnabled = true, onSoundToggle, playDoneSound = () => {}, unlockAudio }: Props) {
+export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjectId, topicNode: requestedTopicNode, session, sessionRunning, newSessionCwd, newSessionDraftKey, onExecutionSettled, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked, chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsChange, onSessionStatsPanelOpen, onContextUsageChange, onOpenFile, onConnectionFailure, soundEnabled = true, onSoundToggle, playDoneSound = () => {}, unlockAudio }: Props) {
   const topicNode = requestedTopicNode ?? session?.topicNode;
-  const sessionMemoryControl = useTopicMemoryControl(topicNode, onSessionMemoryChanged);
   const { t, locale } = useI18n();
-  // The session-memory bar: one view button and the ONE switch the owner sets before sending.
+  // The session-memory bar: one view button that opens the manual session-memory reader.
   const [memoryOpen, setMemoryOpen] = useState(false);
   const { pushStatus, onPushToggle } = usePushNotifications(locale);
   const isMobile = useIsMobile();
@@ -182,15 +181,44 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
     handleBuiltinSlashCommand,
     loadSlashCommands,
     setWorkflowId, setWorkflowAgentConfigs,
-    memoryEnabled, setMemoryEnabled,
     promptCaptureEnabled, setPromptCaptureEnabled,
   } = useAgentSession({
     projectId, deviceId, contextProjectId, topicNode, session, sessionRunning, newSessionCwd, newSessionDraftKey, onExecutionSettled, onAttentionNeeded, onSessionCreated, onSessionOpen, onSessionForked,
     chatInputRef, onBranchDataChange, onSystemPromptChange, onSystemPromptLoaderChange, onSessionStatsPanelOpen,
     onConnectionFailure,
-    sessionMemoryEnabled: sessionMemoryControl?.enabled,
   });
   const sessionBusy = agentRunning || bashRunning || isCompacting;
+  // 完整 Prompt 记录（开启时）：消息流内逐轮内嵌真实发出的 Provider 请求解析。
+  const prevAgentRunningRef = useRef(agentRunning);
+  useEffect(() => {
+    // 一轮结束（running→false）后刷新捕获索引，新记录立即可展开。
+    if (prevAgentRunningRef.current && !agentRunning) setCaptureRevision((value) => value + 1);
+    prevAgentRunningRef.current = agentRunning;
+  }, [agentRunning]);
+  const promptCaptureActive = promptCaptureEnabled && longAgentId !== null && !readOnly;
+  const [captureGroups, setCaptureGroups] = useState<ReadonlyMap<string, PromptCaptureTurnGroup>>(() => new Map());
+  const [captureRevision, setCaptureRevision] = useState(0);
+  const captureSessionId = session?.id ?? sessionIdRef.current ?? null;
+  useEffect(() => {
+    if (!promptCaptureActive || captureSessionId === null) { setCaptureGroups(new Map()); return; }
+    const controller = new AbortController();
+    void fetch(`/api/sessions/${encodeURIComponent(captureSessionId)}/prompt-captures?projectId=${encodeURIComponent(projectId)}`, { signal: controller.signal })
+      .then(async (response) => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return parsePromptCaptureList(await response.json()); })
+      .then((parsed) => {
+        if (controller.signal.aborted) return;
+        const byKey = new Map<string, PromptCaptureTurnGroup>();
+        for (const group of groupPromptCaptures(parsed.records)) {
+          // 轮次匹配键 = turnKey（Long Agent 轮即轮次 ID）；无 turnKey 的直调请求（如压缩摘要）不入流。
+          for (const record of group.records) {
+            if (record.turn.turnKey !== undefined) byKey.set(record.turn.turnKey, group);
+          }
+        }
+        setCaptureGroups(byKey);
+      })
+      .catch(() => { if (!controller.signal.aborted) setCaptureGroups(new Map()); });
+    return () => controller.abort();
+  }, [promptCaptureActive, captureSessionId, projectId, captureRevision]);
+
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -347,7 +375,13 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
     autoScrollRef.current?.update(activityKey);
   }, [activityKey, isEmptyChat, loading, error]);
 
-  const memoryStorageProjectId = longAgentId ?? projectId;
+  // 会话记忆归属 = 会话的真实存储项目：LA 受理回合已在服务端冻结绑定（turn.storageProjectId），
+  // 记忆文件与 Pi 会话文件同处一个项目目录。owner=LA 且 projectId 等于属主（Friend/主题节点会话，
+  // 存在于 Agent 容器 home）时，归属就是该 LA home；绑定项目的会话必须读绑定项目，而非 LA home。
+  const ownerLongAgentId = session?.owner.type === "long-agent" ? session.owner.longAgentId : null;
+  const memoryStorageProjectId = session?.projectId !== undefined && session.projectId !== ownerLongAgentId
+    ? session.projectId
+    : longAgentId ?? projectId;
   const memorySessionId = session?.id ?? sessionIdRef.current ?? null;
   // The badge reads the memory API itself; the dialog no longer has to be open for
   // it to be correct (see hooks/useSessionMemoryCount).
@@ -498,12 +532,6 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
       )}
       {memoryOpen && memorySessionId !== null && (
         <SessionMemoryDialog
-          enabled={sessionMemoryControl?.enabled ?? memoryEnabled}
-          onEnabledChange={sessionMemoryControl?.onChange ?? setMemoryEnabled}
-          busy={sessionMemoryControl?.busy ?? false}
-          ready={sessionMemoryControl?.ready ?? true}
-          error={sessionMemoryControl?.error ?? null}
-          retry={sessionMemoryControl?.retry ?? null}
           onCount={sessionMemoryCount.setCount}
           onClose={() => setMemoryOpen(false)}
           sessionId={memorySessionId}
@@ -665,6 +693,11 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
                 const workflowAgentId = msg.role === "assistant"
                   ? (msg as AssistantMessage).chatWorkflow?.agentId
                   : undefined;
+                // 完整 Prompt 内嵌：用户消息下挂本轮真实发出的 Provider 请求解析树（默认展开，可收起）。
+                const userTurnId = msg.role === "user" && longAgentId !== null
+                  ? (msg as { chatLongAgent?: { turnId?: string } }).chatLongAgent?.turnId ?? null
+                  : null;
+                const captureGroup = userTurnId === null ? undefined : captureGroups.get(userTurnId);
                 const view = workflowAgentId === undefined
                   ? messageView
                   : (
@@ -678,10 +711,17 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
                         {messageView}
                       </div>
                     );
-                if (!isVisible || options.attachRef === false || currentRefIdx === undefined) return view;
+                const withCapture = captureGroup === undefined
+                  ? view
+                  : (<div key={`${keyPrefix}-capture-${idx}`} className="chat-message-with-capture">
+                      {view}
+                      <TurnPromptCaptures projectId={projectId} sessionId={captureSessionId ?? ""}
+                        group={captureGroup} defaultExpanded={promptCaptureEnabled} />
+                    </div>);
+                if (!isVisible || options.attachRef === false || currentRefIdx === undefined) return withCapture;
                 return (
                   <div key={`${keyPrefix}-${idx}`} ref={attachVisibleRef(currentRefIdx)}>
-                    {view}
+                    {withCapture}
                   </div>
                 );
               };

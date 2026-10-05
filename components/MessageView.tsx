@@ -390,7 +390,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
             <img
               src={src}
               alt=""
-              style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "1px solid rgba(59,130,246,0.15)" }}
+              style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, objectFit: "contain", display: "block", border: "1px solid var(--media-outline)" }}
             />
           </ImagePreview>
         );
@@ -438,7 +438,7 @@ function UserMessageView({ message, cwd, onOpenFile, entryId, onFork, forking, o
             flex: 1,
             minWidth: 0,
             background: "var(--user-bg)",
-            border: "1px solid rgba(59,130,246,0.2)",
+            border: "1px solid var(--media-outline)",
             borderRadius: 12,
             padding: "8px 12px",
             fontSize: 14,
@@ -816,18 +816,8 @@ function AssistantMessageView({
       {providerError && (
         <div
           role="alert"
-          style={{
-            marginTop: blocks.length > 0 ? 8 : 0,
-            padding: "7px 10px",
-            border: "1px solid rgba(239,68,68,0.3)",
-            borderRadius: 6,
-            background: "rgba(239,68,68,0.07)",
-            color: "var(--danger)",
-            fontFamily: "var(--font-mono)",
-            fontSize: 12,
-            lineHeight: 1.5,
-            whiteSpace: "pre-wrap",
-            overflowWrap: "anywhere",
+          className="ui-note-inline is-danger"
+          style={{ marginTop: blocks.length > 0 ? 8 : 0, marginBottom: 0
           }}
         >{t("interface.error")}<InterfaceFeedback message={providerError} />
         </div>
@@ -1014,13 +1004,8 @@ function ToolCallBlock({ block, result }: { block: ToolCallContent; result?: Too
 
   return (
     <div
-      style={{
-        borderRadius: 7,
-        overflow: "hidden",
-        fontSize: 12,
-        border: isError ? "1px solid rgba(248,113,113,0.45)" : result && !isError ? "1px solid rgba(34,197,94,0.25)" : "1px solid var(--border)",
-        background: isError ? "rgba(248,113,113,0.05)" : result && !isError ? "rgba(34,197,94,0.04)" : "var(--bg-subtle)",
-      }}
+      className={`message-tool-card${isError ? " is-error" : result !== undefined ? " is-success" : ""}`}
+      data-tool-card-state={isError ? "error" : result !== undefined ? "success" : "pending"}
     >
       {/* ── Tool call header ── */}
       <button
@@ -1041,10 +1026,10 @@ function ToolCallBlock({ block, result }: { block: ToolCallContent; result?: Too
           minWidth: 0,
         }}
       >
-        <span style={{ color: isError ? "var(--danger)" : result ? "var(--success)" : "var(--text-muted)", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
+        <span style={{ color: "var(--text)", fontFamily: "var(--font-mono)", fontWeight: 600, fontSize: 11, flexShrink: 0 }}>
           {block.toolName}
         </span>
-        <span style={{ color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
+        <span style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>
           {isStreamingInput ? t("chat.generatingToolInput") : getToolPreview(block)}
         </span>
         <span style={{ fontSize: 11, flexShrink: 0 }}>{t(`runStatus.${toolState}`)}</span>
@@ -1064,7 +1049,7 @@ function ToolCallBlock({ block, result }: { block: ToolCallContent; result?: Too
             lineHeight: 1.5,
             overflow: "auto",
             background: "var(--bg-subtle)",
-            borderTop: isError ? "1px solid rgba(248,113,113,0.25)" : "1px solid rgba(34,197,94,0.2)",
+            borderTop: `1px solid ${isError ? "var(--danger-outline)" : "var(--success-outline)"}`,
             whiteSpace: "pre-wrap",
             wordBreak: "break-all",
           }}
@@ -1102,7 +1087,7 @@ function PairedDiffResult({ diff }: {
   return (
     <div
       style={{
-        borderTop: "1px solid rgba(34,197,94,0.15)",
+        borderTop: "1px solid var(--success-outline)",
         background: "var(--bg)",
       }}
     >
@@ -1188,9 +1173,9 @@ function SplitDiffHeader({ title, side }: { title: string; side: "left" | "right
 function SplitDiffCellView({ cell, side }: { cell: SplitDiffCell; side: "left" | "right" }) {
   const bg =
     cell.type === "added"
-      ? "rgba(34,197,94,0.12)"
+      ? "var(--diff-add-wash)"
       : cell.type === "removed"
-      ? "rgba(248,113,113,0.13)"
+      ? "var(--diff-remove-wash)"
       : cell.type === "empty"
       ? "var(--bg-subtle)"
       : "transparent";
@@ -1262,9 +1247,9 @@ function PatchTextView({ text }: { text: string }) {
           line.startsWith("-") && !line.startsWith("---") ? "removed" :
           "context";
         const bg =
-          kind === "added" ? "rgba(34,197,94,0.12)" :
-          kind === "removed" ? "rgba(248,113,113,0.13)" :
-          kind === "hunk" ? "rgba(96,165,250,0.12)" :
+          kind === "added" ? "var(--diff-add-wash)" :
+          kind === "removed" ? "var(--diff-remove-wash)" :
+          kind === "hunk" ? "var(--diff-hunk-wash)" :
           "transparent";
         const color =
           kind === "added" ? "var(--success)" :
@@ -1339,8 +1324,8 @@ function PairedResult({ text, images, isEmpty, isError }: {
   return (
     <div
       style={{
-        borderTop: `1px solid ${isError ? "rgba(248,113,113,0.3)" : "rgba(34,197,94,0.15)"}`,
-        background: isError ? "rgba(248,113,113,0.04)" : "var(--bg-subtle)",
+        borderTop: `1px solid ${isError ? "var(--danger-outline)" : "var(--success-outline)"}`,
+        background: isError ? "var(--danger-wash)" : "var(--bg-subtle)",
       }}
     >
       {images.length > 0 && (
@@ -1659,7 +1644,7 @@ function PlanReviewDecisionMessageView({ message }: { message: CustomMessage }) 
           </svg>
           <span>{t("chat.humanReview")}</span>
         </div>
-        <div style={{ background: "var(--user-bg)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: 12, padding: "8px 12px", color: "var(--text)", fontSize: 14, lineHeight: 1.6, wordBreak: "break-word" }}>
+        <div style={{ background: "var(--user-bg)", border: "1px solid var(--media-outline)", borderRadius: 12, padding: "8px 12px", color: "var(--text)", fontSize: 14, lineHeight: 1.6, wordBreak: "break-word" }}>
           {text}
         </div>
         {time && <div style={{ marginTop: 3, paddingRight: 4, color: "var(--text-dim)", fontSize: 10, textAlign: "right" }}>{time}</div>}

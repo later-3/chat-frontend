@@ -20,7 +20,6 @@
 .nodeMeta { font-size: 12px; color: var(--text-dim); }
 .node > span:first-child, .topicLabel > span:first-child { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .dotActive { background: var(--success); }
-.dotMemoryOff { background: var(--text-dim); }
 .dotArchived { background: var(--warning); }
 .dotTopic { background: var(--accent); }
 .groupLabel { position: absolute; display: inline-flex; align-items: baseline; gap: 8px; color: var(--text); font-size: 14px; font-weight: 750; letter-spacing: 0.2px; white-space: nowrap; }

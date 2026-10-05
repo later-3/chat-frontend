@@ -32,6 +32,13 @@ export type WorkflowAgentResources =
       readonly pluginSources: readonly string[];
     };
 
+/** Provider 采样参数；省略字段沿用 provider 默认值（与后端 AgentGenerationConfig 同边界）。 */
+export interface AgentGenerationConfig {
+  readonly temperature?: number;
+  readonly topP?: number;
+  readonly maxOutputTokens?: number;
+}
+
 export interface AgentConfigSelection {
   readonly primary?: string;
   readonly append?: readonly string[];
@@ -39,6 +46,10 @@ export interface AgentConfigSelection {
   readonly promptResources?: readonly AgentPromptResourceSelection[];
   readonly tools?: WorkflowAgentToolPolicy;
   readonly resources?: WorkflowAgentResources;
+  /** "当前会话"档覆盖：仅对当前 Session 的后续轮次生效，优先于持久配置，不进配置文件。 */
+  readonly model?: { readonly provider: string; readonly modelId: string };
+  readonly thinkingLevel?: string;
+  readonly generation?: AgentGenerationConfig;
 }
 
 export interface AgentPromptResourceSelection {
@@ -68,8 +79,6 @@ export interface ChatWorkflowPromptInput {
   readonly sessionId?: string;
   readonly workflow: ChatWorkflowId;
   readonly agentConfigs?: Readonly<Record<string, AgentConfigSelection>>;
-  /** Send-time switch for the Workflow's LAST node: "off" runs this round without writing session memory. */
-  readonly sessionMemory?: "on" | "off";
   /** Send-time switch: "on" records every final provider payload of this round to the session's prompt captures. */
   readonly promptCapture?: "on" | "off";
 }
@@ -171,14 +180,65 @@ function parsePromptResourceSelections(value: unknown): AgentPromptResourceSelec
   });
 }
 
+function readBoundedNumber(value: unknown, field: string, min: number, max: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(`${field}必须是有限数字`);
+  if (value < min || value > max) throw new Error(`${field}必须在${min}到${max}之间`);
+  return value;
+}
+
+function readBoundedInteger(value: unknown, field: string, min: number, max: number): number {
+  if (typeof value !== "number" || !Number.isInteger(value)) throw new Error(`${field}必须是整数`);
+  if (value < min || value > max) throw new Error(`${field}必须在${min}到${max}之间`);
+  return value;
+}
+
+/** 校验生成参数，边界与后端 parseGeneration 一致：temperature 0–2、topP 0–1、maxOutputTokens 1–32000。 */
+export function parseGenerationConfig(value: unknown): AgentGenerationConfig {
+  if (!isRecord(value)) throw new Error("generation必须是对象");
+  const allowed = new Set(["temperature", "topP", "maxOutputTokens"]);
+  const unknown = Object.keys(value).filter((key) => !allowed.has(key));
+  if (unknown.length > 0) throw new Error(`generation包含未知字段: ${unknown.join(", ")}`);
+  const temperature = value.temperature === undefined
+    ? undefined
+    : readBoundedNumber(value.temperature, "generation.temperature", 0, 2);
+  const topP = value.topP === undefined ? undefined : readBoundedNumber(value.topP, "generation.topP", 0, 1);
+  const maxOutputTokens = value.maxOutputTokens === undefined
+    ? undefined
+    : readBoundedInteger(value.maxOutputTokens, "generation.maxOutputTokens", 1, 32000);
+  if (temperature === undefined && topP === undefined && maxOutputTokens === undefined) {
+    throw new Error("generation至少需要temperature、topP或maxOutputTokens之一");
+  }
+  return {
+    ...(temperature === undefined ? {} : { temperature }),
+    ...(topP === undefined ? {} : { topP }),
+    ...(maxOutputTokens === undefined ? {} : { maxOutputTokens }),
+  };
+}
+
+function parseModelRef(value: unknown, field: string): { provider: string; modelId: string } {
+  if (!isRecord(value) || typeof value.provider !== "string" || value.provider.trim() === ""
+    || typeof value.modelId !== "string" || value.modelId.trim() === "") {
+    throw new Error(`${field}无效`);
+  }
+  return { provider: value.provider, modelId: value.modelId };
+}
+
 export function parseAgentConfigSelection(value: unknown): AgentConfigSelection {
   if (!isRecord(value)) throw new Error("Agent配置选择无效");
-  const allowed = new Set(["primary", "append", "promptFiles", "promptResources", "tools", "resources"]);
+  const allowed = new Set([
+    "primary", "append", "promptFiles", "promptResources", "tools", "resources",
+    "model", "thinkingLevel", "generation",
+  ]);
   const unknown = Object.keys(value).filter((key) => !allowed.has(key));
   if (unknown.length > 0) throw new Error(`Agent配置选择包含未知字段: ${unknown.join(", ")}`);
   if (value.primary !== undefined && (typeof value.primary !== "string" || value.primary.trim() === "")) {
     throw new Error("Agent primary无效");
   }
+  const model = value.model === undefined ? undefined : parseModelRef(value.model, "Agent model");
+  if (value.thinkingLevel !== undefined && (typeof value.thinkingLevel !== "string" || value.thinkingLevel.trim() === "")) {
+    throw new Error("Agent thinkingLevel无效");
+  }
+  const generation = value.generation === undefined ? undefined : parseGenerationConfig(value.generation);
   return {
     ...(value.primary === undefined ? {} : { primary: value.primary }),
     ...(value.append === undefined ? {} : { append: parseStringList(value.append, "append") }),
@@ -186,6 +246,9 @@ export function parseAgentConfigSelection(value: unknown): AgentConfigSelection 
     ...(value.promptResources === undefined ? {} : { promptResources: parsePromptResourceSelections(value.promptResources) }),
     ...(value.tools === undefined ? {} : { tools: parseWorkflowAgentToolPolicy(value.tools) }),
     ...(value.resources === undefined ? {} : { resources: parseWorkflowAgentResources(value.resources) }),
+    ...(model === undefined ? {} : { model }),
+    ...(value.thinkingLevel === undefined ? {} : { thinkingLevel: value.thinkingLevel as string }),
+    ...(generation === undefined ? {} : { generation }),
   };
 }
 
@@ -271,7 +334,6 @@ export function parseChatWorkflowPromptInput(value: unknown): ChatWorkflowPrompt
     ...(images === undefined ? {} : { images }),
     ...(value.sessionId === undefined ? {} : { sessionId: value.sessionId }),
     ...(value.agentConfigs === undefined ? {} : { agentConfigs }),
-    ...(value.sessionMemory === undefined ? {} : { sessionMemory: value.sessionMemory as "on" | "off" }),
     ...(value.promptCapture === undefined ? {} : { promptCapture: value.promptCapture as "on" | "off" }),
   };
 }

@@ -39,7 +39,7 @@ export interface TopicNodeParentRef { readonly edgeId: string; readonly parentNo
 export interface TopicNodeSummary {
   readonly nodeId: string; readonly sessionId: string; readonly title: string;
   readonly status: "active" | "archived" | "removed"; readonly readable: boolean;
-  readonly frozenProjectContext: string | null; readonly sessionMemory: "on" | "off";
+  readonly frozenProjectContext: string | null;
   /** The request that created this node: lets the UI resolve the node produced by an approved creation. */
   readonly createdByRequestId: string | null;
   readonly initialMemoryRefs: readonly { entryId: string; source: TopicMemoryAddress }[];
@@ -97,7 +97,6 @@ function parseNode(value: unknown, field: string): TopicNodeSummary & { topicId?
     status: value.status === "archived" ? "archived" : value.status === "removed" ? "removed" : "active",
     readable: value.readable === undefined ? true : boolean(value.readable, `${field}.readable`),
     frozenProjectContext: optionalText(value.frozenProjectContext),
-    sessionMemory: value.sessionMemory === "off" ? "off" : "on",
     createdByRequestId: optionalText(value.createdByRequestId),
     initialMemoryRefs: list(value.initialMemoryRefs, `${field}.initialMemoryRefs`).map((ref) => {
       if (!isRecord(ref) || typeof ref.entryId !== "string") throw new Error(`Chat返回了无效${field}.initialMemoryRefs`);
@@ -248,17 +247,6 @@ export async function fetchTopicNodeAnchors(longAgentId: string, topicId: string
       turnId: text(anchor.turnId, "锚点轮次"), settledAt: optionalText(anchor.settledAt),
     };
   });
-}
-
-export async function setTopicNodeSessionMemory(longAgentId: string, topicId: string, nodeId: string, input: {
-  expectedRevision: number; sessionMemory: "on" | "off";
-}, signal?: AbortSignal): Promise<{ node: TopicNodeSummary & { topicId: string }; revision: number }> {
-  const body = bodyOf(await requestJson(
-    `${base(longAgentId)}/${encodeURIComponent(topicId)}/nodes/${encodeURIComponent(nodeId)}`,
-    { method: "PATCH", body: JSON.stringify({ schemaVersion: 1, ...input }) }, signal,
-  ));
-  if (!Number.isSafeInteger(body.revision) || !isRecord(body.node)) throw new Error("Chat返回了无效节点更新");
-  return { node: { ...parseNode(body.node, "节点更新"), topicId: text(body.node.topicId, "节点 topicId") } as TopicNodeSummary & { topicId: string }, revision: body.revision as number };
 }
 
 function parseIntegrationState(body: Record<string, unknown>): TopicIntegrationState {

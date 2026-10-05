@@ -200,8 +200,6 @@ interface UseAgentSessionOptions {
    * shared observer drives the round. The read path stays the ordinary Session read.
    */
   topicNode?: TopicNodeTarget;
-  /** Topic node policy is a server fact; ordinary sessions keep their local preference. */
-  sessionMemoryEnabled?: boolean;
   session: SessionInfo | null;
   sessionRunning?: boolean;
   newSessionCwd: string | null;
@@ -448,9 +446,11 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const isNew = session === null && newSessionCwd !== null;
   const composerDraftKey = resolveComposerDraftKey(session?.id, session?.owner.type === "long-agent", contextProjectId, newSessionDraftKey, deviceId, projectId);
   const workflowConfigDraftKey = `${projectId}:${composerDraftKey ?? "new"}`;
-  // 顶栏上下文项目只携带注册用户项目；长期同事会话的存储项目就是 Agent 容器，
+  // 顶栏上下文项目只携带注册用户项目；Agent Home（owner id）不能作为执行项目，
   // 它作为协作上下文等价于"未选择"（受理时回落 Agent 容器），绝不作为 contextProjectId 发送。
-  const friendContextProjectId = contextProjectId !== undefined && contextProjectId !== null && contextProjectId !== projectId ? contextProjectId : null;
+  // 2026-10-01 三级导航：项目归属会话的 contextProjectId = 会话归属项目（= projectId prop），必须原样发送。
+  const agentHomeProjectId = session?.owner.type === "long-agent" ? session.owner.longAgentId : projectId;
+  const friendContextProjectId = contextProjectId !== undefined && contextProjectId !== null && contextProjectId !== agentHomeProjectId ? contextProjectId : null;
 
   const [data, setData] = useState<SessionData | null>(null);
   const [loading, setLoading] = useState(!isNew);
@@ -479,23 +479,16 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   }, []);
   const [agentPhase, setAgentPhase] = useState<AgentPhase>(null);
   const [notices, setNotices] = useState<NoticeItem[]>([]);
-  // Session-memory switch: one UI setting the owner flips BEFORE sending. Off = this round runs without
-  // the Workflow's last (memory) node. It is remembered per session so "I keep it off" needs no repeats.
-  const [memoryPreference, setMemoryEnabledState] = useState(true);
-  const memoryEnabled = opts.sessionMemoryEnabled ?? memoryPreference;
-  const setMemoryEnabled = useCallback((next: boolean) => {
-    setMemoryEnabledState(next);
-    try {
-      const key = `chat.session-memory:${sessionIdRef.current ?? "new"}`;
-      if (next) window.localStorage.removeItem(key); else window.localStorage.setItem(key, "off");
-    } catch { /* private mode: the switch still applies to this session */ }
-  }, []);
   // Prompt-capture switch: one UI setting flipped BEFORE sending. On = this round records every final
   // provider payload (full prompt regions, tools) to the session's prompt captures. Off = nothing written.
-  const [promptCapturePreference, setPromptCaptureState] = useState(false);
-  const promptCaptureEnabled = promptCapturePreference;
-  // Read at the moment of the send, so a switch flipped in this render can never be missed by an
-  // already-memoized send callback (the value is the user's send-time intent, not a stale render).
+  // 会话级开关：状态派生自 localStorage（按 session id），不依赖 effect 时序——
+  // 刷新后立即可恢复；override 非 null 时以本次会话内的手动切换为准。
+  const [promptCaptureOverride, setPromptCaptureState] = useState<boolean | null>(null);
+  const readPromptCapturePreference = (sessionId: string | null | undefined): boolean => {
+    try { return window.localStorage.getItem(`chat.prompt-capture:${sessionId ?? "new"}`) === "on"; }
+    catch { return false; }
+  };
+  const promptCaptureEnabled = promptCaptureOverride ?? (session === null || session === undefined ? false : readPromptCapturePreference(session.id));
   const promptCaptureRef = useRef(promptCaptureEnabled);
   promptCaptureRef.current = promptCaptureEnabled;
   const setPromptCaptureEnabled = useCallback((next: boolean) => {
@@ -528,12 +521,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
 
   const sessionIdRef = useRef<string | null>(session?.id ?? null);
-  useEffect(() => {
-    try {
-      setMemoryEnabledState(window.localStorage.getItem(`chat.session-memory:${sessionIdRef.current ?? "new"}`) !== "off");
-      setPromptCaptureState(window.localStorage.getItem(`chat.prompt-capture:${sessionIdRef.current ?? "new"}`) === "on");
-    } catch { /* nothing persisted */ }
-  }, [sessionIdRef.current]);
   const sessionLoadAbortRef = useRef<AbortController | null>(null);
   const workflowAbortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
@@ -1069,7 +1056,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         const accepted = await acceptTopicNodeMessage(topicNode, {
           requestId: pendingId ?? crypto.randomUUID(),
           workflow: workflowId,
-          ...(memoryEnabled ? {} : { sessionMemory: "off" as const }),
           ...(promptCaptureRef.current ? { promptCapture: "on" as const } : {}),
           text: message,
           ...(images?.length ? { images: images.map(image => ({ type: "image" as const, data: image.data, mimeType: image.mimeType })) } : {}),
@@ -1095,7 +1081,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           text: message, ...(friendExecutionRef.current?.workId
             ? { contextProjectId: friendExecutionRef.current.contextProjectId }
             : { contextProjectId: friendContextProjectId }),
-          ...(memoryEnabled ? {} : { sessionMemory: "off" as const }),
           ...(promptCaptureRef.current ? { promptCapture: "on" as const } : {}),
           ...(images?.length ? { images: images.map(image => ({ type: "image" as const, data:image.data, mimeType:image.mimeType })) } : {}),
         }, controller.signal);
@@ -1125,7 +1110,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             ? {}
             : { agentConfigs: submittedAgentConfigs }),
           ...(sessionIdRef.current === null ? {} : { sessionId: sessionIdRef.current }),
-          ...(memoryEnabled ? {} : { sessionMemory: "off" as const }),
           ...(promptCaptureRef.current ? { promptCapture: "on" as const } : {}),
         },
         controller.signal,
@@ -1230,9 +1214,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
       }
     }
   }, [observeFriend, setRunPhase, handleConnection, addNotice, agentConfigsByWorkflow, agentRunning, applySessionData, composerDraftKey, handleRunEvent, longAgentId, longAgents, newSessionCwd, newSessionDraftKey, onExecutionSettled, onConnectionFailure, onSessionCreated, onSessionOpen, projectId, contextProjectId, restoreSubmission, session?.cwd, topicNode, workflowConfigDraftKey, workflowId,
-    // The send callback reads the switch, so it MUST be a dependency: otherwise it keeps the value from
-    // the render that created it and a switched-off round still asks for session memory.
-    memoryEnabled, maintenance.busy, t]);
+    maintenance.busy, t]);
 
   const handlePlanReviewDecision = useCallback(async (decision: PlanReviewDecisionInput) => {
     const reference = activeWorkflowRunRef.current;
@@ -1376,8 +1358,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           await acceptTopicNodeMessage(topicNode, {
             requestId: pendingId,
             workflow: reference.workflow?.id ?? workflowId,
-            ...(memoryEnabled ? {} : { sessionMemory: "off" as const }),
-          ...(promptCaptureRef.current ? { promptCapture: "on" as const } : {}),
+            ...(promptCaptureRef.current ? { promptCapture: "on" as const } : {}),
             text: message,
             ...(images?.length
               ? { images: images.map((image) => ({ type: "image" as const, data: image.data, mimeType: image.mimeType })) }
@@ -1389,8 +1370,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             requestId: pendingId,
             sessionId: reference.sessionId,
             workflow: reference.workflow?.id ?? workflowId,
-            ...(memoryEnabled ? {} : { sessionMemory: "off" as const }),
-          ...(promptCaptureRef.current ? { promptCapture: "on" as const } : {}),
+            ...(promptCaptureRef.current ? { promptCapture: "on" as const } : {}),
             text: message,
             ...(friendExecutionRef.current?.workId
               ? { contextProjectId: friendExecutionRef.current.contextProjectId }
@@ -1409,7 +1389,7 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         addNotice({ type: "error", message: cause instanceof Error ? cause.message : String(cause) });
       }
     },
-    [addNotice, composerDraftKey, contextProjectId, longAgentId, memoryEnabled, promptCaptureEnabled, restoreSubmission, topicNode, unsupported, workflowId],
+    [addNotice, composerDraftKey, contextProjectId, longAgentId, promptCaptureEnabled, restoreSubmission, topicNode, unsupported, workflowId],
   );
   const handleSteer = useCallback(
     (message: string, images?: AttachedImage[]) => {
@@ -1615,7 +1595,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
     loadSlashCommands,
     setWorkflowId, setWorkflowAgentConfigs,
     setActiveLeafId, setData, setMessages,
-    memoryEnabled, setMemoryEnabled,
     promptCaptureEnabled, setPromptCaptureEnabled,
     dispatch, setAgentRunning, setForkingEntryId: () => {},
     bashRunning: false, pendingBash: null as PendingBash | null, handleAgentEventRef,

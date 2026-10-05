@@ -959,7 +959,7 @@ export function SessionSidebar({ contentPanel, onContentPanelChange: setContentP
         <Button iconOnly variant="ghost" type="button" className="workspace-icon" onClick={() => setRemovedSessionsOpen(true)} title={t("removedSessions.title")} aria-label={t("removedSessions.title")}><IconArchive size={18} /></Button>
         <Button iconOnly variant="ghost" type="button" className="workspace-icon" onClick={handleNewSession} disabled={!selectedCwd} title={t("i18n.newSession")} aria-label={t("i18n.newSession")}>＋</Button>
       </div>}
-      {projectSlot && createPortal(<div className="workspace-project-controls">
+      {projectSlot && contentPanel !== "long-agents" && createPortal(<div className="workspace-project-controls">
         {/* CWD picker */}
         <div ref={dropdownRef} style={{ position: "relative" }}>
           <button

@@ -56,7 +56,6 @@ interface Draft {
   timeZone: string;
   systemPromptMode: "pi-default" | "replace";
   systemPromptText: string;
-  responseTemplateText: string;
   customInstructionsText: string;
 }
 
@@ -72,7 +71,6 @@ function draftFrom(document: LongAgentConfigurationDocument): Draft {
     timeZone: document.agent.timeZone ?? "UTC",
     systemPromptMode: definition.systemPrompt.mode,
     systemPromptText: definition.systemPrompt.mode === "replace" ? definition.systemPrompt.text : "",
-    responseTemplateText: document.agent.responseTemplate ?? "",
     customInstructionsText: formatLongAgentInstructions(definition.customInstructions),
   };
 }
@@ -82,7 +80,6 @@ function updateFromDraft(
   draft: Draft,
 ): LongAgentConfigurationUpdate {
   return {
-    responseTemplate: draft.responseTemplateText.trim() === "" ? null : draft.responseTemplateText.trim(),
     name: draft.name.trim(),
     description: draft.description.trim(),
     enabled: draft.enabled,
@@ -455,7 +452,6 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                       <ConfigurationSection className={styles.disclosure} title={t("design.promptOptions")}>
                       <label>{t("longAgentSettings.systemPrompt")}<select value={draft.systemPromptMode} onChange={(event) => set("systemPromptMode", event.target.value as Draft["systemPromptMode"])}><option value="pi-default">{t("longAgentSettings.piDefaultPrompt")}</option><option value="replace">{t("longAgentSettings.replacePrompt")}</option></select></label>
                       {draft.systemPromptMode === "replace" && <label>{t("longAgentSettings.systemPromptText")}<textarea value={draft.systemPromptText} rows={8} onChange={(event) => set("systemPromptText", event.target.value)} /></label>}
-                      <label>{t("longAgentSettings.responseTemplate")}<textarea rows={3} value={draft.responseTemplateText} placeholder={"project：{{project}}"} onChange={(event) => set("responseTemplateText", event.target.value)} /><span className={styles.fieldHint}>{t("longAgentSettings.responseTemplateHint")}</span></label>
                       <label>{t("longAgentSettings.customInstructions")}<textarea value={draft.customInstructionsText} rows={8} placeholder={t("longAgentSettings.instructionSeparator", { separator: LONG_AGENT_INSTRUCTION_SEPARATOR })} onChange={(event) => set("customInstructionsText", event.target.value)} /><span className={styles.fieldHint}>{t("longAgentSettings.instructionSeparator", { separator: LONG_AGENT_INSTRUCTION_SEPARATOR })}</span></label>
                       </ConfigurationSection>
                     </fieldset>

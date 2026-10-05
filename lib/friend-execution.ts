@@ -99,7 +99,6 @@ export async function acceptFriendMessage(
     sessionId?: string;
     contextProjectId?: string | null;
     text: string;
-    sessionMemory?: "on" | "off";
     images?: { type: "image"; data: string; mimeType: string }[];
   },
   signal?: AbortSignal,
