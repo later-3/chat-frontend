@@ -14,7 +14,9 @@ import {
   type LongAgentProjectSession,
 } from "@/lib/long-agents-browser";
 import { fetchChatProjects, openChatProject, type ChatProjectSummary } from "@/lib/projects-contract";
-import { renameSession } from "@/lib/session-removal-browser";
+import { removeSession, renameSession } from "@/lib/session-removal-browser";
+import { SessionActionsMenu } from "./SessionActionsMenu";
+import { useConfirmation } from "./ui/Confirmation";
 import styles from "./LongAgentProjectTree.module.css";
 
 export interface LongAgentProjectTreeProps {
@@ -25,6 +27,8 @@ export interface LongAgentProjectTreeProps {
   readonly onOpenSession: (projectId: string, sessionId: string) => void | Promise<void>;
   /** 点击项目节点即切换到该项目：打开最新会话；该项目还没有会话时创建一条归属会话再打开。 */
   readonly onSelectProject?: (projectId: string) => void | Promise<void>;
+  /** 当前打开的会话被移除后通知宿主（宿主决定切换或回到空态）。 */
+  readonly onSessionRemoved?: (sessionId: string) => void;
 }
 
 function kindLabelKey(kind: string): string {
@@ -42,8 +46,9 @@ function projectName(projects: readonly ChatProjectSummary[], id: string, fallba
   return projects.find((project) => project.projectId === id)?.cachedName ?? fallback;
 }
 
-export function LongAgentProjectTree({ longAgentId, activeSessionId, activeProjectId, onOpenSession, onSelectProject }: LongAgentProjectTreeProps) {
+export function LongAgentProjectTree({ longAgentId, activeSessionId, activeProjectId, onOpenSession, onSelectProject, onSessionRemoved }: LongAgentProjectTreeProps) {
   const { t } = useI18n();
+  const confirm = useConfirmation();
   const [projects, setProjects] = useState<readonly ChatProjectSummary[]>([]);
   const [doc, setDoc] = useState<LongAgentConfigurationDocument | null>(null);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
@@ -186,6 +191,22 @@ export function LongAgentProjectTree({ longAgentId, activeSessionId, activeProje
     setSessions(refreshed); setSessionsLoaded(true);
   });
 
+  /** 移除会话：先确认（说明可恢复与保留期），再调用既有移除接口并刷新列表。 */
+  const removeProjectSession = (sessionId: string, title: string) => void run(async () => {
+    if (selectedProject === null) return;
+    const confirmed = await confirm(t("sessionActions.removeConfirm", { title: title.slice(0, 24) }), t("sessionActions.remove"));
+    if (!confirmed) return;
+    await removeSession(selectedProject, sessionId);
+    const refreshed = await fetchLongAgentProjectSessions(longAgentId, selectedProject, undefined, { force: true });
+    if (latest.current.longAgentId !== longAgentId) return;
+    setSessions(refreshed); setSessionsLoaded(true);
+    if (sessionId === activeSessionId) {
+      const next = refreshed.find((session) => session.sessionId !== sessionId);
+      onSessionRemoved?.(sessionId);
+      if (next !== undefined) await onOpenSession(next.projectId, next.sessionId);
+    }
+  });
+
   const boundProjectIds = doc?.agent.boundProjectIds ?? [];
   const workspaceId = boundProjectIds[0] ?? longAgentId;
 
@@ -224,7 +245,7 @@ export function LongAgentProjectTree({ longAgentId, activeSessionId, activeProje
           disabled={busy} onClick={() => newSession(selectedProject)}>{t("laProjectTree.newSession")}</Button>}
       </div>
       <ul className={styles.sessions}>
-        {sessions.map((session) => <li key={session.sessionId} className={styles.sessionRow}>
+        {sessions.map((session) => <li key={session.sessionId} className={`${styles.sessionRow} session-row`}>
           {renaming?.sessionId === session.sessionId ? (
             <input className={styles.sessionRename} autoFocus value={renaming.value}
               data-project-tree-rename-input={session.sessionId}
@@ -243,9 +264,10 @@ export function LongAgentProjectTree({ longAgentId, activeSessionId, activeProje
                 {t(kindLabelKey(session.kind))}{" · "}{session.messageCount} {t("laProjectTree.messagesSuffix")}
               </small>
             </button>
-            <button type="button" data-project-tree-rename={session.sessionId} className={styles.rename}
-              title={t("laProjectTree.rename")}
-              onClick={() => { renameCancelled.current = false; setRenaming({ sessionId: session.sessionId, value: session.title }); }}>✎</button>
+            <SessionActionsMenu sessionId={session.sessionId} title={session.title}
+              onRename={(_, title) => { renameCancelled.current = false; setRenaming({ sessionId: session.sessionId, value: title }); }}
+              onRemove={() => removeProjectSession(session.sessionId, session.title)}
+              {...(session.sessionId === activeSessionId ? {} : {})} />
           </>)}
         </li>)}
         {sessionsLoaded && sessions.length === 0 && <li className={styles.hint}>{t("laProjectTree.emptySessions")}</li>}

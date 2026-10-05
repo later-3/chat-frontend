@@ -1513,3 +1513,33 @@ span.token.table {
 .chat-prompt-embed-toggle:hover { color: var(--text); }
 .chat-prompt-embed-count { font-weight: 400; color: var(--text-dim); }
 .chat-prompt-embed .prompt-capture-record { margin-bottom: 6px; }
+
+/* 会话行的动作入口（Slack 同款）：默认不显示，hover 该行才出现一个 “⋯”。
+   列表行保持干净，动作数量增加也不需要改布局。 */
+.session-actions-trigger {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard), background var(--duration-fast) var(--ease-standard);
+}
+
+.session-row:hover .session-actions-trigger,
+.session-actions-trigger:focus-visible,
+.session-actions-trigger[data-state="open"] {
+  opacity: 1;
+}
+
+.session-actions-trigger:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
