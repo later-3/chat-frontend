@@ -134,6 +134,8 @@ export function AppShell({
   });
   const [chatActionsSlot, setChatActionsSlot] = useState<HTMLDivElement | null>(null);
   const [projectSlot, setProjectSlot] = useState<HTMLDivElement | null>(null);
+  // Friends 面板的网关状态与设置齿轮统一挂载点：顶栏最右（会话动作之后）。
+  const [longAgentToolbarSlot, setLongAgentToolbarSlot] = useState<HTMLDivElement | null>(null);
   const [filesSlot, setFilesSlot] = useState<HTMLDivElement | null>(null);
   const lastCoworkerRef = useRef<SessionInfo | null>(null);
   const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
@@ -1225,6 +1227,7 @@ export function AppShell({
         contentPanel={contentPanel}
         onContentPanelChange={setContentPanel}
         projectSlot={projectSlot}
+        longAgentToolbarSlot={longAgentToolbarSlot}
         filesSlot={filesSlot}
         selectedSession={selectedSession}
         selectedSessionId={selectedSession?.id ?? null}
@@ -1836,6 +1839,8 @@ export function AppShell({
                 label={translate("layout.conversationWidth")}
                 autoLabel={translate("layout.conversationWidthAuto")}
               /></PopoverContent></Popover>
+              {/* Friends 网关状态 + 设置齿轮固定在顶栏最右（完整历史/压缩等会话动作之后）。 */}
+              <div ref={setLongAgentToolbarSlot} className="workspace-la-toolbar-slot" />
             </>
           )}
           {isMobile && (
@@ -1851,6 +1856,10 @@ export function AppShell({
               hasSession={showChat}
               hideInlineButton
             />
+          )}
+          {/* 窄屏时 Friends 网关状态 + 设置齿轮的挂载点同样在最右。 */}
+          {isMobile && (
+            <div ref={setLongAgentToolbarSlot} className="workspace-la-toolbar-slot" />
           )}
           {/* Top panel dropdown — shared, only one active at a time */}
           {activeTopPanel && topPanelPos && (

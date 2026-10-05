@@ -1,11 +1,11 @@
 "use client";
 
 import { InterfaceFeedback } from "./InterfaceFeedback";
-import { Button } from "./ui/Button";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { IconRefresh, IconSettings } from "@tabler/icons-react";
-import { Hint } from "./ui/Tooltip";
+import { createPortal } from "react-dom";
+import { IconPlugConnected, IconRefresh, IconSettings } from "@tabler/icons-react";
+import { ToolbarAction, ToolbarStatus } from "./ui/ToolbarAction";
 import { useLongAgentPresence } from "@/hooks/useLongAgentPresence";
 import { useI18n } from "@/hooks/useI18n";
 import {
@@ -27,6 +27,8 @@ interface Props {
   onOpenSession: (sessionId: string, projectId: string, date?: string) => void | Promise<void>;
   onRequestClose?: () => void;
   closeAfterOpen?: boolean;
+  /** 顶栏 slot（最右）：面板可见时把网关状态与设置齿轮 Portal 进顶栏，替代原面板头部。 */
+  toolbarSlot: HTMLElement | null;
 }
 
 export function ProjectLongAgentSection({
@@ -38,6 +40,7 @@ export function ProjectLongAgentSection({
   onOpenSession,
   onRequestClose,
   closeAfterOpen = false,
+  toolbarSlot,
 }: Props) {
   const { t } = useI18n();
   const [agents, setAgents] = useState<readonly LongAgentSummary[]>([]);
@@ -139,41 +142,40 @@ export function ProjectLongAgentSection({
 
   if (!visible) return null;
 
+  const gatewayLabel = channelHostAvailable
+    ? t("sidebar.longAgentImOnline")
+    : t("sidebar.longAgentImOffline");
+
   return (
     <>
+    {/* 面板头部已取消：网关状态（ToolbarStatus，非交互读数）与设置齿轮（ToolbarAction）
+        统一走顶栏 toolbar-action 体系，Portal 到顶栏最右 slot。 */}
+    {toolbarSlot && createPortal(
+      <>
+        {!loading && agents.length > 0 && (
+          // 网关健康是基础设施层（NanoClaw 常驻进程连通性），独立于下方每个 Agent 的
+          // presence 状态；图标/文字随 Appearance 的 label 偏好，颜色随连通状态过渡。
+          <ToolbarStatus
+            label={gatewayLabel}
+            tone={channelHostAvailable ? "success" : "danger"}
+            icon={<IconPlugConnected size={18} stroke={1.8} aria-hidden="true" />}
+          />
+        )}
+        <ToolbarAction
+          label={t("longAgentSettings.open")}
+          icon={<IconSettings size={18} stroke={1.8} aria-hidden="true" />}
+          onClick={() => setSettingsOpen(true)}
+          disabled={agents.length === 0}
+        />
+      </>,
+      toolbarSlot,
+    )}
     <section
       id="sidebar-long-agents-panel"
       className={styles.section}
       role="tabpanel"
       aria-labelledby="workspace-coworkers-tab"
     >
-      <div className={styles.header}>
-        <h2 id="project-long-agent-heading">{t("sidebar.longAgentCoworkers")}</h2>
-        <div className={styles.headerActions}>
-        {!loading && agents.length > 0 && (
-          // Status is a dot plus an accessible name: the full sentence never fits in a
-          // 224px rail, and truncating it ("Gateway c…") is not a readable state.
-          <Hint label={channelHostAvailable
-            ? t("sidebar.longAgentImOnlineTitle")
-            : t("sidebar.longAgentImOfflineTitle")} side="top">
-            <span
-              className={channelHostAvailable ? styles.hostOnline : styles.hostOffline}
-              tabIndex={0}
-              role="img"
-              aria-label={channelHostAvailable ? t("sidebar.longAgentImOnline") : t("sidebar.longAgentImOffline")}
-            >
-              <span aria-hidden="true" />
-            </span>
-          </Hint>
-        )}
-        <Button iconOnly variant="ghost" type="button" className={styles.headerAction}
-          onClick={() => setSettingsOpen(true)}
-          disabled={agents.length === 0}
-          aria-label={t("longAgentSettings.open")}>
-          <IconSettings size={18} stroke={1.8} aria-hidden="true" />
-        </Button>
-        </div>
-      </div>
 
       {loading && agents.length === 0 ? (
         <div className={styles.loading} role="status">{t("sidebar.longAgentLoading")}</div>

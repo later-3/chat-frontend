@@ -236,6 +236,9 @@
 /* Session actions (memory, compact, …) are portalled into the top bar; empty means no space. */
 .workspace-chat-actions-slot { display:flex; align-items:stretch; height:100%; flex:none; }
 .workspace-chat-actions-slot:empty { display:none; }
+/* Friends 面板的网关状态与设置齿轮 Portal 到顶栏最右（会话动作之后）；面板不可见时收起不留空位。 */
+.workspace-la-toolbar-slot { display:flex; align-items:stretch; height:100%; flex:none; }
+.workspace-la-toolbar-slot:empty { display:none; }
 /* Chat area = [tasks & archive region | conversation]. The region reuses the
    shared docked-panel primitive, so opening it looks exactly like opening the
    project files panel: same width transition, same fixed-width inner content. */

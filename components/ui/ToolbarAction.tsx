@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from "react";
 import { Hint } from "./Tooltip";
 import { useToolbarLabels } from "@/hooks/useToolbarLabels";
 
@@ -44,5 +44,37 @@ export const ToolbarAction = forwardRef<HTMLButtonElement, ToolbarActionProps>(f
       {badge > 0 && <span className="toolbar-action-badge" aria-hidden="true">{badge}</span>}
       {showLabel && <span className="toolbar-action-label">{label}</span>}
     </button>
+  </Hint>;
+});
+
+export interface ToolbarStatusProps extends Omit<HTMLAttributes<HTMLSpanElement>, "children"> {
+  /** Accessible name; also the tooltip text and the visible label when labels are on. */
+  label: string;
+  icon: ReactNode;
+  /** Semantic tone of the readout; `muted` keeps the default toolbar color. */
+  tone?: "muted" | "success" | "warning" | "danger";
+}
+
+/**
+ * Non-interactive twin of ToolbarAction for the top bar (UI/UX §13.2): same
+ * metrics, label preference, and transition, but a status readout instead of a
+ * button — no cursor/hover affordance, so it never looks clickable.
+ */
+export const ToolbarStatus = forwardRef<HTMLSpanElement, ToolbarStatusProps>(function ToolbarStatus(
+  { label, icon, tone = "muted", className = "", ...props }, ref,
+) {
+  const { labels } = useToolbarLabels();
+  return <Hint label={label}>
+    <span
+      {...props}
+      ref={ref}
+      role="img"
+      aria-label={label}
+      data-toolbar-status={tone}
+      className={`toolbar-action is-status tone-${tone}${labels ? "" : " is-icon-only"} ${className}`.trim()}
+    >
+      <span className="toolbar-action-icon" aria-hidden="true">{icon}</span>
+      {labels && <span className="toolbar-action-label">{label}</span>}
+    </span>
   </Hint>;
 });

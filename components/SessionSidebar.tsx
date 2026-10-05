@@ -101,6 +101,7 @@ interface Props {
   contentPanel: SidebarContentPanel;
   onContentPanelChange: (panel: SidebarContentPanel) => void;
   projectSlot: HTMLElement | null;
+  longAgentToolbarSlot: HTMLElement | null;
   filesSlot: HTMLElement | null;
 
   momentsActive?: boolean;
@@ -367,7 +368,7 @@ function PiWebTitle() {
   );
 }
 
-export function SessionSidebar({ contentPanel, onContentPanelChange: setContentPanel, projectSlot, filesSlot, momentsActive = false, onOpenMoments, selectedSession, selectedSessionId, newSessionDraftKey, onSelectSession, onOpenSessionById, onNewSession, initialSessionId, initialSessionProjectId, skipInitialProjectSelection, onInitialRestoreDone, onReady, refreshKey, onSessionRemoved, selectedCwd: selectedCwdProp, selectedProjectId, onCwdChange, onOpenFile, explorerRefreshKey, onExplorerRefresh, onAtMention, onAtMentions, mobileView = "sessions", onMobileViewChange, onRequestClose, onBackgroundTaskDone, onRunningSessionIdsChange }: Props) {
+export function SessionSidebar({ contentPanel, onContentPanelChange: setContentPanel, projectSlot, longAgentToolbarSlot, filesSlot, momentsActive = false, onOpenMoments, selectedSession, selectedSessionId, newSessionDraftKey, onSelectSession, onOpenSessionById, onNewSession, initialSessionId, initialSessionProjectId, skipInitialProjectSelection, onInitialRestoreDone, onReady, refreshKey, onSessionRemoved, selectedCwd: selectedCwdProp, selectedProjectId, onCwdChange, onOpenFile, explorerRefreshKey, onExplorerRefresh, onAtMention, onAtMentions, mobileView = "sessions", onMobileViewChange, onRequestClose, onBackgroundTaskDone, onRunningSessionIdsChange }: Props) {
   const { t } = useI18n();
   const isMobile = useIsMobile();
   const [allSessions, setAllSessions] = useState<SessionInfo[]>([]);
@@ -1498,6 +1499,7 @@ export function SessionSidebar({ contentPanel, onContentPanelChange: setContentP
       {(!isMobile || mobileView === "sessions") && onOpenSessionById && (
         <ProjectLongAgentSection
           projectId={null}
+          toolbarSlot={longAgentToolbarSlot}
           selectedLongAgentId={selectedSession?.owner.type === "long-agent" ? selectedSession.owner.longAgentId : undefined}
           selectedSessionId={selectedSessionId}
           visible={contentPanel === "long-agents"}

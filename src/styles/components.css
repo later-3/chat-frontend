@@ -1257,6 +1257,16 @@ span.token.table {
   .toolbar-action.is-frame, .toolbar-action.is-frame.is-icon-only { min-width: 44px; min-height: 44px; }
 }
 
+/* Non-interactive status readout (ToolbarStatus): shares every metric and the
+   color/background transition with .toolbar-action, but never looks clickable
+   and keeps its semantic tone across hover. Declared after the hover rules so
+   the tone wins. */
+.toolbar-action.is-status { cursor: default; }
+.toolbar-action.is-status:hover:not(:disabled) { background: none; }
+.toolbar-action.is-status.tone-success { color: var(--success); }
+.toolbar-action.is-status.tone-warning { color: var(--warning); }
+.toolbar-action.is-status.tone-danger { color: var(--danger); }
+
 /* ---------------------------------------------------------------------------
    Conversation width slider (UI/UX §20.7): a quiet scrollbar-like control in
    the conversation top bar, built on the Radix slider primitive. Right widens,

@@ -87,3 +87,16 @@
 - 信息与关系：SurfaceDialog 是固定尺寸 flex 列（§20.6 统一弹层，内容单独滚动 §412）；行模式采用既有 `catalog-item` 关系（左对齐、全宽、hover 背景、圆角 Token）；宽幅弹层用 auto-fill 网格填充，不留死空间。
 - 实施：重排内容为 nav（返回/路径/转到）+ 可滚列表（flex:1）+ footer 三段，全部成为弹层 flex 列的直接子级；在 `components.css` 补写 `.directory-picker-*` 全套样式（条目左对齐 mono、网格填充、hover、44px Compact 规则、footer 安全区）；错误提示移到 footer 上方常驻可见。
 - 验收：条目左对齐成行、hover 有形、列表独立滚动、宽幅下网格填充无空洞；`pnpm test`、`pnpm typecheck`、`pnpm build` 通过并回写浏览器实测截图。
+
+## Friends 面板头部移除：网关状态与设置入口上顶栏
+
+日期：2026-10-05。最小记录。
+
+- 任务与入口：用户要求删除 Friends 侧栏面板的整个头部（"Friends" 标题、网关绿点、设置齿轮），齿轮移到顶栏。入口：左侧 Friends 面板 + 顶栏（桌面与窄屏）。
+- 当前问题与证据：面板头部在 224px 栏内占一行，绿点是裸圆点、含义不可读（截断成 "Gateway c…" 更糟）；齿轮与标题把面板高度花在非列表内容上。
+- 信息与关系：头部绿点与头像右下角绿点不是同一层——头部是 NanoClaw 网关（常驻门卫进程）健康检查，整个列表共用一盏（所有 Friend 默认共享一个 Host 实例）；头像点是单个 Agent 的 presence（就绪/工作中）。两层独立是刻意设计：网关挂了网页照常可用，只有 IM 断，bridge.ts 注释明确 channel health 不得影响 Web 可用性。用户拍板：网关状态保留但移到顶栏，且不得用裸圆点表达。
+- 关系推导：网关健康 = 基础设施层状态 → 顶栏用「图标 + 文字」chip 表达（绿 = 已连接，红 = 未连接），tooltip 保留完整含义句（"不代表消息渠道已连接"）；设置齿轮 = 面板动作 → 与其控制的面板同侧（顶栏左侧、列表开关旁），沿用 Portal slot 惯例；面板不可见或 slot 为空 → `:empty` 收起不留空位。
+- 实施映射：`ProjectLongAgentSection` 删除整个 header 与 `.hostOnline/.hostOffline/.headerAction` 样式；新增 `toolbarSlot` prop，网关 chip（`IconPlugConnected` + `sidebar.longAgentImOnline/Offline` 文案）与齿轮（改用统一 `ToolbarAction`）通过 `createPortal` 渲染进顶栏 `workspace-la-tools-slot`；`AppShell` 新增 slot state 并经 `SessionSidebar` 透传。空 Agent 列表时 chip 不渲染、齿轮禁用（与原行为一致）。
+- 验收：Friends 面板无头部行，列表直接从面板顶部开始；仅 Friends 面板可见时顶栏出现 chip 与齿轮，切回普通会话列表则收起；网关未连接时 chip 变红并给出完整 tooltip；窄屏与桌面、明暗主题下排列正常；`pnpm test`、`pnpm typecheck`、`pnpm build` 通过。
+- 修订（2026-10-05，用户纠正）：齿轮不放左侧，移到顶栏最右（完整历史/压缩等会话动作之后），新增桌面专用 `workspace-la-actions-slot`，窄屏无此 slot 时回退到 chip 旁；网关 chip 默认只显示图标，跟随 Appearance"图标+文字"偏好（`useToolbarLabels`）显示文字，无障碍名称始终由 aria-label 提供。
+- 修订二（2026-10-05，用户纠正）：网关状态与齿轮合并为顶栏最右一个挂载点（`workspace-la-toolbar-slot`，桌面/窄屏各渲染一处、同一 ref），左侧 slot 链整体删除；新增 `ToolbarStatus`（`ToolbarAction` 的非交互孪生，同结构同类名同过渡动画，`is-status` 修饰禁 hover/pointer 并按 `tone-success/warning/danger` 着色），网关指示改用它，删掉独立的 gatewayChip 样式，顶栏小图标统一走 `toolbar-action` 一套方案。
