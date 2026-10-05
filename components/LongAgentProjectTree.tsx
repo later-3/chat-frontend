@@ -16,6 +16,8 @@ import {
 import { fetchChatProjects, openChatProject, type ChatProjectSummary } from "@/lib/projects-contract";
 import { removeSession, renameSession } from "@/lib/session-removal-browser";
 import { SessionActionsMenu } from "./SessionActionsMenu";
+import { SessionSearchOverlay } from "./SessionSearchOverlay";
+import { RemovedSessionsPanel } from "./RemovedSessionsPanel";
 import { useConfirmation } from "./ui/Confirmation";
 import styles from "./LongAgentProjectTree.module.css";
 
@@ -59,6 +61,11 @@ export function LongAgentProjectTree({ longAgentId, activeSessionId, activeProje
   // 用户手动命名：预填当前显示标题；未改动则不写盘（把“第一句话兜底”误固化成真名字）。
   const [renaming, setRenaming] = useState<{ sessionId: string; value: string } | null>(null);
   const renameCancelled = useRef(false);
+  // 会话管理入口：搜索浮层、移除区弹层、批量操作模式（列表默认保持干净）。
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [removedOpen, setRemovedOpen] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedSessions, setSelectedSessions] = useState<readonly string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const latest = useRef({ longAgentId, selectedProject });
   latest.current = { longAgentId, selectedProject };
@@ -207,6 +214,23 @@ export function LongAgentProjectTree({ longAgentId, activeSessionId, activeProje
     }
   });
 
+  /** 批量移除：一次确认后逐个调用既有移除接口；失败项保留选中状态并提示。 */
+  const removeSelectedSessions = () => void run(async () => {
+    if (selectedProject === null || selectedSessions.length === 0) return;
+    const confirmed = await confirm(t("sessionActions.removeManyConfirm", { count: selectedSessions.length }), t("sessionActions.remove"));
+    if (!confirmed) return;
+    const failed: string[] = [];
+    for (const sessionId of selectedSessions) {
+      try { await removeSession(selectedProject, sessionId); }
+      catch { failed.push(sessionId); }
+    }
+    setSelectedSessions(failed);
+    if (failed.length === 0) setSelectMode(false);
+    const refreshed = await fetchLongAgentProjectSessions(longAgentId, selectedProject, undefined, { force: true });
+    if (latest.current.longAgentId !== longAgentId) return;
+    setSessions(refreshed); setSessionsLoaded(true);
+  });
+
   const boundProjectIds = doc?.agent.boundProjectIds ?? [];
   const workspaceId = boundProjectIds[0] ?? longAgentId;
 
@@ -241,6 +265,14 @@ export function LongAgentProjectTree({ longAgentId, activeSessionId, activeProje
     {selectedProject !== null && <>
       <div className={styles.sessionsHeader}>
         <p className={styles.heading}>{projectName(projects, selectedProject, selectedProject)}</p>
+        <button type="button" data-project-tree-search className="session-actions-trigger" style={{ opacity: 1 }}
+          title={t("laProjectTree.search")} aria-label={t("laProjectTree.search")} onClick={() => setSearchOpen(true)}>&#8981;</button>
+        <button type="button" data-project-tree-removed className="session-actions-trigger" style={{ opacity: 1 }}
+          title={t("laProjectTree.removed")} aria-label={t("laProjectTree.removed")} onClick={() => setRemovedOpen(true)}>&#8635;</button>
+        <button type="button" data-project-tree-select className="session-actions-trigger" style={{ opacity: 1 }}
+          data-active={selectMode} title={selectMode ? t("laProjectTree.selectDone") : t("laProjectTree.select")}
+          aria-label={t("laProjectTree.select")}
+          onClick={() => { setSelectMode((mode) => !mode); setSelectedSessions([]); }}>{selectMode ? "✓" : "☰"}</button>
         {selectedProject !== workspaceId && <Button variant="primary" type="button" className={styles.newSession} data-project-tree-new={selectedProject}
           disabled={busy} onClick={() => newSession(selectedProject)}>{t("laProjectTree.newSession")}</Button>}
       </div>
@@ -256,6 +288,11 @@ export function LongAgentProjectTree({ longAgentId, activeSessionId, activeProje
               }}
               onBlur={() => { if (renameCancelled.current) { renameCancelled.current = false; return; } commitRename(); }} />
           ) : (<>
+            {selectMode && <input type="checkbox" data-session-select={session.sessionId}
+              checked={selectedSessions.includes(session.sessionId)}
+              onChange={(event) => setSelectedSessions((current) => event.target.checked
+                ? [...current, session.sessionId]
+                : current.filter((id) => id !== session.sessionId))} />}
             <button type="button" data-project-tree-session={session.sessionId}
               className={session.sessionId === activeSessionId ? styles.activeSession : styles.session}
               onClick={() => void onOpenSession(session.projectId, session.sessionId)}>
@@ -272,7 +309,24 @@ export function LongAgentProjectTree({ longAgentId, activeSessionId, activeProje
         </li>)}
         {sessionsLoaded && sessions.length === 0 && <li className={styles.hint}>{t("laProjectTree.emptySessions")}</li>}
       </ul>
+      {selectMode && <div className="session-bulk-bar" data-session-bulk-bar>
+        <span>{t("laProjectTree.selectedCount", { count: selectedSessions.length })}</span>
+        <Button variant="secondary" type="button" disabled={selectedSessions.length === 0}
+          data-session-bulk-remove onClick={removeSelectedSessions}>
+          {t("laProjectTree.removeSelected", { count: selectedSessions.length })}
+        </Button>
+      </div>}
     </>}
+    {searchOpen && <SessionSearchOverlay
+      {...(selectedProject === null ? {} : { projectId: selectedProject })}
+      ownerLongAgentId={longAgentId}
+      projectName={(id) => projectName(projects, id, id)}
+      onOpenSession={onOpenSession}
+      onClose={() => setSearchOpen(false)} />}
+    {removedOpen && <RemovedSessionsPanel projects={projects}
+      {...(selectedProject === null ? {} : { initialProjectId: selectedProject })}
+      onClose={() => setRemovedOpen(false)}
+      onChanged={() => { if (selectedProject !== null) void reloadSessions(selectedProject, undefined, true); }} />}
     {error !== null && <p role="alert" className={styles.error}><InterfaceFeedback message={error} /></p>}
     {pickerOpen && (
       <DirectoryPicker

@@ -22,6 +22,7 @@ import { RemovedSessionsPanel } from "./RemovedSessionsPanel";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { IconArchive, IconPhoto, IconDotsVertical, IconPencil, IconX } from "@tabler/icons-react";
 import { removeSession, renameSession } from "@/lib/session-removal-browser";
+import { SessionActionsMenu } from "./SessionActionsMenu";
 import { overlaySelectedSession } from "@/lib/session-summary";
 import { buildSidebarSessionTree, type SidebarSessionTreeNode } from "@/lib/session-tree";
 import { fetchProjectSessionById, parseSessionListPage } from "@/lib/session-list-browser";
@@ -2063,12 +2064,16 @@ function SessionItem({
   const baseTitle = session.name || displayFirstMessage.slice(0, 50) || session.id.slice(0, 12);
   const title = session.groupConversation ? `${t(session.groupConversation.role === "public" ? "design.groupRecord" : "design.participationRecord")} · ${baseTitle}` : baseTitle;
 
-  const startRename = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
+  const beginRename = useCallback(() => {
     if (diskActionsDisabled) return;
     setRenameValue(session.name || displayFirstMessage.slice(0, 50) || session.id.slice(0, 12));
     setRenaming(true);
   }, [diskActionsDisabled, session.name, displayFirstMessage, session.id]);
+
+  const startRename = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    beginRename();
+  }, [beginRename]);
 
   const commitRename = useCallback(async () => {
     const name = renameValue.trim();
@@ -2102,6 +2107,11 @@ function SessionItem({
       setActionError(error instanceof Error ? error.message : String(error));
     }
   }, [diskActionsDisabled, session.id, session.projectId, onRemoved]);
+
+  const requestRemove = useCallback(() => {
+    if (diskActionsDisabled) return;
+    setConfirmRemove(true);
+  }, [diskActionsDisabled]);
 
   const handleRemoveClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -2383,60 +2393,11 @@ function SessionItem({
             </SurfaceSheet>
           )}
 
-          {/* Desktop action buttons — shown on hover */}
-          {!isMobile && hovered && !diskActionsDisabled && (
-            <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-              <button
-                onClick={startRename}
-                title={t("sidebar.rename")}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 32, height: 32, padding: 0,
-                  background: "var(--bg-hover)", border: "1px solid var(--border)",
-                  borderRadius: 7, color: "var(--text-muted)",
-                  cursor: "pointer", flexShrink: 0,
-                  transition: "background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard)",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--bg-selected)";
-                  e.currentTarget.style.color = "var(--accent)";
-                  e.currentTarget.style.borderColor = "var(--accent-outline)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                  e.currentTarget.style.color = "var(--text-muted)";
-                  e.currentTarget.style.borderColor = "var(--border)";
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-                </svg>
-              </button>
-              <button
-                onClick={handleRemoveClick}
-                title={t("sidebar.deleteWithShiftClick")}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  width: 32, height: 32, padding: 0,
-                  background: "var(--bg-hover)", border: "1px solid var(--border)",
-                  borderRadius: 7, color: "var(--text-muted)",
-                  cursor: "pointer", flexShrink: 0,
-                  transition: "background var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard)",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "color-mix(in srgb, var(--accent) 10%, transparent)";
-                  e.currentTarget.style.color = "var(--accent)";
-                  e.currentTarget.style.borderColor = "color-mix(in srgb, var(--accent) 35%, transparent)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "var(--bg-hover)";
-                  e.currentTarget.style.color = "var(--text-muted)";
-                  e.currentTarget.style.borderColor = "var(--border)";
-                }}
-              >
-                <IconArchive size={14} stroke={2} aria-hidden="true" />
-              </button>
-            </div>
+          {/* 会话动作统一走 “…” 菜单（与项目树同一套交互），列表行默认保持干净。 */}
+          {!isMobile && !diskActionsDisabled && (
+            <SessionActionsMenu sessionId={session.id} title={title}
+              onRename={beginRename}
+              onRemove={requestRemove} />
           )}
         </>
       )}

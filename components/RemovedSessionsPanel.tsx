@@ -180,10 +180,10 @@ export function RemovedSessionsPanel({
                   </div>
                 ) : (
                   <div className="ui-row-6">
-                    <Button iconOnly variant="ghost" type="button" disabled={busy} title={t("removedSessions.restore")} aria-label={t("removedSessions.restore")} onClick={() => void restore(session.id)}>
+                    <Button iconOnly variant="ghost" type="button" disabled={busy} data-session-restore={session.id} title={t("removedSessions.restore")} aria-label={t("removedSessions.restore")} onClick={() => void restore(session.id)}>
                       <IconRestore size={17} stroke={1.8} aria-hidden="true" />
                     </Button>
-                    <Button iconOnly variant="ghost" type="button" disabled={busy} title={t("removedSessions.purge")} aria-label={t("removedSessions.purge")} onClick={() => setConfirmPurgeId(session.id)}>
+                    <Button iconOnly variant="ghost" type="button" disabled={busy} data-session-purge={session.id} title={t("removedSessions.purge")} aria-label={t("removedSessions.purge")} onClick={() => setConfirmPurgeId(session.id)}>
                       <IconTrash size={17} stroke={1.8} aria-hidden="true" />
                     </Button>
                   </div>
