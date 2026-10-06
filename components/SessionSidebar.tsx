@@ -111,7 +111,7 @@ interface Props {
   selectedSessionId: string | null;
   newSessionDraftKey?: string | null;
   onSelectSession: (session: SessionInfo, isRestore?: boolean) => void;
-  onOpenSessionById?: (sessionId: string, projectId: string, date?: string) => void | Promise<void>;
+  onOpenSessionById?: (sessionId: string, projectId: string, date?: string, longAgentId?: string) => void | Promise<void>;
   onNewSession?: (sessionId: string, cwd: string) => void;
   initialSessionId?: string | null;
   initialSessionProjectId?: string;
@@ -1505,9 +1505,9 @@ export function SessionSidebar({ contentPanel, onContentPanelChange: setContentP
           selectedSessionId={selectedSessionId}
           visible={contentPanel === "long-agents"}
           refreshKey={refreshKey}
-          onOpenSession={(sessionId, sessionProjectId, date) => {
+          onOpenSession={(sessionId, sessionProjectId, date, longAgentId) => {
             setContentPanel("long-agents");
-            return onOpenSessionById(sessionId, sessionProjectId, date);
+            return onOpenSessionById(sessionId, sessionProjectId, date, longAgentId);
           }}
           onRequestClose={onRequestClose}
           closeAfterOpen={isMobile}

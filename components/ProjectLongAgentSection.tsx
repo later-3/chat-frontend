@@ -24,7 +24,7 @@ interface Props {
   selectedLongAgentId?: string;
   visible?: boolean;
   refreshKey?: number;
-  onOpenSession: (sessionId: string, projectId: string, date?: string) => void | Promise<void>;
+  onOpenSession: (sessionId: string, projectId: string, date?: string, longAgentId?: string) => void | Promise<void>;
   onRequestClose?: () => void;
   closeAfterOpen?: boolean;
   /** 顶栏 slot（最右）：面板可见时把网关状态与设置齿轮 Portal 进顶栏，替代原面板头部。 */
@@ -131,7 +131,8 @@ export function ProjectLongAgentSection({
             },
           }
         : item));
-      await onOpenSession(started.primarySessionId, sessionProjectId);
+      // 三要素齐全：agent（当前长期同事）+ project（会话真实归属）+ session。
+      await onOpenSession(started.primarySessionId, sessionProjectId, undefined, agent.id);
       if (closeAfterOpen) onRequestClose?.();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));

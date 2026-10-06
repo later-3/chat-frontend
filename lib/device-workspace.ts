@@ -52,6 +52,7 @@ export function workspaceUrlFromNavigation(navigation: InitialNavigation): strin
   else if (navigation.sessionId) {
     params.set("session", navigation.sessionId);
     if (navigation.sessionProjectId) params.set("projectId", navigation.sessionProjectId);
+    if (navigation.sessionLongAgentId) params.set("agent", navigation.sessionLongAgentId);
   }
   const query = params.toString();
   return query ? `/?${query}` : "/";
@@ -72,6 +73,8 @@ function normalizeNavigation(value: unknown): InitialNavigation {
     sessionId: requestedCwd ? null : boundedString(record.sessionId, 256),
     ...(!requestedCwd && boundedString(record.sessionId, 256) && boundedString(record.sessionProjectId, 256)
       ? { sessionProjectId: record.sessionProjectId as string } : {}),
+    ...(!requestedCwd && boundedString(record.sessionId, 256) && boundedString(record.sessionLongAgentId, 256)
+      ? { sessionLongAgentId: record.sessionLongAgentId as string } : {}),
   };
 }
 

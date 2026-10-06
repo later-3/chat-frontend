@@ -107,6 +107,15 @@ interface AppShellProps {
   onConnectionFailure: () => Promise<boolean | null>;
 }
 
+/** 从会话事实里取归属的 Long Agent id（普通会话返回 undefined）。 */
+function ownerOf(session: unknown): string | undefined {
+  if (session === null || typeof session !== "object") return undefined;
+  const owner = (session as { owner?: unknown }).owner;
+  if (owner === null || typeof owner !== "object") return undefined;
+  const record = owner as { type?: unknown; longAgentId?: unknown };
+  return record.type === "long-agent" && typeof record.longAgentId === "string" ? record.longAgentId : undefined;
+}
+
 export function AppShell({
   deviceDirectory,
   initialNavigation,
@@ -890,13 +899,6 @@ export function AppShell({
   }, [activateChat, invalidateWorkspaceRestore, router, isMobile, projectDraftKey]);
 
   // LA→Project→Session：从项目树打开归属项目的会话；服务端归属校验与普通打开一致。
-  const handleOpenProjectSession = useCallback(async (projectId: string, sessionId: string) => {
-    try {
-      const next = await fetchProjectSessionById(projectId, sessionId);
-      handleSelectSession(next);
-    } catch (cause: unknown) { setNavigationError(cause instanceof Error ? cause.message : String(cause)); }
-  }, [handleSelectSession]);
-
   const creatingFriendSession = useRef(false);
   const newSessionInCurrentContext = (cwd: string) => {
     if (!selectedLongAgentId || contentPanel !== "long-agents") { handleNewSession(`new-${crypto.randomUUID()}`, cwd); return; }
@@ -1040,11 +1042,16 @@ export function AppShell({
     router.replace(`?session=${encodeURIComponent(newSessionId)}`, { scroll: false });
   }, [invalidateWorkspaceRestore, router, hydrateSelectedSession]);
 
-  const handleOpenExistingSession = useCallback(async (sessionId: string, projectId: string, date?: string) => {
-    const locateDay = () => {
+  const handleOpenExistingSession = useCallback(async (sessionId: string, projectId: string, date?: string, longAgentId?: string) => {
+    const locateDay = (owner: string | undefined) => {
       const url = new URL(window.location.href);
       if (date) url.searchParams.set("friendDate", date);
       else url.searchParams.delete("friendDate");
+      // 定位三要素：会话必须能唯一确定 agent + project + session。
+      // projectId 由调用方写入，这里补齐 agent（Long Agent 会话）；普通会话清掉该参数。
+      const agentId = owner ?? longAgentId;
+      if (agentId !== undefined && agentId !== "") url.searchParams.set("agent", agentId);
+      else url.searchParams.delete("agent");
       router.replace(`${url.pathname}${url.search}${url.hash}`);
     };
     const token = ++workspaceRestoreTokenRef.current;
@@ -1056,13 +1063,21 @@ export function AppShell({
       // The chat may be mounted behind Topics/Settings. Reuse its data but still perform the visible
       // navigation (including closing a mobile drawer); the shared selector avoids a remount itself.
       handleSelectSession(selectedSession);
-      locateDay();
+      locateDay(ownerOf(selectedSession));
       return;
     }
     const target = await fetchProjectSessionById(projectId, sessionId);
     openedSessionRef.current = { sessionId, projectId };
-    if (workspaceRestoreTokenRef.current === token) { handleSelectSession(target); locateDay(); }
+    // 以会话事实（owner）为准写入 URL：调用方给的 agent 只作提示，真实归属由后端返回。
+    if (workspaceRestoreTokenRef.current === token) { handleSelectSession(target); locateDay(ownerOf(target)); }
   }, [handleSelectSession, selectedSession?.id, router]);
+
+  const handleOpenProjectSession = useCallback(async (projectId: string, sessionId: string) => {
+    try {
+      // 项目树里的会话属于当前 Long Agent：按三要素打开并同步 URL。
+      await handleOpenExistingSession(sessionId, projectId);
+    } catch (cause: unknown) { setNavigationError(cause instanceof Error ? cause.message : String(cause)); }
+  }, [handleOpenExistingSession]);
 
   useEffect(() => {
     const restore = () => {
