@@ -8,7 +8,7 @@ import { SurfaceDialog } from "./SurfaceDialog";
 
 import { InterfaceFeedback } from "./InterfaceFeedback";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { IconBook2, IconBrain, IconClock, IconRefresh, IconSettings, IconShieldCheck } from "@tabler/icons-react";
 import { useI18n } from "@/hooks/useI18n";
 import {
@@ -307,17 +307,21 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
   };
   const [usageOpen, setUsageOpen] = useState(false);
   const [identityOpen, setIdentityOpen] = useState(false);
+  // P8：把检查视图与真实装配对齐——引用本轮实际注入的 harness 区域（含 revision）。
+  const harnessRegion = inspection?.prompt.regions?.find((region) => region.name === "chat_interaction_harness");
   const tabDescriptions: Record<SettingsTab, string> = {
     runtime: t("assistantDesign.settingsHint"), tasks: t("assistantDesign.scheduleHint"),
     duties: t("assistantDesign.dutiesHint"), standards: t("longAgentSettings.standardsHint"),
     "agent-memory": t("assistantDesign.memoryHint"),
   };
   const tabs = [
-    { id: "runtime", label: t("longAgentSettings.runtimeTab"), icon: IconSettings },
-    { id: "tasks", label: t("longAgentSettings.tasksTab"), icon: IconClock },
-    { id: "duties", label: t("longAgentSettings.dutiesTab"), icon: IconBook2 },
-    { id: "standards", label: t("longAgentSettings.standardsTab"), icon: IconShieldCheck },
-    { id: "agent-memory", label: t("longAgentSettings.agentMemoryTab"), icon: IconBrain },
+    // 按 Agent 定义分组：构成（它是什么）与能力（它能做什么）。
+    // 定时任务与长期职责属于「能力 · 持续」，与即时能力同组，而不是与构成项平级。
+    { id: "standards", label: t("longAgentSettings.standardsTab"), icon: IconShieldCheck, group: "constitution" as const },
+    { id: "agent-memory", label: t("longAgentSettings.agentMemoryTab"), icon: IconBrain, group: "constitution" as const },
+    { id: "runtime", label: t("longAgentSettings.runtimeTab"), icon: IconSettings, group: "capability" as const },
+    { id: "tasks", label: t("longAgentSettings.tasksTab"), icon: IconClock, group: "capability" as const },
+    { id: "duties", label: t("longAgentSettings.dutiesTab"), icon: IconBook2, group: "capability" as const },
   ] as const;
   const handleTabKeyDown = async (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp" && event.key !== "ArrowRight" && event.key !== "ArrowLeft" && event.key !== "Home" && event.key !== "End") return;
@@ -367,11 +371,16 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
             options={agents.map(agent => ({ value:agent.id, label:agent.name, detail:agent.available ? t("longAgentSettings.enabled") : t("longAgentSettings.disabled") }))}
             onChange={selectAgent} disabled={saving || lifecycleBusy} />
               <div className={styles.settingsTabs} role="tablist" aria-orientation="vertical" aria-label={t("longAgentSettings.sections")} onKeyDown={handleTabKeyDown}>
-                {tabs.map((tab) => {
+                {tabs.map((tab, index) => {
                   const Icon = tab.icon;
+                  const groupLabel = tabs[index - 1]?.group === tab.group ? null
+                    : t(tab.group === "capability" ? "longAgentSettings.groupCapability" : "longAgentSettings.groupConstitution");
                   return (
+                    <Fragment key={tab.id}>
+                    {groupLabel !== null && (
+                      <div className={styles.settingsTabGroup} role="presentation">{groupLabel}</div>
+                    )}
                     <button
-                      key={tab.id}
                       id={`long-agent-${tab.id}-tab`}
                       type="button"
                       role="tab"
@@ -385,6 +394,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                       <Icon size={17} aria-hidden="true" />
                       <span><strong>{tab.label}</strong><small>{tabDescriptions[tab.id]}</small></span>
                     </button>
+                    </Fragment>
                   );
                 })}
               </div>
@@ -534,6 +544,30 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                       <span>{t("longAgentSettings.interactionHarness")}</span>
                     </label>
                     <p className={styles.hint}>{t("longAgentSettings.interactionHarnessHint")}</p>
+                    <p className={styles.hint} data-la-harness-revision={harnessRegion?.revision ?? "none"}>
+                      {harnessRegion === undefined
+                        ? t("longAgentSettings.harnessRevisionPending")
+                        : t("longAgentSettings.harnessRevision", {
+                            revision: harnessRegion.revision ?? t("longAgentSettings.harnessRevisionUnversioned"),
+                            characters: harnessRegion.characters,
+                          })}
+                    </p>
+                    {(inspection?.prompt.regions ?? []).length > 0 && (
+                      <div className={styles.capabilitySummary} data-la-prompt-regions>
+                        <strong>{t("longAgentSettings.promptRegions")}</strong>
+                        <ul className={styles.regionList}>
+                          {(inspection?.prompt.regions ?? []).map((region, index) => (
+                            <li key={`${region.name}:${index}`}>
+                              <code>{region.name}</code>
+                              <span>{t("longAgentSettings.promptRegionDetail", {
+                                characters: region.characters,
+                                revision: region.revision ?? t("longAgentSettings.harnessRevisionUnversioned"),
+                              })}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </fieldset>
                 )}
                 {activeTab === "agent-memory" && (

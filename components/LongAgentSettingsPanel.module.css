@@ -1350,3 +1350,18 @@
   .agentHeading h2 { font-size:24px; }
   .section { padding:20px 0; }
 }
+
+/* 标签分组标题：构成（它是什么）/ 能力（它能做什么）。 */
+.settingsTabGroup {
+  margin: 10px 0 4px;
+  padding: 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary, #8a8f98);
+}
+
+/* 检查视图的 prompt 区域构成列表。 */
+.regionList { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+.regionList li { display: flex; gap: 8px; align-items: baseline; font-size: 12px; }
+.regionList code { font-size: 11px; opacity: 0.85; }

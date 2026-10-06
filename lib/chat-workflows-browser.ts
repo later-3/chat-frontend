@@ -251,6 +251,12 @@ export interface WorkflowAgentInspection {
   };
   readonly prompt: {
     readonly final: string;
+    /** 区域构成：与执行装配同一来源，供检查视图按区域核对（旧后端可能没有）。 */
+    readonly regions?: readonly {
+      readonly name: string;
+      readonly revision: string | null;
+      readonly characters: number;
+    }[];
     readonly base: { readonly mode: string; readonly text?: string; readonly sourcePath: string | null };
     readonly append: readonly { readonly text: string; readonly sourcePath: string | null }[];
     readonly contextFiles: readonly { readonly path: string; readonly content: string }[];
@@ -423,7 +429,24 @@ export function parseWorkflowAgentInspection(value: unknown, field: string): Wor
     ? null
     : readString(rawPrompt.base.sourcePath, `${field}.prompt.base.sourcePath`);
   const baseText = readOptionalString(rawPrompt.base.text, `${field}.prompt.base.text`);
+  const rawRegions = rawPrompt.regions;
+  if (rawRegions !== undefined && !Array.isArray(rawRegions)) {
+    throw new Error(`Chat返回了无效的${field}.prompt.regions`);
+  }
+  const regions = rawRegions === undefined ? undefined : rawRegions.map((item, index) => {
+    if (!isRecord(item)) throw new Error(`Chat返回了无效的${field}.prompt.regions[${index}]`);
+    const revision = item.revision === null ? null : readString(item.revision, `${field}.prompt.regions[${index}].revision`);
+    if (typeof item.characters !== "number" || !Number.isFinite(item.characters)) {
+      throw new Error(`Chat返回了无效的${field}.prompt.regions[${index}].characters`);
+    }
+    return {
+      name: readString(item.name, `${field}.prompt.regions[${index}].name`),
+      revision,
+      characters: item.characters,
+    };
+  });
   const prompt: WorkflowAgentInspection["prompt"] = {
+    ...(regions === undefined ? {} : { regions }),
     final: readString(rawPrompt.final, `${field}.prompt.final`, true),
     base: {
       mode: readString(rawPrompt.base.mode, `${field}.prompt.base.mode`),
