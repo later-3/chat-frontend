@@ -1572,3 +1572,7 @@ span.token.table {
 .session-bulk-bar { position: sticky; bottom: 0; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-top: 1px solid var(--border); background: var(--bg-elevated, var(--bg-hover)); }
 .session-bulk-bar span { flex: 1; color: var(--text-muted); font-size: 12px; }
 .session-select-toggle[data-active="true"] { color: var(--accent); }
+
+/* 构成层开关行（规范 / 记忆注入）：与其它设置项同构的勾选行。 */
+.switch-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+.switch-row input { width: 16px; height: 16px; }

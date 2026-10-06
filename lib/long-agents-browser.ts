@@ -84,6 +84,10 @@ export interface LongAgentConfigurationDocument {
     readonly defaultProjectId: string;
     /** Web 三级导航的项目绑定；Agent Workspace 永远首位。 */
     readonly boundProjectIds: readonly string[];
+    /** 构成层开关：交互 harness（协作规范）是否注入本轮 prompt。 */
+    readonly interactionHarness: "on" | "off";
+    /** 构成层开关：长期记忆是否注入本轮 prompt；关闭只影响注入，工具仍可用。 */
+    readonly agentMemory: "on" | "off";
     readonly timeZone?: string;
     readonly effective: LongAgentEffectiveConfig;
     readonly definition: {
@@ -120,6 +124,9 @@ export interface LongAgentConfigurationUpdate {
   /** 完整替换目标绑定列表；undefined 表示不改。 */
   readonly boundProjectIds?: readonly string[];
   readonly timeZone?: string;
+  /** 构成层开关；undefined 表示不改。 */
+  readonly interactionHarness?: "on" | "off";
+  readonly agentMemory?: "on" | "off";
   readonly definition: LongAgentConfigurationDocument["agent"]["definition"];
 }
 
@@ -294,6 +301,8 @@ function parseLongAgentConfiguration(value: unknown): LongAgentConfigurationDocu
     || !/^[a-f0-9]{64}$/.test(value.revision) || !isRecord(value.agent)
     || !nonEmpty(value.agent.id) || !nonEmpty(value.agent.name) || typeof value.agent.description !== "string"
     || (value.agent.timeZone !== undefined && !nonEmpty(value.agent.timeZone))
+    || (value.agent.interactionHarness !== undefined && value.agent.interactionHarness !== "on" && value.agent.interactionHarness !== "off")
+    || (value.agent.agentMemory !== undefined && value.agent.agentMemory !== "on" && value.agent.agentMemory !== "off")
     || !isRecord(value.agent.avatar)
     || !isRecord(value.agent.effective)
     || typeof value.agent.enabled !== "boolean" || !nonEmpty(value.agent.defaultProjectId)
@@ -347,6 +356,9 @@ function parseLongAgentConfiguration(value: unknown): LongAgentConfigurationDocu
       name: value.agent.name,
       description: value.agent.description,
       avatar: parseAvatar(value.agent.avatar),
+      // 缺省即当前行为：旧响应没有这两个字段时视为 on。
+      interactionHarness: value.agent.interactionHarness ?? "on",
+      agentMemory: value.agent.agentMemory ?? "on",
       enabled: value.agent.enabled,
       defaultProjectId: value.agent.defaultProjectId,
       boundProjectIds: value.agent.boundProjectIds,
@@ -592,6 +604,8 @@ export async function saveLongAgentConfiguration(
       defaultProjectId: update.defaultProjectId,
       ...(update.boundProjectIds === undefined ? {} : { boundProjectIds: update.boundProjectIds }),
       ...(update.timeZone === undefined ? {} : { timeZone: update.timeZone }),
+      ...(update.interactionHarness === undefined ? {} : { interactionHarness: update.interactionHarness }),
+      ...(update.agentMemory === undefined ? {} : { agentMemory: update.agentMemory }),
       definition,
     }),
     credentials: "same-origin",

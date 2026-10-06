@@ -9,7 +9,7 @@ import { SurfaceDialog } from "./SurfaceDialog";
 import { InterfaceFeedback } from "./InterfaceFeedback";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { IconBook2, IconBrain, IconClock, IconRefresh, IconSettings } from "@tabler/icons-react";
+import { IconBook2, IconBrain, IconClock, IconRefresh, IconSettings, IconShieldCheck } from "@tabler/icons-react";
 import { useI18n } from "@/hooks/useI18n";
 import {
   fetchLongAgentConfiguration,
@@ -57,9 +57,12 @@ interface Draft {
   systemPromptMode: "pi-default" | "replace";
   systemPromptText: string;
   customInstructionsText: string;
+  /** 构成层开关（缺省 on）。 */
+  interactionHarness: "on" | "off";
+  agentMemory: "on" | "off";
 }
 
-type SettingsTab = "runtime" | "tasks" | "duties" | "agent-memory";
+type SettingsTab = "runtime" | "tasks" | "duties" | "standards" | "agent-memory";
 
 function draftFrom(document: LongAgentConfigurationDocument): Draft {
   const definition = document.agent.definition;
@@ -72,6 +75,8 @@ function draftFrom(document: LongAgentConfigurationDocument): Draft {
     systemPromptMode: definition.systemPrompt.mode,
     systemPromptText: definition.systemPrompt.mode === "replace" ? definition.systemPrompt.text : "",
     customInstructionsText: formatLongAgentInstructions(definition.customInstructions),
+    interactionHarness: document.agent.interactionHarness,
+    agentMemory: document.agent.agentMemory,
   };
 }
 
@@ -85,6 +90,8 @@ function updateFromDraft(
     enabled: draft.enabled,
     defaultProjectId: draft.defaultProjectId,
     timeZone: draft.timeZone,
+    interactionHarness: draft.interactionHarness,
+    agentMemory: draft.agentMemory,
     definition: {
       schemaVersion: 1,
       id: document.agent.id,
@@ -300,14 +307,16 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
   };
   const [usageOpen, setUsageOpen] = useState(false);
   const [identityOpen, setIdentityOpen] = useState(false);
-  const tabDescriptions = {
+  const tabDescriptions: Record<SettingsTab, string> = {
     runtime: t("assistantDesign.settingsHint"), tasks: t("assistantDesign.scheduleHint"),
-    duties: t("assistantDesign.dutiesHint"), "agent-memory": t("assistantDesign.memoryHint"),
+    duties: t("assistantDesign.dutiesHint"), standards: t("longAgentSettings.standardsHint"),
+    "agent-memory": t("assistantDesign.memoryHint"),
   };
   const tabs = [
     { id: "runtime", label: t("longAgentSettings.runtimeTab"), icon: IconSettings },
     { id: "tasks", label: t("longAgentSettings.tasksTab"), icon: IconClock },
     { id: "duties", label: t("longAgentSettings.dutiesTab"), icon: IconBook2 },
+    { id: "standards", label: t("longAgentSettings.standardsTab"), icon: IconShieldCheck },
     { id: "agent-memory", label: t("longAgentSettings.agentMemoryTab"), icon: IconBrain },
   ] as const;
   const handleTabKeyDown = async (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -514,6 +523,31 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                 {activeTab === "runtime" && <ConfigurationSection className={styles.disclosure} title={t("longAgentSettings.activityHeading")} onToggle={event => setUsageOpen(event.currentTarget.open)}>{usageOpen && <LongAgentActivitySettings longAgentId={document.agent.id} />}</ConfigurationSection>}
             {activeTab === "tasks" && <LongAgentTasksSettings longAgentId={document.agent.id} />}
                 {activeTab === "duties" && <LongAgentDutiesSettings longAgentId={document.agent.id} />}
+                {activeTab === "standards" && (
+                  <fieldset className={styles.section} data-la-standards>
+                    <legend>{t("longAgentSettings.standardsTab")}</legend>
+                    <p className={styles.hint}>{t("longAgentSettings.standardsHint")}</p>
+                    <label className="switch-row">
+                      <input type="checkbox" data-la-interaction-harness
+                        checked={draft.interactionHarness === "on"}
+                        onChange={(event) => setDraft({ ...draft, interactionHarness: event.target.checked ? "on" : "off" })} />
+                      <span>{t("longAgentSettings.interactionHarness")}</span>
+                    </label>
+                    <p className={styles.hint}>{t("longAgentSettings.interactionHarnessHint")}</p>
+                  </fieldset>
+                )}
+                {activeTab === "agent-memory" && (
+                  <fieldset className={styles.section} data-la-memory-switch>
+                    <legend>{t("longAgentSettings.agentMemoryTab")}</legend>
+                    <label className="switch-row">
+                      <input type="checkbox" data-la-agent-memory
+                        checked={draft.agentMemory === "on"}
+                        onChange={(event) => setDraft({ ...draft, agentMemory: event.target.checked ? "on" : "off" })} />
+                      <span>{t("longAgentSettings.agentMemoryInject")}</span>
+                    </label>
+                    <p className={styles.hint}>{t("longAgentSettings.agentMemoryInjectHint")}</p>
+                  </fieldset>
+                )}
                 {activeTab === "agent-memory" && <LongAgentMemorySettings longAgentId={document.agent.id} key={`${document.agent.id}:${refreshVersion}`} onDirtyChange={setTabDirty} />}
               </div>
             </div>
