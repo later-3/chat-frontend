@@ -36,7 +36,9 @@
 以下 Agent Skills 是规范的可执行验收清单，生成或评审 UI/React 代码时按清单自查：
 
 - [web-design-guidelines](./.agents/skills/web-design-guidelines/SKILL.md)：UI 交互质量门禁（焦点、键盘、loading、动效、表单、设计 token），源自 Vercel web-interface-guidelines（MIT，已适配 Vite SPA）。
+  **强制**：动任何 UI（组件/页面/弹层/表单/动效）之前先完整读取本 skill；完成后按其「评审门禁用法」自查，并把自查结果写进汇报（哪几条、结论）。
 - [react-best-practices](./.agents/skills/react-best-practices/SKILL.md)：React 性能与质量门禁（瀑布、bundle、重渲染、渲染、JS 性能），源自 Vercel react-best-practices（MIT，已去除 Next/RSC 专属规则）。
+  **强制**：写/改 React 代码前先完整读取；完成后按其中的检查项自查并写进汇报。
 
 Skills 内容与规范文档冲突时以规范文档为准；修改 skill 中的项目适配映射（token 名、文件路径、模式先例）时须同步核对对应文档。
 
