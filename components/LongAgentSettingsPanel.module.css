@@ -1365,3 +1365,15 @@
 .regionList { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
 .regionList li { display: flex; gap: 8px; align-items: baseline; font-size: 12px; }
 .regionList code { font-size: 11px; opacity: 0.85; }
+
+/* P3 总览：每项 = 标签 + 摘要 + 基数 + 入口 */
+.overview { border: 1px solid var(--border-subtle, #e3e6ec); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+.overviewHead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.overviewHead small { color: var(--text-tertiary, #8a8f98); }
+.overviewList { list-style: none; margin: 0; padding: 0; }
+.overviewRow { display: grid; grid-template-columns: 88px 1fr auto auto; gap: 10px; align-items: center; padding: 7px 0; border-top: 1px solid var(--border-subtle, #e3e6ec); }
+.overviewRow:first-child { border-top: none; }
+.overviewLabel { color: var(--text-tertiary, #8a8f98); }
+.overviewSummary { color: var(--text-primary, #1c1f24); overflow-wrap: anywhere; }
+.overviewCount { font-size: 12px; color: var(--text-secondary, #6b7280); border: 1px solid var(--border-subtle, #e3e6ec); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+@media (max-width: 768px) { .overviewRow { grid-template-columns: 72px 1fr; } .overviewCount { grid-column: 2; } }

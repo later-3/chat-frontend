@@ -38,6 +38,7 @@ import { LongAgentMemorySettings } from "./LongAgentMemorySettings";
 import { LongAgentTasksSettings } from "./LongAgentTasksSettings";
 import { LongAgentDutiesSettings } from "./LongAgentDutiesSettings";
 import { ConfigurationSection } from "./ConfigurationSection";
+import { LongAgentOverviewCard } from "./LongAgentOverviewCard";
 import { ConfigurationToggle } from "./ConfigurationToggle";
 import { SearchSelect } from "./SearchSelect";
 
@@ -419,6 +420,11 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                   <h2>{draft.name}</h2>
                   <p className={styles.headingDescription}>{tabDescriptions[activeTab]}</p>
                 </div>
+                <LongAgentOverviewCard
+                  document={document}
+                  inspection={inspection}
+                  onOpenTab={(tab) => void selectTab(tab)}
+                />
                 {activeTab === "runtime" && (
                   <div className={styles.enabledControl}>
                     <span>{draft.enabled ? t("longAgentSettings.enabled") : t("longAgentSettings.disabled")}</span>
