@@ -467,11 +467,6 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                     </fieldset>
 
 
-                    <div className={styles.actions}>
-                      <span>{dirty ? t("longAgentSettings.unsaved") : t("longAgentSettings.savedState")}</span>
-                      <Button variant="secondary" type="button" disabled={!dirty || saving} onClick={() => { if (initialDraft) setDraft(initialDraft); }}>{t("longAgentSettings.reset")}</Button>
-                      <Button variant="primary" type="submit" disabled={!dirty || saving}>{saving ? t("common.saving") : t("common.save")}</Button>
-                    </div>
                     </fieldset>
                   </form>
                 )}

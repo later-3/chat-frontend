@@ -6,7 +6,8 @@
   display: flex;
   flex-direction: column;
   position: relative;
-  overflow: hidden;
+  overflow-y: auto;          /* P3：悬浮窗整体滚动（原来 hidden 造成“只有底部一小块能滚”，案例 C58） */
+  overscroll-behavior: contain;
   color: var(--text);
   background: var(--bg);
 }
@@ -110,13 +111,18 @@
 }
 
 .workspace {
-  flex: 1 1 auto;
-  min-height: 0;
+  flex: 0 0 auto;            /* P3：随内容自然增高，不再压缩成局部滚动区 */
   display: grid;
   grid-template-columns: 232px minmax(0, 1fr);
+  align-items: start;
 }
 
 .agentNav {
+  position: sticky;          /* P3：左侧导航在整体滚动时保持可见 */
+  top: 0;
+  align-self: start;
+  max-height: 100vh;
+  overflow-y: auto;
   min-height: 0;
   overflow: auto;
   padding: 24px 16px calc(16px + env(safe-area-inset-bottom));
@@ -199,8 +205,8 @@
 
 .main {
   min-height: 0;
-  overflow: auto;
-  padding: 30px 36px calc(96px + env(safe-area-inset-bottom));
+  overflow: visible;         /* P3：不再独立滚动（滚动交给 .dialog） */
+  padding: 24px 32px calc(88px + env(safe-area-inset-bottom));
 }
 
 .settingsShell {
@@ -985,11 +991,10 @@
 }
 
 .actions {
-  position: fixed;
-  right: 0;
+  position: sticky;          /* P3：底部动作条固定在悬浮窗底部 */
   bottom: 0;
-  left: min(240px, max(190px, 20vw));
   z-index: 2;
+  margin-top: auto;
   min-height: calc(62px + env(safe-area-inset-bottom));
   display: flex;
   align-items: center;
