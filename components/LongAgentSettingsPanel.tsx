@@ -27,9 +27,6 @@ import {
 import type { WorkflowAgentInspection } from "@/lib/chat-workflows-browser";
 import { EffectiveSkillsList } from "./EffectiveSkillsList";
 import {
-  formatLongAgentInstructions,
-  LONG_AGENT_INSTRUCTION_SEPARATOR,
-  parseLongAgentInstructions,
 } from "@/lib/long-agent-settings";
 import styles from "./LongAgentSettingsPanel.module.css";
 import { LongAgentAvatarEditor } from "./LongAgentAvatarEditor";
@@ -56,7 +53,8 @@ interface Draft {
   timeZone: string;
   systemPromptMode: "pi-default" | "replace";
   systemPromptText: string;
-  customInstructionsText: string;
+  /** 自定义指令：真正的段落数组（P4：由拼接文本改为数组编辑） */
+  customInstructions: readonly string[];
   /** 构成层开关（缺省 on）。 */
   interactionHarness: "on" | "off";
   agentMemory: "on" | "off";
@@ -76,7 +74,7 @@ function draftFrom(document: LongAgentConfigurationDocument): Draft {
     timeZone: document.agent.timeZone ?? "UTC",
     systemPromptMode: definition.systemPrompt.mode,
     systemPromptText: definition.systemPrompt.mode === "replace" ? definition.systemPrompt.text : "",
-    customInstructionsText: formatLongAgentInstructions(definition.customInstructions),
+    customInstructions: definition.customInstructions,
     interactionHarness: document.agent.interactionHarness,
     agentMemory: document.agent.agentMemory,
     boundProjectIds: document.agent.boundProjectIds,
@@ -106,7 +104,7 @@ function updateFromDraft(
       systemPrompt: draft.systemPromptMode === "pi-default"
         ? { mode: "pi-default" }
         : { mode: "replace", text: draft.systemPromptText.trim() },
-      customInstructions: parseLongAgentInstructions(draft.customInstructionsText),
+      customInstructions: draft.customInstructions.map((text) => text.trim()).filter((text) => text !== ""),
       tools: document.agent.definition.tools,
       resources: document.agent.definition.resources,
     },
@@ -127,6 +125,8 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
   const [draft, setDraft] = useState<Draft | null>(null);
   const [initialDraft, setInitialDraft] = useState<Draft | null>(null);
   const [projects, setProjects] = useState<readonly ChatProjectSummary[]>([]);
+  /** P4：规则资源（复用既有 Prompt 资源接口，只读展示） */
+  const [ruleResources, setRuleResources] = useState<readonly { readonly id: string; readonly revision: number; readonly kind: string; readonly title: string }[]>([]);
   const [modelInspectionVersion, setModelInspectionVersion] = useState(0);
   const [inspection, setInspection] = useState<WorkflowAgentInspection | null>(null);
   const [inspectionError, setInspectionError] = useState<string | null>(null);
@@ -152,6 +152,20 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
 
   useEffect(() => {
     const controller = new AbortController();
+    void (async () => {
+      try {
+        const response = await fetch(`/api/prompt-resources?projectId=${encodeURIComponent(agentId)}`, { cache: "no-store", credentials: "same-origin", signal: controller.signal });
+        const body: unknown = await response.json().catch(() => null);
+        if (!response.ok || body === null || typeof body !== "object") return;
+        const list = (body as { resources?: unknown }).resources;
+        if (!Array.isArray(list)) return;
+        setRuleResources(list.flatMap((item) => (item !== null && typeof item === "object"
+          && typeof (item as { id?: unknown }).id === "string" && typeof (item as { title?: unknown }).title === "string"
+          && typeof (item as { kind?: unknown }).kind === "string" && typeof (item as { revision?: unknown }).revision === "number"
+          ? [{ id: (item as { id: string }).id, revision: (item as { revision: number }).revision, kind: (item as { kind: string }).kind, title: (item as { title: string }).title }]
+          : [])));
+      } catch { /* 资源读取失败不影响规范开关 */ }
+    })();
     void fetchChatProjects(controller.signal).then(setProjects).catch((cause: unknown) => {
       if (!(cause instanceof DOMException && cause.name === "AbortError")) {
         setError(cause instanceof Error ? cause.message : String(cause));
@@ -466,6 +480,43 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                       <label>{t("longAgentSettings.description")}<textarea value={draft.description} rows={3} maxLength={500} onChange={(event) => set("description", event.target.value)} /></label>
                     </fieldset>
 
+                    <fieldset className={styles.section} data-la-identity-prompt>
+                      <legend>{t("longAgentSettings.systemPrompt")}</legend>
+                      <label>{t("longAgentSettings.systemPromptMode")}<select value={draft.systemPromptMode} onChange={(event) => set("systemPromptMode", event.target.value as Draft["systemPromptMode"])}>
+                        <option value="pi-default">{t("longAgentSettings.piDefaultPrompt")}</option>
+                        <option value="replace">{t("longAgentSettings.replacePrompt")}</option>
+                      </select></label>
+                      {draft.systemPromptMode === "replace" && (
+                        <label>{t("longAgentSettings.systemPromptText")}
+                          <textarea className={styles.promptEditor} value={draft.systemPromptText} rows={12}
+                            onChange={(event) => set("systemPromptText", event.target.value)} />
+                        </label>
+                      )}
+                    </fieldset>
+
+                    <fieldset className={styles.section} data-la-custom-instructions>
+                      <legend>{t("longAgentSettings.customInstructions")}</legend>
+                      <p className={styles.help}>{t("longAgentSettings.customInstructionsHint")}</p>
+                      <ul className={styles.instructionList}>
+                        {draft.customInstructions.map((text, index) => (
+                          <li key={`instruction-${index}`} className={styles.instructionRow}>
+                            <textarea value={text} rows={3}
+                              aria-label={t("longAgentSettings.customInstructionN", { n: String(index + 1) })}
+                              onChange={(event) => set("customInstructions", draft.customInstructions
+                                .map((item, i) => (i === index ? event.target.value : item)))} />
+                            <Button variant="secondary" type="button"
+                              onClick={() => set("customInstructions", draft.customInstructions.filter((_, i) => i !== index))}>
+                              {t("common.delete")}
+                            </Button>
+                          </li>
+                        ))}
+                      </ul>
+                      <Button variant="secondary" type="button"
+                        onClick={() => set("customInstructions", [...draft.customInstructions, ""])}>
+                        {t("longAgentSettings.addInstruction")}
+                      </Button>
+                    </fieldset>
+
 
                     </fieldset>
                   </form>
@@ -534,11 +585,6 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                       <LongAgentWorkflowSettings key={document.agent.id} projectId={document.agent.id}
                         cwd={projects.find(project => project.projectId === document.agent.id)?.path ?? ""}
                         onChanged={workflowChanged} />
-                      <ConfigurationSection className={styles.disclosure} title={t("design.promptOptions")}>
-                      <label>{t("longAgentSettings.systemPrompt")}<select value={draft.systemPromptMode} onChange={(event) => set("systemPromptMode", event.target.value as Draft["systemPromptMode"])}><option value="pi-default">{t("longAgentSettings.piDefaultPrompt")}</option><option value="replace">{t("longAgentSettings.replacePrompt")}</option></select></label>
-                      {draft.systemPromptMode === "replace" && <label>{t("longAgentSettings.systemPromptText")}<textarea value={draft.systemPromptText} rows={8} onChange={(event) => set("systemPromptText", event.target.value)} /></label>}
-                      <label>{t("longAgentSettings.customInstructions")}<textarea value={draft.customInstructionsText} rows={8} placeholder={t("longAgentSettings.instructionSeparator", { separator: LONG_AGENT_INSTRUCTION_SEPARATOR })} onChange={(event) => set("customInstructionsText", event.target.value)} /><span className={styles.fieldHint}>{t("longAgentSettings.instructionSeparator", { separator: LONG_AGENT_INSTRUCTION_SEPARATOR })}</span></label>
-                      </ConfigurationSection>
                     </fieldset>
                   </>
                 )}
@@ -579,6 +625,21 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                             characters: harnessRegion.characters,
                           })}
                     </p>
+                    <div data-la-rule-resources>
+                      <h4 className={styles.regionTitle}>{t("longAgentSettings.ruleResources")}</h4>
+                      <p className={styles.hint}>{t("longAgentSettings.ruleResourcesHint")}</p>
+                      {ruleResources.length === 0 ? <p className={styles.hint}>{t("longAgentSettings.ruleResourcesEmpty")}</p>
+                        : (
+                          <ul className={styles.resourceList}>
+                            {ruleResources.slice(0, 8).map((resource) => (
+                              <li key={resource.id} className={styles.resourceItem}>
+                                <div className={styles.resourceTitle}>{resource.title}</div>
+                                <div className={styles.resourceMeta}>{t("longAgentSettings.ruleResourceKind", { kind: resource.kind, revision: String(resource.revision) })}</div>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                    </div>
                     {(inspection?.prompt.regions ?? []).length > 0 && (
                       // 高级信息：折叠展示，默认界面只留“开关 + 生效 revision”。
                       <ConfigurationSection className={styles.disclosure} data-la-prompt-regions title={t("longAgentSettings.promptRegions")}>
