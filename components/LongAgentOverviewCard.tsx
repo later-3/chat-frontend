@@ -8,7 +8,7 @@ import type { WorkflowAgentInspection } from "@/lib/chat-workflows-browser";
 import styles from "./LongAgentSettingsPanel.module.css";
 
 /** 总览入口可跳转的标签（P3 阶段沿用现有标签；P4–P7 重排后指向更精确的目标）。 */
-export type LongAgentOverviewTab = "runtime" | "standards" | "agent-memory" | "tasks" | "duties";
+export type LongAgentOverviewTab = "identity" | "standards" | "memory" | "projects" | "on-demand" | "continuous" | "channel";
 
 interface Counts {
   readonly memory?: number;
@@ -78,7 +78,7 @@ export function LongAgentOverviewCard({ document, inspection, onOpenTab }: {
         prompt: String(promptText.length),
         custom: String(definition.customInstructions.length),
       }),
-      tab: "runtime",
+      tab: "identity",
     },
     {
       key: "standards", label: t("longAgentSettings.standardsTab"),
@@ -89,18 +89,18 @@ export function LongAgentOverviewCard({ document, inspection, onOpenTab }: {
       tab: "standards",
     },
     {
-      key: "memory", label: t("longAgentSettings.agentMemoryTab"),
+      key: "memory", label: t("longAgentSettings.memoryTab"),
       summary: t("longAgentSettings.overviewMemorySummary", {
         count: count(counts.memory), source: t("longAgentSettings.overviewMemorySource"),
       }),
-      count: count(counts.memory), tab: "agent-memory",
+      count: count(counts.memory), tab: "memory",
     },
     {
       key: "projects", label: t("longAgentSettings.overviewProjects"),
       summary: t("longAgentSettings.overviewProjectSummary", {
         project: document.agent.defaultProjectId, bound: String(document.agent.boundProjectIds.length),
       }),
-      count: String(document.agent.boundProjectIds.length), tab: "runtime",
+      count: String(document.agent.boundProjectIds.length), tab: "projects",
     },
     {
       key: "on-demand", label: t("longAgentSettings.overviewOnDemand"),
@@ -108,21 +108,21 @@ export function LongAgentOverviewCard({ document, inspection, onOpenTab }: {
         model: model === null || model === undefined ? "—" : `${model.provider}/${model.modelId}`,
         thinking: thinking ?? "—", tools: count(activeTools), skills: count(skills),
       }),
-      tab: "runtime",
+      tab: "on-demand",
     },
     {
       key: "continuous", label: t("longAgentSettings.overviewContinuous"),
       summary: t("longAgentSettings.overviewContinuousSummary", { tasks: count(counts.tasks), duties: count(counts.duties) }),
       count: counts.tasks === undefined && counts.duties === undefined
         ? undefined : `${count(counts.tasks)} / ${count(counts.duties)}`,
-      tab: "tasks",
+      tab: "continuous",
     },
     {
       key: "channel", label: t("longAgentSettings.overviewChannel"),
       summary: document.channel === null
         ? t("longAgentSettings.overviewChannelUnbound")
         : t("longAgentSettings.overviewChannelBound", { type: document.channel.type, instance: document.channel.instance }),
-      tab: "runtime",
+      tab: "channel",
     },
   ];
 

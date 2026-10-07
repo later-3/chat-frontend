@@ -9,7 +9,7 @@ import { SurfaceDialog } from "./SurfaceDialog";
 import { InterfaceFeedback } from "./InterfaceFeedback";
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
-import { IconBook2, IconBrain, IconClock, IconRefresh, IconSettings, IconShieldCheck } from "@tabler/icons-react";
+import { IconBook2, IconBrain, IconClock, IconEye, IconFolder, IconLayoutList, IconPlugConnected, IconRefresh, IconSettings, IconShieldCheck, IconUser } from "@tabler/icons-react";
 import { useI18n } from "@/hooks/useI18n";
 import {
   fetchLongAgentConfiguration,
@@ -61,9 +61,11 @@ interface Draft {
   /** 构成层开关（缺省 on）。 */
   interactionHarness: "on" | "off";
   agentMemory: "on" | "off";
+  /** 绑定项目（P3 起可在此增删；后端 PUT /config 已支持）。 */
+  boundProjectIds: readonly string[];
 }
 
-type SettingsTab = "runtime" | "tasks" | "duties" | "standards" | "agent-memory";
+type SettingsTab = "overview" | "identity" | "standards" | "memory" | "projects" | "on-demand" | "continuous" | "channel" | "readonly";
 
 function draftFrom(document: LongAgentConfigurationDocument): Draft {
   const definition = document.agent.definition;
@@ -78,6 +80,7 @@ function draftFrom(document: LongAgentConfigurationDocument): Draft {
     customInstructionsText: formatLongAgentInstructions(definition.customInstructions),
     interactionHarness: document.agent.interactionHarness,
     agentMemory: document.agent.agentMemory,
+    boundProjectIds: document.agent.boundProjectIds,
   };
 }
 
@@ -93,6 +96,7 @@ function updateFromDraft(
     timeZone: draft.timeZone,
     interactionHarness: draft.interactionHarness,
     agentMemory: draft.agentMemory,
+    boundProjectIds: draft.boundProjectIds,
     definition: {
       schemaVersion: 1,
       id: document.agent.id,
@@ -132,7 +136,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<SettingsTab>("runtime");
+  const [activeTab, setActiveTab] = useState<SettingsTab>("overview");
   const [tabDirty, setTabDirty] = useState(false);
   const dirty = draft !== null && initialDraft !== null
     && JSON.stringify(draft) !== JSON.stringify(initialDraft);
@@ -311,18 +315,27 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
   // P8：把检查视图与真实装配对齐——引用本轮实际注入的 harness 区域（含 revision）。
   const harnessRegion = inspection?.prompt.regions?.find((region) => region.name === "chat_interaction_harness");
   const tabDescriptions: Record<SettingsTab, string> = {
-    runtime: t("assistantDesign.settingsHint"), tasks: t("assistantDesign.scheduleHint"),
-    duties: t("assistantDesign.dutiesHint"), standards: t("longAgentSettings.standardsHint"),
-    "agent-memory": t("assistantDesign.memoryHint"),
+    overview: t("longAgentSettings.overviewHint"),
+    identity: t("assistantDesign.identityHint"),
+    standards: t("longAgentSettings.standardsHint"),
+    memory: t("assistantDesign.memoryHint"),
+    projects: t("longAgentSettings.projectsHint"),
+    "on-demand": t("assistantDesign.settingsHint"),
+    continuous: t("assistantDesign.scheduleHint"),
+    channel: t("longAgentSettings.channelHint"),
+    readonly: t("longAgentSettings.readonlyHint"),
   };
+  // 左侧导航 = Agent 定义的各个部分（构成 5 + 能力 3 + 只读 1），与 02-design §4 的整页骨架一致。
   const tabs = [
-    // 按 Agent 定义分组：构成（它是什么）与能力（它能做什么）。
-    // 定时任务与长期职责属于「能力 · 持续」，与即时能力同组，而不是与构成项平级。
+    { id: "overview", label: t("longAgentSettings.overviewTitle"), icon: IconLayoutList, group: "constitution" as const },
+    { id: "identity", label: t("longAgentSettings.identity"), icon: IconUser, group: "constitution" as const },
     { id: "standards", label: t("longAgentSettings.standardsTab"), icon: IconShieldCheck, group: "constitution" as const },
-    { id: "agent-memory", label: t("longAgentSettings.agentMemoryTab"), icon: IconBrain, group: "constitution" as const },
-    { id: "runtime", label: t("longAgentSettings.runtimeTab"), icon: IconSettings, group: "capability" as const },
-    { id: "tasks", label: t("longAgentSettings.tasksTab"), icon: IconClock, group: "capability" as const },
-    { id: "duties", label: t("longAgentSettings.dutiesTab"), icon: IconBook2, group: "capability" as const },
+    { id: "memory", label: t("longAgentSettings.memoryTab"), icon: IconBrain, group: "constitution" as const },
+    { id: "projects", label: t("longAgentSettings.projectsTab"), icon: IconFolder, group: "constitution" as const },
+    { id: "on-demand", label: t("longAgentSettings.onDemandTab"), icon: IconSettings, group: "capability" as const },
+    { id: "continuous", label: t("longAgentSettings.continuousTab"), icon: IconClock, group: "capability" as const },
+    { id: "channel", label: t("longAgentSettings.channelTab"), icon: IconPlugConnected, group: "capability" as const },
+    { id: "readonly", label: t("longAgentSettings.readonlyTab"), icon: IconEye, group: "readonly" as const },
   ] as const;
   const handleTabKeyDown = async (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp" && event.key !== "ArrowRight" && event.key !== "ArrowLeft" && event.key !== "Home" && event.key !== "End") return;
@@ -375,7 +388,9 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                 {tabs.map((tab, index) => {
                   const Icon = tab.icon;
                   const groupLabel = tabs[index - 1]?.group === tab.group ? null
-                    : t(tab.group === "capability" ? "longAgentSettings.groupCapability" : "longAgentSettings.groupConstitution");
+                    : tab.group === "capability" ? t("longAgentSettings.groupCapability")
+                      : tab.group === "readonly" ? t("longAgentSettings.groupReadonly")
+                        : t("longAgentSettings.groupConstitution");
                   return (
                     <Fragment key={tab.id}>
                     {groupLabel !== null && (
@@ -416,16 +431,10 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
             <div className={styles.settingsShell}>
               <div className={styles.agentHeading}>
                 <div>
-                  <span className={styles.eyebrow}>{tabs.find(tab => tab.id === activeTab)?.label}</span>
                   <h2>{draft.name}</h2>
                   <p className={styles.headingDescription}>{tabDescriptions[activeTab]}</p>
                 </div>
-                <LongAgentOverviewCard
-                  document={document}
-                  inspection={inspection}
-                  onOpenTab={(tab) => void selectTab(tab)}
-                />
-                {activeTab === "runtime" && (
+                {activeTab === "identity" && (
                   <div className={styles.enabledControl}>
                     <span>{draft.enabled ? t("longAgentSettings.enabled") : t("longAgentSettings.disabled")}</span>
                     <ConfigurationToggle enabled={draft.enabled} loading={saving} onToggle={() => set("enabled", !draft.enabled)} label={t("longAgentSettings.enabled")} />
@@ -440,7 +449,11 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                 aria-labelledby={`long-agent-${activeTab}-tab`}
                 className={styles.tabPanel}
               >
-                {activeTab === "runtime" && (
+                {activeTab === "overview" && (
+                  <LongAgentOverviewCard document={document} inspection={inspection}
+                    onOpenTab={(tab) => void selectTab(tab as SettingsTab)} />
+                )}
+                {activeTab === "identity" && (
                   <form className={styles.form} onSubmit={(event) => { event.preventDefault(); void save(); }}>
                     <fieldset className={styles.formFields} disabled={saving}>
                     <div className={styles.sourceLine}>
@@ -469,32 +482,6 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                       <label>{t("longAgentSettings.description")}<textarea value={draft.description} rows={3} maxLength={500} onChange={(event) => set("description", event.target.value)} /></label>
                     </fieldset>
 
-                    <fieldset className={`${styles.section} ${styles.runtimeSection}`}>
-                      <legend>{t("longAgentSettings.runtime")}</legend>
-                      <LongAgentWorkflowSettings key={document.agent.id} projectId={document.agent.id}
-                        cwd={projects.find(project => project.projectId === document.agent.id)?.path ?? ""}
-                        onChanged={workflowChanged} />
-                      <ConfigurationSection className={styles.disclosure} title={t("design.promptOptions")}>
-                      <label>{t("longAgentSettings.systemPrompt")}<select value={draft.systemPromptMode} onChange={(event) => set("systemPromptMode", event.target.value as Draft["systemPromptMode"])}><option value="pi-default">{t("longAgentSettings.piDefaultPrompt")}</option><option value="replace">{t("longAgentSettings.replacePrompt")}</option></select></label>
-                      {draft.systemPromptMode === "replace" && <label>{t("longAgentSettings.systemPromptText")}<textarea value={draft.systemPromptText} rows={8} onChange={(event) => set("systemPromptText", event.target.value)} /></label>}
-                      <label>{t("longAgentSettings.customInstructions")}<textarea value={draft.customInstructionsText} rows={8} placeholder={t("longAgentSettings.instructionSeparator", { separator: LONG_AGENT_INSTRUCTION_SEPARATOR })} onChange={(event) => set("customInstructionsText", event.target.value)} /><span className={styles.fieldHint}>{t("longAgentSettings.instructionSeparator", { separator: LONG_AGENT_INSTRUCTION_SEPARATOR })}</span></label>
-                      </ConfigurationSection>
-                    </fieldset>
-
-                    <ConfigurationSection className={styles.disclosure} title={t("longAgentSettings.channel")}>
-                      {document.channel === null ? (
-                        <p className={styles.help}>{t("longAgentSettings.channelUnbound")}</p>
-                      ) : (
-                        <>
-                          <dl className={styles.facts}>
-                            <dt>{t("longAgentSettings.adapter")}</dt><dd>{document.channel.type}</dd>
-                            <dt>{t("longAgentSettings.instance")}</dt><dd>{document.channel.instance}</dd>
-                            <dt>{t("longAgentSettings.host")}</dt><dd>{document.channel.host.name} · {document.channel.host.id}</dd>
-                          </dl>
-                          <p className={styles.securityNote}>{t("longAgentSettings.channelCredentialBoundary")}</p>
-                        </>
-                      )}
-                    </ConfigurationSection>
 
                     <div className={styles.actions}>
                       <span>{dirty ? t("longAgentSettings.unsaved") : t("longAgentSettings.savedState")}</span>
@@ -504,11 +491,11 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                     </fieldset>
                   </form>
                 )}
-                {activeTab === "runtime" && <ConfigurationSection className={styles.disclosure} title={t("longAgentSettings.groupIdentity")} onToggle={event => { if (event.currentTarget.open) setIdentityOpen(true); }}>
+                {activeTab === "identity" && <ConfigurationSection className={styles.disclosure} title={t("longAgentSettings.groupIdentity")} onToggle={event => { if (event.currentTarget.open) setIdentityOpen(true); }}>
                   {identityOpen && <LongAgentGroupSettings longAgentId={document.agent.id} key={`${document.agent.id}:${refreshVersion}`} onDirtyChange={setTabDirty} />}
                 </ConfigurationSection>}
-                {activeTab === "runtime" && (
-                  <ConfigurationSection className={styles.disclosure} title={t("longAgentSettings.effectiveAssembly")}>
+                {activeTab === "readonly" && (
+                  <ConfigurationSection className={styles.disclosure} title={t("longAgentSettings.effectiveAssembly")} open>
                     <p className={styles.help}>{t("longAgentSettings.previewScope", { project: document.agent.id })}</p>
                     {dirty && <p className={styles.help}>{t("longAgentSettings.previewSaved")}</p>}
                     {inspection && <div className={styles.capabilitySummary}>
@@ -536,9 +523,64 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                     )}
                   </ConfigurationSection>
                 )}
-                {activeTab === "runtime" && <ConfigurationSection className={styles.disclosure} title={t("longAgentSettings.activityHeading")} onToggle={event => setUsageOpen(event.currentTarget.open)}>{usageOpen && <LongAgentActivitySettings longAgentId={document.agent.id} />}</ConfigurationSection>}
-            {activeTab === "tasks" && <LongAgentTasksSettings longAgentId={document.agent.id} />}
-                {activeTab === "duties" && <LongAgentDutiesSettings longAgentId={document.agent.id} />}
+                {activeTab === "readonly" && <ConfigurationSection className={styles.disclosure} title={t("longAgentSettings.activityHeading")} onToggle={event => setUsageOpen(event.currentTarget.open)}>{usageOpen && <LongAgentActivitySettings longAgentId={document.agent.id} />}</ConfigurationSection>}
+            {activeTab === "continuous" && <LongAgentTasksSettings longAgentId={document.agent.id} />}
+                {activeTab === "continuous" && <LongAgentDutiesSettings longAgentId={document.agent.id} />}
+                {activeTab === "projects" && (
+                  <fieldset className={styles.section}>
+                    <legend>{t("longAgentSettings.projectsTab")}</legend>
+                    <p className={styles.hint}>{t("longAgentSettings.projectsHint")}</p>
+                    <label>{t("longAgentSettings.defaultProject")}<select value={draft.defaultProjectId} onChange={(event) => set("defaultProjectId", event.target.value)}>{!projects.some((project) => project.projectId === draft.defaultProjectId) && <option value={draft.defaultProjectId}>{draft.defaultProjectId}</option>}{projects.filter(project => project.kind === "project" || project.projectId === draft.defaultProjectId || project.projectId === document.agent.id).map((project) => <option key={project.projectId} value={project.projectId} disabled={!project.available}>{project.kind === "project" ? project.cachedName : t("design.noCollaboration")}</option>)}</select></label>
+                    <div className={styles.boundProjects} data-la-bound-projects>
+                      <span>{t("longAgentSettings.boundProjects")}</span>
+                      {projects.filter(project => project.kind === "project").map((project) => {
+                        const bound = draft.boundProjectIds.includes(project.projectId);
+                        return (
+                          <label key={project.projectId} className={styles.boundProjectRow}>
+                            <input type="checkbox" checked={bound} disabled={!project.available}
+                              onChange={(event) => set("boundProjectIds", event.target.checked
+                                ? [...draft.boundProjectIds, project.projectId]
+                                : draft.boundProjectIds.filter((id) => id !== project.projectId))} />
+                            <span>{project.cachedName}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
+                )}
+                {activeTab === "on-demand" && (
+                  <>
+                    <fieldset className={`${styles.section} ${styles.runtimeSection}`}>
+                      <legend>{t("longAgentSettings.runtime")}</legend>
+                      <LongAgentWorkflowSettings key={document.agent.id} projectId={document.agent.id}
+                        cwd={projects.find(project => project.projectId === document.agent.id)?.path ?? ""}
+                        onChanged={workflowChanged} />
+                      <ConfigurationSection className={styles.disclosure} title={t("design.promptOptions")}>
+                      <label>{t("longAgentSettings.systemPrompt")}<select value={draft.systemPromptMode} onChange={(event) => set("systemPromptMode", event.target.value as Draft["systemPromptMode"])}><option value="pi-default">{t("longAgentSettings.piDefaultPrompt")}</option><option value="replace">{t("longAgentSettings.replacePrompt")}</option></select></label>
+                      {draft.systemPromptMode === "replace" && <label>{t("longAgentSettings.systemPromptText")}<textarea value={draft.systemPromptText} rows={8} onChange={(event) => set("systemPromptText", event.target.value)} /></label>}
+                      <label>{t("longAgentSettings.customInstructions")}<textarea value={draft.customInstructionsText} rows={8} placeholder={t("longAgentSettings.instructionSeparator", { separator: LONG_AGENT_INSTRUCTION_SEPARATOR })} onChange={(event) => set("customInstructionsText", event.target.value)} /><span className={styles.fieldHint}>{t("longAgentSettings.instructionSeparator", { separator: LONG_AGENT_INSTRUCTION_SEPARATOR })}</span></label>
+                      </ConfigurationSection>
+                    </fieldset>
+                  </>
+                )}
+                {activeTab === "channel" && (
+                  <fieldset className={styles.section}>
+                    <legend>{t("longAgentSettings.channelTab")}</legend>
+                    <p className={styles.hint}>{t("longAgentSettings.channelHint")}</p>
+                    {document.channel === null ? (
+                      <p className={styles.help}>{t("longAgentSettings.channelUnbound")}</p>
+                    ) : (
+                      <>
+                        <dl className={styles.facts}>
+                          <dt>{t("longAgentSettings.adapter")}</dt><dd>{document.channel.type}</dd>
+                          <dt>{t("longAgentSettings.instance")}</dt><dd>{document.channel.instance}</dd>
+                          <dt>{t("longAgentSettings.host")}</dt><dd>{document.channel.host.name} · {document.channel.host.id}</dd>
+                        </dl>
+                        <p className={styles.securityNote}>{t("longAgentSettings.channelCredentialBoundary")}</p>
+                      </>
+                    )}
+                  </fieldset>
+                )}
                 {activeTab === "standards" && (
                   <fieldset className={styles.section} data-la-standards>
                     <legend>{t("longAgentSettings.standardsTab")}</legend>
@@ -576,9 +618,9 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                     )}
                   </fieldset>
                 )}
-                {activeTab === "agent-memory" && (
+                {activeTab === "memory" && (
                   <fieldset className={styles.section} data-la-memory-switch>
-                    <legend>{t("longAgentSettings.agentMemoryTab")}</legend>
+                    <legend>{t("longAgentSettings.memoryTab")}</legend>
                     <label className="switch-row">
                       <input type="checkbox" data-la-agent-memory
                         checked={draft.agentMemory === "on"}
@@ -588,7 +630,12 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                     <p className={styles.hint}>{t("longAgentSettings.agentMemoryInjectHint")}</p>
                   </fieldset>
                 )}
-                {activeTab === "agent-memory" && <LongAgentMemorySettings longAgentId={document.agent.id} key={`${document.agent.id}:${refreshVersion}`} onDirtyChange={setTabDirty} />}
+                {activeTab === "memory" && <LongAgentMemorySettings longAgentId={document.agent.id} key={`${document.agent.id}:${refreshVersion}`} onDirtyChange={setTabDirty} />}
+                <div className={styles.actions} data-la-actions>
+                  <span>{dirty ? t("longAgentSettings.unsaved") : t("longAgentSettings.savedState")}</span>
+                  <Button variant="secondary" type="button" disabled={!dirty || saving} onClick={() => { if (initialDraft) setDraft(initialDraft); }}>{t("longAgentSettings.reset")}</Button>
+                  <Button variant="primary" type="button" disabled={!dirty || saving} onClick={() => void save()}>{saving ? t("common.saving") : t("common.save")}</Button>
+                </div>
               </div>
             </div>
           ) : null}
