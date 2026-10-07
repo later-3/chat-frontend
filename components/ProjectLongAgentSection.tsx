@@ -235,10 +235,6 @@ export function ProjectLongAgentSection({
                       ? `${agent.name} · ${stateLabel} · ${agent.description}`
                       : t("sidebar.longAgentUnavailable", { name: agent.name })}
                   >
-                    <span className={styles.avatarWrap} aria-hidden="true">
-                      <LongAgentAvatarView agentId={agent.id} name={agent.name} avatar={agent.avatar} />
-                      <span className={styles.presence} data-state={state} />
-                    </span>
                     <span className={styles.agentText}>
                       <strong>
                         {agent.name}
