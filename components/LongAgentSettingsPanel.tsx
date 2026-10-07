@@ -562,16 +562,17 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                     <p className={styles.hint}>{t("longAgentSettings.projectsHint")}</p>
                     <label>{t("longAgentSettings.defaultProject")}<select value={draft.defaultProjectId} onChange={(event) => set("defaultProjectId", event.target.value)}>{!projects.some((project) => project.projectId === draft.defaultProjectId) && <option value={draft.defaultProjectId}>{draft.defaultProjectId}</option>}{projects.filter(project => project.kind === "project" || project.projectId === draft.defaultProjectId || project.projectId === document.agent.id).map((project) => <option key={project.projectId} value={project.projectId} disabled={!project.available}>{project.kind === "project" ? project.cachedName : t("design.noCollaboration")}</option>)}</select></label>
                     <div className={styles.boundProjects} data-la-bound-projects>
-                      <span>{t("longAgentSettings.boundProjects")}</span>
+                      <span>{t("longAgentSettings.boundProjects")} · {t("longAgentSettings.boundCount", { count: String(draft.boundProjectIds.length) })}</span>
                       {projects.filter(project => project.kind === "project").map((project) => {
                         const bound = draft.boundProjectIds.includes(project.projectId);
                         return (
-                          <label key={project.projectId} className={styles.boundProjectRow}>
+                          <label key={project.projectId} className={styles.boundProjectRow}
+                            title={project.available ? undefined : t("longAgentSettings.projectUnavailable")}>
                             <input type="checkbox" checked={bound} disabled={!project.available}
                               onChange={(event) => set("boundProjectIds", event.target.checked
                                 ? [...draft.boundProjectIds, project.projectId]
                                 : draft.boundProjectIds.filter((id) => id !== project.projectId))} />
-                            <span>{project.cachedName}</span>
+                            <span>{project.cachedName}{project.available ? "" : ` · ${t("longAgentSettings.projectUnavailable")}`}</span>
                           </label>
                         );
                       })}

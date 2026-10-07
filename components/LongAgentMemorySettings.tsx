@@ -199,12 +199,27 @@ export function LongAgentMemorySettings({ longAgentId, onDirtyChange }: Props) {
     await openFile(editor.path, true);
   };
 
+  // P5 摘要层：条数 · 最近更新 · 大小合计（直接来自 fetchLongAgentMemory 的 files）
+  const memoryFiles = memory?.files ?? [];
+  const memoryBytes = memoryFiles.reduce((sum, file) => sum + file.size, 0);
+  const memoryLatest = memoryFiles.reduce((latest, file) => (file.updatedAt > latest ? file.updatedAt : latest), "");
+  const humanBytes = (bytes: number) => (bytes >= 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`);
+
   return (
     <div className={styles.memoryTab} data-agent-memory={longAgentId}>
       <div className={styles.sourceLine}>
         <span>{t("longAgentSettings.nanoMemorySource")}</span>
         <span>{t("longAgentSettings.nextTurnEffective")}</span>
       </div>
+
+      {memory === null ? null : (
+        <p className={styles.memorySummary} data-agent-memory-summary>
+          {t("longAgentSettings.memorySummary", {
+            count: String(memoryFiles.length), bytes: humanBytes(memoryBytes),
+            updated: memoryLatest === "" ? "—" : memoryLatest.slice(0, 10),
+          })}
+        </p>
+      )}
 
       <div className={styles.memoryToolbar}>
         <form className={styles.memorySearch} onSubmit={(event) => { event.preventDefault(); void search(); }} role="search">
