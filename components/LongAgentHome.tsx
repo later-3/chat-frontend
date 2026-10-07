@@ -100,7 +100,6 @@ export function LongAgentHome({ document, onOpenFeed }: {
   const latest: HomeLatest | undefined = latestDay === undefined ? undefined
     : { date: latestDay.date, turns: latestDay.turns, sessions: latestDay.sessions };
   const self = posts.filter((post) => post.longAgentId === agentId).slice(0, 3);
-  const friends = posts.filter((post) => post.longAgentId !== agentId).slice(0, 3);
   const stateLabel = status === null ? t("longAgentHome.statusUnknown")
     : status === "ready" ? t("longAgentHome.statusOnline") : t("longAgentHome.statusOffline");
 
@@ -143,34 +142,20 @@ export function LongAgentHome({ document, onOpenFeed }: {
         </p>
       </section>
 
-      {/* A3 / A4 */}
-      <section className={styles.twoColumns} data-la-home-region="feeds">
-        <div>
-          <h3 className={styles.regionTitle}>{t("longAgentHome.ownPosts")}</h3>
-          <ul className={styles.posts}>
-            {self.length === 0 ? <li className={styles.empty}>{t("longAgentHome.empty")}</li>
-              : self.map((post) => (
-                <li key={post.id} className={styles.post} data-la-home-post="own">
-                  <span className={styles.postText}>{post.text}</span>
-                  <span className={styles.postDate}>{post.date.slice(5)}</span>
-                </li>
-              ))}
-          </ul>
-        </div>
-        <div>
-          <h3 className={styles.regionTitle}>{t("longAgentHome.publicFeed")}</h3>
-          <ul className={styles.posts}>
-            {friends.length === 0 ? <li className={styles.empty}>{t("longAgentHome.empty")}</li>
-              : friends.map((post) => (
-                <li key={post.id} className={styles.post} data-la-home-post="friend">
-                  <span className={styles.postText}><b>{post.longAgentId}</b>：{post.text}</span>
-                  <span className={styles.postDate}>{post.date.slice(5)}</span>
-                </li>
-              ))}
-          </ul>
-          {onOpenFeed === undefined ? null
-            : <button type="button" className={styles.more} onClick={onOpenFeed}>{t("longAgentHome.viewAll")}</button>}
-        </div>
+      {/* A3 个人动态（公共朋友圈已按用户要求移除） */}
+      <section className={styles.region} data-la-home-region="posts">
+        <h3 className={styles.regionTitle}>{t("longAgentHome.ownPosts")}</h3>
+        <ul className={styles.posts}>
+          {self.length === 0 ? <li className={styles.empty}>{t("longAgentHome.empty")}</li>
+            : self.map((post) => (
+              <li key={post.id} className={styles.post} data-la-home-post="own">
+                <span className={styles.postText}>{post.text}</span>
+                <span className={styles.postDate}>{post.date.slice(5)}</span>
+              </li>
+            ))}
+        </ul>
+        {onOpenFeed === undefined ? null
+          : <button type="button" className={styles.more} onClick={onOpenFeed}>{t("longAgentHome.viewAll")}</button>}
       </section>
 
       {/* A5 正在做的事（待办因无接口暂不展示） */}

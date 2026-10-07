@@ -1264,7 +1264,6 @@ export const zhCNLocale: LocalePlugin = {
     "longAgentHome.activityHint": "近 12 周，每天按消耗的 token 点亮",
     "longAgentHome.statLine": "近 14 天：{sessions} 次会话 · {turns} turns · {tokens} tokens · 最常用 {tool}",
     "longAgentHome.ownPosts": "个人动态",
-    "longAgentHome.publicFeed": "公共朋友圈",
     "longAgentHome.viewAll": "查看全部",
     "longAgentHome.empty": "暂无",
     "longAgentHome.workingOn": "正在做的事",

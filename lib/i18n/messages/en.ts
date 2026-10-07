@@ -1264,7 +1264,6 @@ export const enLocale: LocalePlugin = {
     "longAgentHome.activityHint": "Last 12 weeks, lit by daily token usage",
     "longAgentHome.statLine": "Last 14 days: {sessions} sessions · {turns} turns · {tokens} tokens · top tool {tool}",
     "longAgentHome.ownPosts": "Own posts",
-    "longAgentHome.publicFeed": "Shared feed",
     "longAgentHome.viewAll": "View all",
     "longAgentHome.empty": "Nothing yet",
     "longAgentHome.workingOn": "Working on",
