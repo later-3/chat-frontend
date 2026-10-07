@@ -369,7 +369,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
   return (<SurfaceDialog title={t("longAgentSettings.title")} description={t("longAgentSettings.subtitle")}
     onClose={requestClose} actions={headerActions}>
     <div className={`${styles.dialog} configuration-dialog`}>
-      {document !== null && document.agent.id === agentId ? <LongAgentHome document={document} /> : null}
+      {document !== null && document.agent.id === agentId ? <LongAgentHome document={document} inspection={inspection} /> : null}
       <div className={styles.workspace}>
         <nav className={styles.agentNav} aria-label={t("longAgentSettings.agentList")}>
               <div className={styles.settingsTabs} role="tablist" aria-orientation="vertical" aria-label={t("longAgentSettings.sections")} onKeyDown={handleTabKeyDown}>

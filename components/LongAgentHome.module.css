@@ -31,3 +31,13 @@
 .facts li { display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid var(--border-subtle, #e3e6ec); padding: 7px 0; font-size: 13px; }
 .facts li:first-child { border-top: none; }
 .chip { font-weight: 500; font-size: 12px; border: 1px solid var(--border-subtle, #e3e6ec); border-radius: 999px; padding: 1px 8px; color: var(--text-secondary, #6b7280); }
+
+/* A5 社交卡片（头像 + 名称 + 时间 + 正文 + 评论数） */
+.postCard { display: grid; grid-template-columns: 36px 1fr; gap: 10px; padding: 10px 12px; border: 1px solid var(--border-subtle, #e3e6ec); border-radius: 12px; }
+.postCard + .postCard { margin-top: 10px; }
+.postAvatar { width: 36px; height: 36px; border-radius: 50%; overflow: hidden; }
+.postBody { min-width: 0; }
+.postHead { display: flex; align-items: baseline; gap: 8px; }
+.postAuthor { font-weight: 600; font-size: 13.5px; }
+.postTime { color: var(--text-tertiary, #8a8f98); font-size: 12px; }
+.postFoot { display: inline-block; margin-top: 6px; color: var(--text-tertiary, #8a8f98); font-size: 12px; }

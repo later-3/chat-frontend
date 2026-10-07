@@ -6,11 +6,12 @@ import {
   fetchLongAgentActivity, fetchLongAgentFeed,
   type LongAgentActivityDay, type LongAgentConfigurationDocument, type LongAgentFeedPost,
 } from "@/lib/long-agents-browser";
+import type { WorkflowAgentInspection } from "@/lib/chat-workflows-browser";
 import { fetchLongAgentPresence } from "@/lib/long-agent-presence";
 import { LongAgentAvatarView } from "./LongAgentAvatar";
 import styles from "./LongAgentHome.module.css";
 
-interface HomeFeedPost { readonly id: string; readonly longAgentId: string; readonly date: string; readonly text: string }
+interface HomeFeedPost { readonly id: string; readonly longAgentId: string; readonly date: string; readonly text: string; readonly comments: number }
 interface HomeCounts { readonly tasks?: number; readonly duties?: number }
 /** 最近活跃（来自 activity 的最后一天；日报接口返回的是生成状态而非正文，故不展示“工作总结”） */
 interface HomeLatest { readonly date: string; readonly turns: number; readonly sessions: number }
@@ -39,8 +40,9 @@ function humanTokens(total: number): string {
 const WEEKS = 12;
 const DAYS = WEEKS * 7;
 
-export function LongAgentHome({ document, onOpenFeed }: {
+export function LongAgentHome({ document, inspection, onOpenFeed }: {
   readonly document: LongAgentConfigurationDocument;
+  readonly inspection: WorkflowAgentInspection | null;
   readonly onOpenFeed?: () => void;
 }) {
   const { t } = useI18n();
@@ -50,29 +52,33 @@ export function LongAgentHome({ document, onOpenFeed }: {
 
   const [counts, setCounts] = useState<HomeCounts>({});
   const [status, setStatus] = useState<string | null>(null);
+  const [memoryCount, setMemoryCount] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
     void (async () => {
       const base = `/api/long-agents/${encodeURIComponent(agentId)}`;
-      const [activity, feed, presence, tasks, duties] = await Promise.allSettled([
+      const [activity, feed, presence, tasks, duties, memory] = await Promise.allSettled([
         fetchLongAgentActivity(agentId, undefined, signal),
         fetchLongAgentFeed(agentId, { limit: 40 }, signal),
         fetchLongAgentPresence(signal),
         getJson(`${base}/tasks`, signal),
         getJson(`${base}/duties`, signal),
+        getJson(`${base}/agent-memory?operation=list`, signal),
       ]);
       if (signal.aborted) return;
       if (activity.status === "fulfilled") setDays(activity.value);
       if (feed.status === "fulfilled") {
         setPosts(feed.value.map((post: LongAgentFeedPost) => ({
           id: post.id, longAgentId: post.longAgentId, date: post.date, text: post.text,
+          comments: post.comments.length,
         })));
       }
       if (presence.status === "fulfilled") {
         setStatus(presence.value.agents.find((agent) => agent.id === agentId)?.status ?? null);
       }
+      if (memory.status === "fulfilled") setMemoryCount(listLength(memory.value, "files"));
       setCounts({
         tasks: tasks.status === "fulfilled" ? listLength(tasks.value, "tasks") : undefined,
         duties: duties.status === "fulfilled" ? listLength(duties.value, "duties") : undefined,
@@ -96,6 +102,13 @@ export function LongAgentHome({ document, onOpenFeed }: {
   const toolTally = new Map<string, number>();
   for (const day of recent) for (const tool of day.tools) toolTally.set(tool.name, (toolTally.get(tool.name) ?? 0) + tool.count);
   const topTool = [...toolTally.entries()].sort((a, b) => b[1] - a[1])[0];
+  // A3 能力一览（来自 inspection，只读）
+  const model = inspection?.agent.effectiveModel ?? null;
+  const thinking = inspection?.agent.effectiveThinkingLevel ?? null;
+  const activeTools = inspection === null || inspection === undefined
+    ? undefined : inspection.tools.filter((tool) => tool.active).length;
+  const skills = inspection === null || inspection === undefined ? undefined : inspection.skills.length;
+  const harnessRegion = inspection?.prompt.regions?.find((region) => region.name === "chat_interaction_harness");
   const latestDay = days.length === 0 ? undefined : days[days.length - 1];
   const latest: HomeLatest | undefined = latestDay === undefined ? undefined
     : { date: latestDay.date, turns: latestDay.turns, sessions: latestDay.sessions };
@@ -142,15 +155,47 @@ export function LongAgentHome({ document, onOpenFeed }: {
         </p>
       </section>
 
-      {/* A3 个人动态（公共朋友圈已按用户要求移除） */}
+      {/* A3 能力一览 + A4 规范与记忆（只读展示） */}
+      <section className={styles.twoColumns} data-la-home-region="capabilities">
+        <div>
+          <h3 className={styles.regionTitle}>{t("longAgentHome.capabilities")}</h3>
+          <ul className={styles.facts}>
+            <li><span>{t("longAgentHome.model")}</span><span>{model === null || model === undefined ? "—" : `${model.modelId}`}</span></li>
+            <li><span>{t("longAgentHome.thinking")}</span><span>{thinking ?? "—"}</span></li>
+            <li><span>{t("longAgentHome.tools")}</span><span><b className={styles.chip}>{activeTools ?? "—"}</b></span></li>
+            <li><span>{t("longAgentHome.skills")}</span><span><b className={styles.chip}>{skills ?? "—"}</b></span></li>
+          </ul>
+        </div>
+        <div>
+          <h3 className={styles.regionTitle}>{t("longAgentHome.standardsAndMemory")}</h3>
+          <ul className={styles.facts}>
+            <li><span>{t("longAgentHome.standards")}</span>
+              <span>{harnessRegion === undefined ? "—"
+                : `${document.agent.interactionHarness === "off" ? t("longAgentSettings.disabled") : t("longAgentSettings.enabled")} · ${(harnessRegion.revision ?? "").replace(/^sha256:/, "").slice(0, 6)}`}</span></li>
+            <li><span>{t("longAgentHome.memory")}</span><span><b className={styles.chip}>{memoryCount ?? "—"}</b></span></li>
+          </ul>
+        </div>
+      </section>
+
+      {/* A5 个人动态（社交卡片；公共朋友圈已按用户要求移除） */}
       <section className={styles.region} data-la-home-region="posts">
         <h3 className={styles.regionTitle}>{t("longAgentHome.ownPosts")}</h3>
         <ul className={styles.posts}>
           {self.length === 0 ? <li className={styles.empty}>{t("longAgentHome.empty")}</li>
             : self.map((post) => (
-              <li key={post.id} className={styles.post} data-la-home-post="own">
-                <span className={styles.postText}>{post.text}</span>
-                <span className={styles.postDate}>{post.date.slice(5)}</span>
+              <li key={post.id} className={styles.postCard} data-la-home-post="own">
+                <span className={styles.postAvatar} data-la-home-post-avatar>
+                  <LongAgentAvatarView agentId={agentId} name={document.agent.name} avatar={document.agent.avatar} />
+                </span>
+                <div className={styles.postBody}>
+                  <div className={styles.postHead}>
+                    <span className={styles.postAuthor}>{document.agent.name}</span>
+                    <span className={styles.postTime}>{post.date.slice(5)}</span>
+                  </div>
+                  <p className={styles.postText}>{post.text}</p>
+                  {post.comments === 0 ? null
+                    : <span className={styles.postFoot}>{t("longAgentHome.comments", { count: String(post.comments) })}</span>}
+                </div>
               </li>
             ))}
         </ul>
