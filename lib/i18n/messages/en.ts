@@ -1249,6 +1249,7 @@ export const enLocale: LocalePlugin = {
     "longAgentSettings.readonlyTab": "Read-only",
     "longAgentSettings.readonlyHint": "View only: this round’s assembly, usage and workspace.",
     "longAgentSettings.groupReadonly": "Read-only",
+    "longAgentSettings.openProfile": "Open {name} profile and settings",
 "longAgentSettings.overviewTitle": "Overview",
     "longAgentSettings.overviewHint": "What it is and what it can do; open a section on the right. Collections open as a list with per-item detail.",
     "longAgentSettings.overviewOpen": "Open",

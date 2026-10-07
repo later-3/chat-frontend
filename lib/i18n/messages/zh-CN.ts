@@ -1249,6 +1249,7 @@ export const zhCNLocale: LocalePlugin = {
     "longAgentSettings.readonlyTab": "只读信息",
     "longAgentSettings.readonlyHint": "只能查看：本轮实际装配、用量与工作空间。",
     "longAgentSettings.groupReadonly": "只读",
+    "longAgentSettings.openProfile": "打开 {name} 的资料与配置",
 "longAgentSettings.overviewTitle": "总览",
     "longAgentSettings.overviewHint": "这些是它的构成与能力；右侧进入对应编辑区，集合型信息进入后是列表与单条。",
     "longAgentSettings.overviewOpen": "进入",

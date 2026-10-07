@@ -233,3 +233,7 @@
 .agentText > span { font-size:12px; line-height:18px; }
 .avatarWrap { width:40px; height:40px; flex:0 0 40px; }
 .status { display:none; }
+
+/* P3：头像作为独立入口按钮（与外层会话按钮并列） */
+.avatarButton { position: relative; border: none; background: none; padding: 0; cursor: pointer; flex: none; }
+.avatarButton:focus-visible { outline: 2px solid var(--accent, #2563eb); outline-offset: 2px; border-radius: 999px; }

@@ -4,8 +4,8 @@ import { InterfaceFeedback } from "./InterfaceFeedback";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { IconPlugConnected, IconRefresh, IconSettings } from "@tabler/icons-react";
-import { ToolbarAction, ToolbarStatus } from "./ui/ToolbarAction";
+import { IconPlugConnected, IconRefresh } from "@tabler/icons-react";
+import { ToolbarStatus } from "./ui/ToolbarAction";
 import { useLongAgentPresence } from "@/hooks/useLongAgentPresence";
 import { useI18n } from "@/hooks/useI18n";
 import {
@@ -57,6 +57,8 @@ export function ProjectLongAgentSection({
     return () => window.clearTimeout(timer);
   }, [openingAgentId]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // P3：点头像 → 打开该 Agent 的悬浮窗（不再用齿轮）
+  const [profileAgentId, setProfileAgentId] = useState<string | null>(null);
   // Creation happens by talking to a Friend (`long_agent_manage`), so the rail only
   // bootstraps the first one; there is no local name/description form.
   const [enabling, setEnabling] = useState(false);
@@ -149,8 +151,7 @@ export function ProjectLongAgentSection({
 
   return (
     <>
-    {/* 面板头部已取消：网关状态（ToolbarStatus，非交互读数）与设置齿轮（ToolbarAction）
-        统一走顶栏 toolbar-action 体系，Portal 到顶栏最右 slot。 */}
+    {/* 网关状态（ToolbarStatus，非交互读数）走顶栏；入口改为点头像（P3）。 */}
     {toolbarSlot && createPortal(
       <>
         {!loading && agents.length > 0 && (
@@ -162,12 +163,6 @@ export function ProjectLongAgentSection({
             icon={<IconPlugConnected size={18} stroke={1.8} aria-hidden="true" />}
           />
         )}
-        <ToolbarAction
-          label={t("longAgentSettings.open")}
-          icon={<IconSettings size={18} stroke={1.8} aria-hidden="true" />}
-          onClick={() => setSettingsOpen(true)}
-          disabled={agents.length === 0}
-        />
       </>,
       toolbarSlot,
     )}
@@ -214,6 +209,18 @@ export function ProjectLongAgentSection({
                   : t("sidebar.longAgentStartChat");
               return (
                 <li key={agent.id} className={styles.agentRow}>
+                  {/* 点头像 → 打开该 Agent 的悬浮窗（与外层会话按钮并列，避免交互元素嵌套） */}
+                  <button
+                    type="button"
+                    className={styles.avatarButton}
+                    data-long-agent-profile={agent.id}
+                    aria-label={t("longAgentSettings.openProfile", { name: agent.name })}
+                    title={t("longAgentSettings.openProfile", { name: agent.name })}
+                    onClick={() => { setProfileAgentId(agent.id); setSettingsOpen(true); }}
+                  >
+                    <LongAgentAvatarView agentId={agent.id} name={agent.name} avatar={agent.avatar} />
+                    <span className={styles.presence} data-state={state} />
+                  </button>
                   <button
                     type="button"
                     className={`${styles.agentButton}${selected ? ` ${styles.selected}` : ""}`}
@@ -256,8 +263,8 @@ export function ProjectLongAgentSection({
     {settingsOpen && agents.length > 0 && (
       <LongAgentSettingsPanel
         agents={agents}
-        initialAgentId={selectedLongAgentId ?? agents.find((agent) => agent.project?.primarySessionId === selectedSessionId)?.id}
-        onBack={() => setSettingsOpen(false)}
+        initialAgentId={profileAgentId ?? selectedLongAgentId ?? agents.find((agent) => agent.project?.primarySessionId === selectedSessionId)?.id}
+        onBack={() => { setSettingsOpen(false); setProfileAgentId(null); }}
         onSaved={() => void load()}
       />
     )}

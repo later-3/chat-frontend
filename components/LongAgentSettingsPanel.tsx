@@ -9,7 +9,7 @@ import { SurfaceDialog } from "./SurfaceDialog";
 import { InterfaceFeedback } from "./InterfaceFeedback";
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
-import { IconBook2, IconBrain, IconClock, IconEye, IconFolder, IconLayoutList, IconPlugConnected, IconRefresh, IconSettings, IconShieldCheck, IconUser } from "@tabler/icons-react";
+import { IconBook2, IconBrain, IconClock, IconEye, IconFolder, IconPlugConnected, IconRefresh, IconSettings, IconShieldCheck, IconUser } from "@tabler/icons-react";
 import { useI18n } from "@/hooks/useI18n";
 import {
   fetchLongAgentConfiguration,
@@ -38,9 +38,7 @@ import { LongAgentMemorySettings } from "./LongAgentMemorySettings";
 import { LongAgentTasksSettings } from "./LongAgentTasksSettings";
 import { LongAgentDutiesSettings } from "./LongAgentDutiesSettings";
 import { ConfigurationSection } from "./ConfigurationSection";
-import { LongAgentOverviewCard } from "./LongAgentOverviewCard";
 import { ConfigurationToggle } from "./ConfigurationToggle";
-import { SearchSelect } from "./SearchSelect";
 
 interface Props {
   agents: readonly LongAgentSummary[];
@@ -65,7 +63,7 @@ interface Draft {
   boundProjectIds: readonly string[];
 }
 
-type SettingsTab = "overview" | "identity" | "standards" | "memory" | "projects" | "on-demand" | "continuous" | "channel" | "readonly";
+type SettingsTab = "identity" | "standards" | "memory" | "projects" | "on-demand" | "continuous" | "channel" | "readonly";
 
 function draftFrom(document: LongAgentConfigurationDocument): Draft {
   const definition = document.agent.definition;
@@ -136,7 +134,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<SettingsTab>("overview");
+  const [activeTab, setActiveTab] = useState<SettingsTab>("identity");
   const [tabDirty, setTabDirty] = useState(false);
   const dirty = draft !== null && initialDraft !== null
     && JSON.stringify(draft) !== JSON.stringify(initialDraft);
@@ -240,12 +238,6 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
     return () => { controller.abort(); loadGeneration.current += 1; };
   }, [agentId, load]);
 
-  const selectAgent = async (nextAgentId: string) => {
-    if (nextAgentId === agentId) return;
-    if (hasUnsavedChanges && !await confirm(t("longAgentSettings.discardConfirm"), t("common.discard"))) return;
-    setTabDirty(false);
-    setAgentId(nextAgentId);
-  };
   const refresh = async () => {
     if (hasUnsavedChanges && !await confirm(t("longAgentSettings.discardConfirm"), t("common.discard"))) return;
     setTabDirty(false);
@@ -315,7 +307,6 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
   // P8：把检查视图与真实装配对齐——引用本轮实际注入的 harness 区域（含 revision）。
   const harnessRegion = inspection?.prompt.regions?.find((region) => region.name === "chat_interaction_harness");
   const tabDescriptions: Record<SettingsTab, string> = {
-    overview: t("longAgentSettings.overviewHint"),
     identity: t("assistantDesign.identityHint"),
     standards: t("longAgentSettings.standardsHint"),
     memory: t("assistantDesign.memoryHint"),
@@ -327,7 +318,6 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
   };
   // 左侧导航 = Agent 定义的各个部分（构成 5 + 能力 3 + 只读 1），与 02-design §4 的整页骨架一致。
   const tabs = [
-    { id: "overview", label: t("longAgentSettings.overviewTitle"), icon: IconLayoutList, group: "constitution" as const },
     { id: "identity", label: t("longAgentSettings.identity"), icon: IconUser, group: "constitution" as const },
     { id: "standards", label: t("longAgentSettings.standardsTab"), icon: IconShieldCheck, group: "constitution" as const },
     { id: "memory", label: t("longAgentSettings.memoryTab"), icon: IconBrain, group: "constitution" as const },
@@ -380,10 +370,6 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
     <div className={`${styles.dialog} configuration-dialog`}>
       <div className={styles.workspace}>
         <nav className={styles.agentNav} aria-label={t("longAgentSettings.agentList")}>
-          <div className={styles.navIntro}><span>{t("assistantDesign.workspace")}</span><small>{t("assistantDesign.workspaceHint")}</small></div>
-          <SearchSelect label={t("longAgentSettings.agentList")} value={agentId}
-            options={agents.map(agent => ({ value:agent.id, label:agent.name, detail:agent.available ? t("longAgentSettings.enabled") : t("longAgentSettings.disabled") }))}
-            onChange={selectAgent} disabled={saving || lifecycleBusy} />
               <div className={styles.settingsTabs} role="tablist" aria-orientation="vertical" aria-label={t("longAgentSettings.sections")} onKeyDown={handleTabKeyDown}>
                 {tabs.map((tab, index) => {
                   const Icon = tab.icon;
@@ -431,7 +417,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
             <div className={styles.settingsShell}>
               <div className={styles.agentHeading}>
                 <div>
-                  <h2>{draft.name}</h2>
+                  <h2>{tabs.find((tab) => tab.id === activeTab)?.label}</h2>
                   <p className={styles.headingDescription}>{tabDescriptions[activeTab]}</p>
                 </div>
                 {activeTab === "identity" && (
@@ -449,10 +435,6 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                 aria-labelledby={`long-agent-${activeTab}-tab`}
                 className={styles.tabPanel}
               >
-                {activeTab === "overview" && (
-                  <LongAgentOverviewCard document={document} inspection={inspection}
-                    onOpenTab={(tab) => void selectTab(tab as SettingsTab)} />
-                )}
                 {activeTab === "identity" && (
                   <form className={styles.form} onSubmit={(event) => { event.preventDefault(); void save(); }}>
                     <fieldset className={styles.formFields} disabled={saving}>
