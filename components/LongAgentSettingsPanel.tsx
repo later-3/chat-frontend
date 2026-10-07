@@ -553,8 +553,8 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                           })}
                     </p>
                     {(inspection?.prompt.regions ?? []).length > 0 && (
-                      <div className={styles.capabilitySummary} data-la-prompt-regions>
-                        <strong>{t("longAgentSettings.promptRegions")}</strong>
+                      // 高级信息：折叠展示，默认界面只留“开关 + 生效 revision”。
+                      <ConfigurationSection className={styles.disclosure} data-la-prompt-regions title={t("longAgentSettings.promptRegions")}>
                         <ul className={styles.regionList}>
                           {(inspection?.prompt.regions ?? []).map((region, index) => (
                             <li key={`${region.name}:${index}`}>
@@ -566,7 +566,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                             </li>
                           ))}
                         </ul>
-                      </div>
+                      </ConfigurationSection>
                     )}
                   </fieldset>
                 )}
