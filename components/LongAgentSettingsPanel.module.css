@@ -11,6 +11,35 @@
   color: var(--text);
   background: var(--bg);
 }
+/* 顶部双页切换：个人主页 / 长期助手设置（各页独立成页，不靠滚动找内容） */
+.topPages {
+  display: flex;
+  gap: 4px;
+  flex: none;
+  padding: 10px 20px 0;
+  border-bottom: 1px solid var(--border);
+}
+.topPage,
+.topPageActive {
+  border: none;
+  background: none;
+  padding: 8px 14px 10px;
+  min-height: 44px;              /* 移动端命中目标 ≥ 44px */
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  touch-action: manipulation;    /* 控件不触发双击缩放 */
+}
+.topPage:hover {
+  color: var(--text);
+}
+.topPageActive {
+  color: var(--text);
+  border-bottom-color: var(--accent, #2563eb);
+}
 /* 唯一滚动容器：个人主页（A 区）与配置（B 区）都在里面滚动 */
 .scroll {
   flex: 1;

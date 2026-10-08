@@ -139,6 +139,7 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
   const [tabDirty, setTabDirty] = useState(false);
   const dirty = draft !== null && initialDraft !== null
     && JSON.stringify(draft) !== JSON.stringify(initialDraft);
+
   const hasUnsavedChanges = dirty || tabDirty;
 
   useEffect(() => {
@@ -362,6 +363,22 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
     setTabDirty(false);
     setActiveTab(nextTab);
   };
+  // 顶部双页：个人主页（home，只读）与长期助手设置（settings，可编辑）——
+  // draft 草稿跨页保留，切到主页再回来修改不丢失；未保存就换页先确认。
+  const [topPage, setTopPage] = useState<"home" | "settings">("home");
+  const switchTopPage = async (next: "home" | "settings") => {
+    if (next === topPage) return;
+    if (hasUnsavedChanges && !await confirm(t("longAgentSettings.discardConfirm"), t("common.discard"))) return;
+    setTopPage(next);
+  };
+  // 分页签键盘可达：左右箭头在两页之间切换（与左导航的 handleTabKeyDown 同一模式）
+  const handleTopPageKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+    event.preventDefault();
+    const order = ["home", "settings"] as const;
+    const next = order[(order.indexOf(topPage) + (event.key === "ArrowRight" ? 1 : -1) + order.length) % order.length];
+    void switchTopPage(next);
+  };
 
   // P3: temporary config renders in the shared SurfaceDialog (wide). Radix owns
   // focus + Escape; unsaved-close confirmation runs through `back()`.
@@ -380,12 +397,29 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
         <IconRefresh size={16} stroke={1.8} aria-hidden="true" />{t("common.refresh")}
       </Button>
   </>);
-  return (<SurfaceDialog title={t("longAgentSettings.title")} description={t("longAgentSettings.subtitle")}
+  return (<SurfaceDialog title={topPage === "home" ? t("longAgentHome.title") : t("longAgentSettings.title")}
+    description={topPage === "home" ? undefined : t("longAgentSettings.subtitle")}
     onClose={requestClose} actions={headerActions}>
+    {/* 顶部双页切换：个人主页 / 长期助手设置（同一 Dialog 内切换，不靠滚动） */}
+    <div className={styles.topPages} role="tablist" aria-label={t("longAgentSettings.title")} onKeyDown={handleTopPageKeyDown}>
+      <button type="button" role="tab" aria-selected={topPage === "home"}
+        className={topPage === "home" ? styles.topPageActive : styles.topPage}
+        onClick={() => void switchTopPage("home")}>{t("longAgentHome.title")}</button>
+      <button type="button" role="tab" aria-selected={topPage === "settings"}
+        className={topPage === "settings" ? styles.topPageActive : styles.topPage}
+        onClick={() => void switchTopPage("settings")}>{t("longAgentSettings.title")}{hasUnsavedChanges ? <span aria-hidden="true"> ●</span> : null}</button>
+    </div>
     <div className={`${styles.dialog} configuration-dialog`}>
+      {topPage === "home" ? (
+        /* 个人主页（只读页）：独立滚动，不渲染配置/动作条 */
+        <div className={styles.scroll} data-la-scroll data-la-page="home">
+          {document !== null && document.agent.id === agentId ? <LongAgentHome document={document} inspection={inspection} /> : null}
+        </div>
+      ) : (
+        /* 配置页：左导航 8 分区 + 右内容 + 底部动作条 */
+        <>
       {/* 唯一滚动容器：A 区（个人主页）+ B 区（配置）都在其中；动作条在滚动区之外，不会覆盖正文 */}
-      <div className={styles.scroll} data-la-scroll>
-      {document !== null && document.agent.id === agentId ? <LongAgentHome document={document} inspection={inspection} /> : null}
+      <div className={styles.scroll} data-la-scroll data-la-page="settings">
       <div className={styles.workspace}>
         <nav className={styles.agentNav} aria-label={t("longAgentSettings.agentList")}>
               <div className={styles.settingsTabs} role="tablist" aria-orientation="vertical" aria-label={t("longAgentSettings.sections")} onKeyDown={handleTabKeyDown}>
@@ -679,12 +713,16 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
         </main>
       </div>
       </div>
-      {/* 底部动作条：在滚动区之外，固定占位，永不覆盖正文 */}
+      </>
+      )}
+      {topPage === "settings" ? (
+      /* 底部动作条：只在配置页；固定占位，永不覆盖正文 */
       <div className={styles.actions} data-la-actions>
         <span>{dirty ? t("longAgentSettings.unsaved") : t("longAgentSettings.savedState")}</span>
         <Button variant="secondary" type="button" disabled={!dirty || saving} onClick={() => { if (initialDraft) setDraft(initialDraft); }}>{t("longAgentSettings.reset")}</Button>
         <Button variant="primary" type="button" disabled={!dirty || saving} onClick={() => void save()}>{saving ? t("common.saving") : t("common.save")}</Button>
       </div>
+      ) : null}
     </div>
   </SurfaceDialog>);
 }
