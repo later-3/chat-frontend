@@ -6,20 +6,23 @@
   display: flex;
   flex-direction: column;
   position: relative;
-  overflow-y: auto;          /* P3：悬浮窗整体滚动（原来 hidden 造成“只有底部一小块能滚”，案例 C58） */
+  overflow: hidden;          /* P9：自身不滚动，滚动交给唯一的 .scroll（动作条在滚动区外，不再覆盖正文） */
   overscroll-behavior: contain;
   color: var(--text);
   background: var(--bg);
+}
+/* 唯一滚动容器：个人主页（A 区）与配置（B 区）都在里面滚动 */
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 /* Footer was `position:fixed` against the viewport with a full-page sidebar
    offset (`left:min(240px,…)`). Inside a centered SurfaceDialog that offset
    is wrong, so the dialog variant anchors to the dialog box instead. */
 .dialog .actions {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 3;
+  flex: none;                /* P9：作为 dialog 的固定末行占位，不参与滚动 */
 }
 .page {
   position: fixed;
@@ -115,16 +118,14 @@
   display: grid;
   grid-template-columns: 232px minmax(0, 1fr);
   align-items: start;
+  border-top: 1px solid var(--border);   /* P9：个人主页（A 区）与配置（B 区）之间显式分隔 */
+  margin-top: 6px;
 }
 
 .agentNav {
-  position: sticky;          /* P3：左侧导航在整体滚动时保持可见 */
+  position: sticky;          /* P9：外层已有唯一滚动容器（.scroll），导航只粘顶，不再自建滚动区 */
   top: 0;
   align-self: start;
-  max-height: 100vh;
-  overflow-y: auto;
-  min-height: 0;
-  overflow: auto;
   padding: 24px 16px calc(16px + env(safe-area-inset-bottom));
   background-color: var(--surface-chrome, var(--bg-panel));
   background-image: var(--ambient-background);
@@ -235,8 +236,8 @@
 
 .agentHeading h2 {
   margin: 6px 0 0;
-  font-size: 28px;
-  letter-spacing: -.025em;
+  font-size: 20px;           /* P9：配置区标题不再用超大字号（原 28px 与左栏导航重复且喧宾夺主） */
+  letter-spacing: -.02em;
   font-weight: 650;
 }
 
@@ -991,10 +992,8 @@
 }
 
 .actions {
-  position: sticky;          /* P3：底部动作条固定在悬浮窗底部 */
-  bottom: 0;
+  flex: none;                /* P9：固定底栏（在 .scroll 之外），不需要 sticky/absolute */
   z-index: 2;
-  margin-top: auto;
   min-height: calc(62px + env(safe-area-inset-bottom));
   display: flex;
   align-items: center;

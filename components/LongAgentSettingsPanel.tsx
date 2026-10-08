@@ -383,6 +383,8 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
   return (<SurfaceDialog title={t("longAgentSettings.title")} description={t("longAgentSettings.subtitle")}
     onClose={requestClose} actions={headerActions}>
     <div className={`${styles.dialog} configuration-dialog`}>
+      {/* 唯一滚动容器：A 区（个人主页）+ B 区（配置）都在其中；动作条在滚动区之外，不会覆盖正文 */}
+      <div className={styles.scroll} data-la-scroll>
       {document !== null && document.agent.id === agentId ? <LongAgentHome document={document} inspection={inspection} /> : null}
       <div className={styles.workspace}>
         <nav className={styles.agentNav} aria-label={t("longAgentSettings.agentList")}>
@@ -410,7 +412,8 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                       onClick={() => selectTab(tab.id)}
                     >
                       <Icon size={17} aria-hidden="true" />
-                      <span><strong>{tab.label}</strong><small>{tabDescriptions[tab.id]}</small></span>
+                      {/* 导航只放标题：同一信息不在左栏与右栏重复，说明由右栏展开 */}
+                      <span><strong>{tab.label}</strong></span>
                     </button>
                     </Fragment>
                   );
@@ -433,7 +436,8 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
             <div className={styles.settingsShell}>
               <div className={styles.agentHeading}>
                 <div>
-                  <h2>{tabs.find((tab) => tab.id === activeTab)?.label}</h2>
+                  {/* P9：当前分区名称由左栏导航承担，这里不再视觉重复（保留无障碍语义） */}
+                  <h2 className={styles.visuallyHidden}>{tabs.find((tab) => tab.id === activeTab)?.label}</h2>
                   <p className={styles.headingDescription}>{tabDescriptions[activeTab]}</p>
                 </div>
                 {activeTab === "identity" && (
@@ -462,8 +466,8 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                     {error && <div className={styles.error} role="alert"><InterfaceFeedback message={error} /></div>}
 
                     <fieldset className={styles.section}>
-                      <legend>{t("longAgentSettings.identity")}</legend>
-                      <p className={styles.help}>{t("assistantDesign.identityHint")}</p>
+                      {/* P9：与左栏导航同名的标题只留一处——这里视觉隐藏，仅保留无障碍语义 */}
+                      <legend className={styles.visuallyHidden}>{t("longAgentSettings.identity")}</legend>
                       <LongAgentAvatarEditor
                         document={document}
                         onUpdated={(next) => {
@@ -559,7 +563,6 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                 {activeTab === "projects" && (
                   <fieldset className={styles.section}>
                     <legend>{t("longAgentSettings.projectsTab")}</legend>
-                    <p className={styles.hint}>{t("longAgentSettings.projectsHint")}</p>
                     <label>{t("longAgentSettings.defaultProject")}<select value={draft.defaultProjectId} onChange={(event) => set("defaultProjectId", event.target.value)}>{!projects.some((project) => project.projectId === draft.defaultProjectId) && <option value={draft.defaultProjectId}>{draft.defaultProjectId}</option>}{projects.filter(project => project.kind === "project" || project.projectId === draft.defaultProjectId || project.projectId === document.agent.id).map((project) => <option key={project.projectId} value={project.projectId} disabled={!project.available}>{project.kind === "project" ? project.cachedName : t("design.noCollaboration")}</option>)}</select></label>
                     <div className={styles.boundProjects} data-la-bound-projects>
                       <span>{t("longAgentSettings.boundProjects")} · {t("longAgentSettings.boundCount", { count: String(draft.boundProjectIds.length) })}</span>
@@ -592,7 +595,6 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                 {activeTab === "channel" && (
                   <fieldset className={styles.section}>
                     <legend>{t("longAgentSettings.channelTab")}</legend>
-                    <p className={styles.hint}>{t("longAgentSettings.channelHint")}</p>
                     {document.channel === null ? (
                       <p className={styles.help}>{t("longAgentSettings.channelUnbound")}</p>
                     ) : (
@@ -610,7 +612,6 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                 {activeTab === "standards" && (
                   <fieldset className={styles.section} data-la-standards>
                     <legend>{t("longAgentSettings.standardsTab")}</legend>
-                    <p className={styles.hint}>{t("longAgentSettings.standardsHint")}</p>
                     <label className="switch-row">
                       <input type="checkbox" data-la-interaction-harness
                         checked={draft.interactionHarness === "on"}
@@ -672,15 +673,17 @@ export function LongAgentSettingsPanel({ agents, initialAgentId, onBack, onSaved
                   </fieldset>
                 )}
                 {activeTab === "memory" && <LongAgentMemorySettings longAgentId={document.agent.id} key={`${document.agent.id}:${refreshVersion}`} onDirtyChange={setTabDirty} />}
-                <div className={styles.actions} data-la-actions>
-                  <span>{dirty ? t("longAgentSettings.unsaved") : t("longAgentSettings.savedState")}</span>
-                  <Button variant="secondary" type="button" disabled={!dirty || saving} onClick={() => { if (initialDraft) setDraft(initialDraft); }}>{t("longAgentSettings.reset")}</Button>
-                  <Button variant="primary" type="button" disabled={!dirty || saving} onClick={() => void save()}>{saving ? t("common.saving") : t("common.save")}</Button>
-                </div>
               </div>
             </div>
           ) : null}
         </main>
+      </div>
+      </div>
+      {/* 底部动作条：在滚动区之外，固定占位，永不覆盖正文 */}
+      <div className={styles.actions} data-la-actions>
+        <span>{dirty ? t("longAgentSettings.unsaved") : t("longAgentSettings.savedState")}</span>
+        <Button variant="secondary" type="button" disabled={!dirty || saving} onClick={() => { if (initialDraft) setDraft(initialDraft); }}>{t("longAgentSettings.reset")}</Button>
+        <Button variant="primary" type="button" disabled={!dirty || saving} onClick={() => void save()}>{saving ? t("common.saving") : t("common.save")}</Button>
       </div>
     </div>
   </SurfaceDialog>);
