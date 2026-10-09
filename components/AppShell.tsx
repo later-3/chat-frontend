@@ -74,8 +74,16 @@ import {
 import {
   isRightPanelOverlay,
   getDefaultRightPanelWidth,
+  getFriendPanelMaxWidth,
+  getProjectTreeMaxWidth,
   getRightPanelMaxWidth,
   getSidebarMaxWidth,
+  FRIEND_PANEL_DEFAULT_WIDTH,
+  FRIEND_PANEL_MAX_WIDTH,
+  FRIEND_PANEL_MIN_WIDTH,
+  PROJECT_TREE_DEFAULT_WIDTH,
+  PROJECT_TREE_MAX_WIDTH,
+  PROJECT_TREE_MIN_WIDTH,
   RIGHT_PANEL_FALLBACK_WIDTH,
   RIGHT_PANEL_MAX_WIDTH,
   RIGHT_PANEL_MIN_WIDTH,
@@ -245,6 +253,8 @@ export function AppShell({
   const [mobileSidebarReady, setMobileSidebarReady] = useState(false);
   const sidebarWidthRef = useRef(SIDEBAR_DEFAULT_WIDTH);
   const rightPanelWidthRef = useRef(RIGHT_PANEL_FALLBACK_WIDTH);
+  const projectTreeWidthRef = useRef(PROJECT_TREE_DEFAULT_WIDTH);
+  const friendPanelWidthRef = useRef(FRIEND_PANEL_DEFAULT_WIDTH);
   const getResponsiveRightPanelWidth = useCallback(
     () => typeof window === "undefined"
       ? RIGHT_PANEL_FALLBACK_WIDTH
@@ -547,6 +557,39 @@ export function AppShell({
   const [friendPanelOpen, setFriendPanelOpen] = useState(false);
   // LA→Project→Session 三级导航：项目树默认随会话展开。
   const [projectTreeOpen, setProjectTreeOpen] = useState(true);
+  // 项目树与长期助手面板复用同一可调节宽度底座（与 sidebar/right-panel 同 hook），宽度参与兄弟面板联算。
+  const getResponsiveProjectTreeMaxWidth = useCallback(() => typeof window === "undefined" ? PROJECT_TREE_MAX_WIDTH : getProjectTreeMaxWidth({ viewportWidth: window.innerWidth, sidebarOpen, rightPanelOpen, rightPanelWidth: rightPanelWidthRef.current, friendPanelOpen }), [sidebarOpen, rightPanelOpen, friendPanelOpen]);
+  const getResponsiveFriendPanelMaxWidth = useCallback(() => typeof window === "undefined" ? FRIEND_PANEL_MAX_WIDTH : getFriendPanelMaxWidth({ viewportWidth: window.innerWidth, sidebarOpen, rightPanelOpen, rightPanelWidth: rightPanelWidthRef.current, projectTreeOpen }), [sidebarOpen, rightPanelOpen, projectTreeOpen]);
+  const projectTreeResizer = useResizablePanel({
+    ariaLabel: translate("layout.resizeProjectTree"),
+    cssVariable: "--project-tree-width",
+    defaultWidth: PROJECT_TREE_DEFAULT_WIDTH,
+    getMaxWidth: getResponsiveProjectTreeMaxWidth,
+    growthDirection: "right",
+    maxWidth: PROJECT_TREE_MAX_WIDTH,
+    minWidth: PROJECT_TREE_MIN_WIDTH,
+    storageKey: "pi-project-tree-width",
+    widthRef: projectTreeWidthRef,
+  });
+  const friendPanelResizer = useResizablePanel({
+    ariaLabel: translate("layout.resizeFriendPanel"),
+    cssVariable: "--friend-panel-width",
+    defaultWidth: FRIEND_PANEL_DEFAULT_WIDTH,
+    getMaxWidth: getResponsiveFriendPanelMaxWidth,
+    growthDirection: "right",
+    maxWidth: FRIEND_PANEL_MAX_WIDTH,
+    minWidth: FRIEND_PANEL_MIN_WIDTH,
+    storageKey: "pi-friend-panel-width",
+    widthRef: friendPanelWidthRef,
+  });
+  const reclampProjectTreeWidth = projectTreeResizer.reclampWidth;
+  const reclampFriendPanelWidth = friendPanelResizer.reclampWidth;
+  useEffect(() => { reclampProjectTreeWidth(); }, [projectTreeResizer.width, reclampProjectTreeWidth, sidebarOpen, rightPanelOpen]);
+  useEffect(() => { reclampFriendPanelWidth(); }, [friendPanelResizer.width, reclampFriendPanelWidth, sidebarOpen, rightPanelOpen]);
+  useEffect(() => {
+    if (!projectTreeOpen && !friendPanelOpen) return;
+    reclampSidebarWidth(); reclampRightPanelWidth(); reclampProjectTreeWidth(); reclampFriendPanelWidth();
+  }, [reclampSidebarWidth, reclampRightPanelWidth, reclampProjectTreeWidth, reclampFriendPanelWidth, projectTreeOpen, friendPanelOpen]);
   const [friendDate, setFriendDate] = useState(() => friendDateFromUrl(window.location.href));
   useEffect(() => {
     const restore = () => setFriendDate(friendDateFromUrl(window.location.href));
@@ -2200,12 +2243,14 @@ export function AppShell({
         {/* Chat content */}
         <div className="workspace-chat-row">
         {selectedSession?.owner.type === "long-agent" && (
-          // LA→Project→Session 三级导航：与 Friend 面板同款 dock，展示绑定项目与项目内会话。
+          // LA→Project→Session 三级导航：与 sidebar / right-panel 同款可调节宽度 dock。
           <aside
-            className={`workspace-dock workspace-project-tree ${projectTreeOpen ? "is-open" : "is-closed"}`}
+            ref={element => { projectTreeResizer.panelRef.current = element as HTMLDivElement | null; }}
+            className={`workspace-dock workspace-project-tree ${projectTreeOpen ? "is-open" : "is-closed"}${projectTreeResizer.isResizing ? " is-resizing" : ""}`}
             id="long-agent-project-tree"
             inert={!projectTreeOpen}
             aria-hidden={!projectTreeOpen}
+            style={{ "--project-tree-width": `${projectTreeResizer.width}px` } as React.CSSProperties}
           >
             <div className="workspace-project-tree-inner">
               <LongAgentProjectTree
@@ -2217,14 +2262,17 @@ export function AppShell({
             </div>
           </aside>
         )}
+        {selectedSession?.owner.type === "long-agent" && projectTreeOpen && (
+          <div {...projectTreeResizer.separatorProps} aria-controls="long-agent-project-tree" className={`panel-resize-handle project-tree-resize-handle${projectTreeResizer.isResizing ? " is-resizing" : ""}`} data-resize-handle="project-tree" title={`${translate("layout.resizeProjectTree")}: ${translate("layout.resizeHint")}`} />
+        )}
         {selectedSession?.owner.type === "long-agent" && (
-          // Stays mounted with an open/closed class so it reveals with the same
-          // width transition as the project files panel (.workspace-dock).
           <aside
-            className={`workspace-dock workspace-friend-panel ${friendPanelOpen ? "is-open" : "is-closed"}`}
+            ref={element => { friendPanelResizer.panelRef.current = element as HTMLDivElement | null; }}
+            className={`workspace-dock workspace-friend-panel ${friendPanelOpen ? "is-open" : "is-closed"}${friendPanelResizer.isResizing ? " is-resizing" : ""}`}
             id="friend-tasks-archive"
             inert={!friendPanelOpen}
             aria-hidden={!friendPanelOpen}
+            style={{ "--friend-panel-width": `${friendPanelResizer.width}px` } as React.CSSProperties}
           >
             <div className="workspace-friend-inner">
               <FriendInspector
@@ -2239,6 +2287,10 @@ export function AppShell({
             </div>
           </aside>
         )}
+        {selectedSession?.owner.type === "long-agent" && friendPanelOpen && (
+          <div {...friendPanelResizer.separatorProps} aria-controls="friend-tasks-archive" className={`panel-resize-handle friend-panel-resize-handle${friendPanelResizer.isResizing ? " is-resizing" : ""}`} data-resize-handle="friend-panel" title={`${translate("layout.resizeFriendPanel")}: ${translate("layout.resizeHint")}`} />
+        )}
+        {/* 分支入口只在顶栏（桌面 BranchNavigator inline / 移动端 branches 按钮），不设第二个 dock。 */}
         <div ref={chatColumnRef} className="workspace-chat-column">
           {navigationError ? <div className="workspace-navigation-error" role="alert"><InterfaceFeedback message={navigationError} /></div> : showChat && currentProjectId && (contentPanel === "sessions" || selectedSession?.owner.type === "long-agent") ? (
             <>

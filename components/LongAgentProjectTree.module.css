@@ -18,6 +18,21 @@
   white-space: nowrap;
 }
 
+.projectsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.projectActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
 .projects,
 .sessions {
   list-style: none;
@@ -66,20 +81,15 @@
   display: flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
 }
 
-.rename {
-  flex: 0 0 auto;
-  padding: 2px 6px;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  color: var(--text-muted);
-  cursor: pointer;
-  opacity: 0;
+/* L2 行布局：会话按钮占满剩余宽度（标题省略），“…”触发器固定 24px 不挤占。 */
+.sessionRow .session,
+.sessionRow .activeSession {
+  flex: 1 1 auto;
+  min-width: 0;
 }
-
-.sessionRow:hover .rename { opacity: 1; }
 
 .sessionRename {
   flex: 1 1 auto;
@@ -93,6 +103,8 @@
 }
 
 .sessionTitle {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -129,6 +141,7 @@
 }
 
 .sessionMeta {
+  flex-shrink: 0;
   color: var(--text-muted);
   font-size: 11px;
 }
@@ -136,18 +149,19 @@
 .sessionsHeader {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 8px;
   margin-top: 6px;
   min-width: 0;
 }
 
-.newSession {
-  flex-shrink: 0;
-}
-
-.addProject {
-  margin-top: 2px;
+.sessionActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
 }
 
 .hint {

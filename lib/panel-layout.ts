@@ -5,6 +5,12 @@ export const CHAT_MIN_WIDTH = 480;
 export const SIDEBAR_DEFAULT_WIDTH = 280;
 export const SIDEBAR_MIN_WIDTH = 224;
 export const SIDEBAR_MAX_WIDTH = 360;
+export const PROJECT_TREE_DEFAULT_WIDTH = 320;
+export const PROJECT_TREE_MIN_WIDTH = 240;
+export const PROJECT_TREE_MAX_WIDTH = 480;
+export const FRIEND_PANEL_DEFAULT_WIDTH = 360;
+export const FRIEND_PANEL_MIN_WIDTH = 300;
+export const FRIEND_PANEL_MAX_WIDTH = 480;
 export const RIGHT_PANEL_FALLBACK_WIDTH = 360;
 export const RIGHT_PANEL_MIN_WIDTH = 320;
 export const RIGHT_PANEL_MAX_WIDTH = 720;
@@ -29,4 +35,24 @@ export function getRightPanelMaxWidth({ viewportWidth, sidebarOpen, sidebarWidth
 }): number {
   if (isRightPanelOverlay(viewportWidth, sidebarOpen)) return Math.min(RIGHT_PANEL_MAX_WIDTH, viewportWidth - 48);
   return Math.min(RIGHT_PANEL_MAX_WIDTH, viewportWidth - NAVIGATION_WIDTH - CHAT_MIN_WIDTH - 1 - (sidebarOpen ? sidebarWidth + 1 : 0));
+}
+
+export function getProjectTreeMaxWidth({ viewportWidth, sidebarOpen, rightPanelOpen, rightPanelWidth, friendPanelOpen }: {
+  viewportWidth: number; sidebarOpen: boolean; rightPanelOpen: boolean; rightPanelWidth: number; friendPanelOpen: boolean;
+}): number {
+  if (viewportWidth < SPLIT_PANEL_MIN_WIDTH) return PROJECT_TREE_MAX_WIDTH;
+  const sidebar = sidebarOpen ? SIDEBAR_MIN_WIDTH + 1 : 0;
+  const right = rightPanelOpen && !isRightPanelOverlay(viewportWidth, sidebarOpen) ? rightPanelWidth + 1 : 0;
+  const friend = friendPanelOpen ? FRIEND_PANEL_MIN_WIDTH + 1 : 0;
+  return Math.max(PROJECT_TREE_MIN_WIDTH, Math.min(PROJECT_TREE_MAX_WIDTH, viewportWidth - NAVIGATION_WIDTH - CHAT_MIN_WIDTH - sidebar - right - friend - 1));
+}
+
+export function getFriendPanelMaxWidth({ viewportWidth, sidebarOpen, rightPanelOpen, rightPanelWidth, projectTreeOpen }: {
+  viewportWidth: number; sidebarOpen: boolean; rightPanelOpen: boolean; rightPanelWidth: number; projectTreeOpen: boolean;
+}): number {
+  if (viewportWidth < SPLIT_PANEL_MIN_WIDTH) return FRIEND_PANEL_MAX_WIDTH;
+  const sidebar = sidebarOpen ? SIDEBAR_MIN_WIDTH + 1 : 0;
+  const right = rightPanelOpen && !isRightPanelOverlay(viewportWidth, sidebarOpen) ? rightPanelWidth + 1 : 0;
+  const tree = projectTreeOpen ? PROJECT_TREE_MIN_WIDTH + 1 : 0;
+  return Math.max(FRIEND_PANEL_MIN_WIDTH, Math.min(FRIEND_PANEL_MAX_WIDTH, viewportWidth - NAVIGATION_WIDTH - CHAT_MIN_WIDTH - sidebar - right - tree - 1));
 }

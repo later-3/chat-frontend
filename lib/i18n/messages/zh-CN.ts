@@ -807,6 +807,8 @@ export const zhCNLocale: LocalePlugin = {
     "files.noneOpen": "没有打开的文件",
     "layout.resizeSidebar": "调整侧边栏宽度",
     "layout.resizeFilePanel": "调整文件面板宽度",
+    "layout.resizeProjectTree": "调整项目树宽度",
+    "layout.resizeFriendPanel": "调整长期助手面板宽度",
     "layout.resizeHint": "拖动调整宽度。双击或按 Enter 恢复默认值。",
     "layout.conversationWidth": "会话宽度",
     "layout.conversationWidthAuto": "自适应",

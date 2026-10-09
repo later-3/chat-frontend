@@ -1488,12 +1488,13 @@ span.token.table {
 .composer-queue-action.is-interrupt:not(:disabled) { border-color: var(--warning-outline); color: var(--warning); }
 .composer-queue-action.is-interrupt:not(:disabled):hover { background: var(--warning-wash); }
 
-/* LA→Project→Session 项目树 dock：显式宽度，不与 friend-panel 的窄屏覆盖规则互相干扰。 */
-.workspace-dock.workspace-project-tree { --dock-width: 360px; width: var(--dock-width); min-width: var(--dock-width); max-width: var(--dock-width); border-right: 1px solid var(--border); background: var(--bg-panel); }
+/* LA→Project→Session 项目树 dock：可调节宽度（与 sidebar / right-panel 同 hook 逻辑），不与 friend-panel 的窄屏覆盖互相干扰。 */
+.workspace-dock.workspace-project-tree { --dock-width: var(--project-tree-width, 320px); border-right: 1px solid var(--border); background: var(--bg-panel); }
 .workspace-dock.workspace-project-tree.is-closed { width: 0; min-width: 0; border: 0 !important; }
 .workspace-dock.workspace-project-tree > * { width: var(--dock-width); min-width: var(--dock-width); }
 .workspace-project-tree-inner { height: 100%; overflow-y: auto; overscroll-behavior: contain; }
-@media (max-width: 1100px) { .workspace-dock.workspace-project-tree { --dock-width: 320px; } }
+.workspace-dock.workspace-friend-panel { --dock-width: var(--friend-panel-width, 360px); }
+@media (max-width: 1100px) { .workspace-dock.workspace-project-tree { --dock-width: min(320px, var(--project-tree-width, 320px)); } }
 @media (max-width: 768px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
   .workspace-dock.workspace-project-tree { position: absolute; inset: 0; width: 100%; min-width: 0; max-width: none; border-right: 0; background: var(--bg); transform: translateX(-100%); transition: transform var(--duration-panel) var(--ease-standard); }
   .workspace-dock.workspace-project-tree.is-open { transform: none; }
@@ -1542,6 +1543,11 @@ span.token.table {
 .session-actions-trigger:hover {
   background: var(--bg-hover);
   color: var(--text);
+}
+
+/* 触屏/无 hover 设备没有“悬停才出现”，否则行动作入口彻底不可见：常显但置灰。 */
+@media (hover: none), (pointer: coarse) {
+  .session-actions-trigger { opacity: 1; color: var(--text-dim); }
 }
 
 /* 会话搜索浮层：输入 + 筛选 → 结果列表 → 预览（证据优先，再决定打开哪一条）。 */

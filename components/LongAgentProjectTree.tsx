@@ -3,7 +3,9 @@ import { Button } from "./ui/Button";
 import { InterfaceFeedback } from "./InterfaceFeedback";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { IconArchive, IconListCheck, IconPencil, IconPlus, IconSearch, IconTrash } from "@tabler/icons-react";
 import { useI18n } from "@/hooks/useI18n";
+import { ToolbarAction } from "./ui/ToolbarAction";
 import {
   clearProjectSessionsCache,
   createLongAgentProjectSession,
@@ -15,7 +17,6 @@ import {
 } from "@/lib/long-agents-browser";
 import { fetchChatProjects, openChatProject, type ChatProjectSummary } from "@/lib/projects-contract";
 import { removeSession, renameSession } from "@/lib/session-removal-browser";
-import { SessionActionsMenu } from "./SessionActionsMenu";
 import { SessionSearchOverlay } from "./SessionSearchOverlay";
 import { RemovedSessionsPanel } from "./RemovedSessionsPanel";
 import { useConfirmation } from "./ui/Confirmation";
@@ -234,8 +235,17 @@ export function LongAgentProjectTree({ longAgentId, activeSessionId, activeProje
   const boundProjectIds = doc?.agent.boundProjectIds ?? [];
   const workspaceId = boundProjectIds[0] ?? longAgentId;
 
+  const activeSession = sessions.find((s) => s.sessionId === activeSessionId) ?? null;
+  const canActOnActive = activeSession !== null && selectedProject !== null && !selectMode;
+
   return <div className={styles.tree} data-long-agent-project-tree={longAgentId}>
-    <p className={styles.heading}>{t("laProjectTree.projects")}</p>
+    {/* L0 我在哪：项目归属。高亮即所在，无需重复标题；操作收进 L0 行尾。 */}
+    <div className={styles.projectsHeader}>
+      <p className={styles.heading}>{t("laProjectTree.projects")}</p>
+      <div className={styles.projectActions}>
+        <ToolbarAction label={t("laProjectTree.addProject")} icon={<IconPlus size={18} />} data-project-tree-add onClick={() => { setError(null); setPickerOpen(true); }} disabled={busy} />
+      </div>
+    </div>
     <ul className={styles.projects}>
       <li>
         <button type="button" data-project-tree-project={workspaceId}
@@ -257,25 +267,29 @@ export function LongAgentProjectTree({ longAgentId, activeSessionId, activeProje
         </button>
       </li>)}
     </ul>
-    {/* 添加项目 = 打开一个目录：点击直接弹目录选择器（复用 /api/cwd/browse 底层能力），无中间层。 */}
-    <Button variant="ghost" type="button" className={styles.addProject} data-project-tree-add
-      disabled={busy}
-      onClick={() => { setError(null); setPickerOpen(true); }}>{t("laProjectTree.addProject")}</Button>
 
     {selectedProject !== null && <>
+      {/* L1 对集合操作：同一行完成。标题已由 L0 高亮表达，此处不再重复项目名；操作全部用 ToolbarAction 同底座。 */}
       <div className={styles.sessionsHeader}>
-        <p className={styles.heading}>{projectName(projects, selectedProject, selectedProject)}</p>
-        <button type="button" data-project-tree-search className="session-actions-trigger" style={{ opacity: 1 }}
-          title={t("laProjectTree.search")} aria-label={t("laProjectTree.search")} onClick={() => setSearchOpen(true)}>&#8981;</button>
-        <button type="button" data-project-tree-removed className="session-actions-trigger" style={{ opacity: 1 }}
-          title={t("laProjectTree.removed")} aria-label={t("laProjectTree.removed")} onClick={() => setRemovedOpen(true)}>&#8635;</button>
-        <button type="button" data-project-tree-select className="session-actions-trigger" style={{ opacity: 1 }}
-          data-active={selectMode} title={selectMode ? t("laProjectTree.selectDone") : t("laProjectTree.select")}
-          aria-label={t("laProjectTree.select")}
-          onClick={() => { setSelectMode((mode) => !mode); setSelectedSessions([]); }}>{selectMode ? "✓" : "☰"}</button>
-        {selectedProject !== workspaceId && <Button variant="primary" type="button" className={styles.newSession} data-project-tree-new={selectedProject}
-          disabled={busy} onClick={() => newSession(selectedProject)}>{t("laProjectTree.newSession")}</Button>}
+        <div className={styles.sessionActions}>
+          <ToolbarAction label={t("laProjectTree.search")} icon={<IconSearch size={18} />}
+            data-project-tree-search="true" onClick={() => setSearchOpen(true)} />
+          <ToolbarAction label={t("laProjectTree.removed")} icon={<IconArchive size={18} />}
+            data-project-tree-removed="true" onClick={() => setRemovedOpen(true)} />
+          <ToolbarAction label={selectMode ? t("laProjectTree.selectDone") : t("laProjectTree.select")}
+            icon={<IconListCheck size={18} />} active={selectMode} data-project-tree-select="true"
+            onClick={() => { setSelectMode((mode) => !mode); setSelectedSessions([]); }} />
+          <ToolbarAction label={t("sessionActions.rename")} icon={<IconPencil size={18} />}
+            data-session-action="rename" data-project-tree-rename={activeSession?.sessionId ?? ""}
+            disabled={!canActOnActive} onClick={() => { if (activeSession) { renameCancelled.current = false; setRenaming({ sessionId: activeSession.sessionId, value: activeSession.title }); } }} />
+          <ToolbarAction label={t("sessionActions.remove")} icon={<IconTrash size={18} />}
+            data-session-action="remove" data-project-tree-remove={activeSession?.sessionId ?? ""}
+            disabled={!canActOnActive} onClick={() => { if (activeSession) removeProjectSession(activeSession.sessionId, activeSession.title); }} />
+          {selectedProject !== workspaceId && <ToolbarAction label={t("laProjectTree.newSession")} icon={<IconPlus size={18} />}
+            data-project-tree-new={selectedProject} disabled={busy} onClick={() => newSession(selectedProject)} />}
+        </div>
       </div>
+      {/* L2 会话列表：纯信息行，无每行 “…”；选中态即当前会话。 */}
       <ul className={styles.sessions}>
         {sessions.map((session) => <li key={session.sessionId} className={`${styles.sessionRow} session-row`}>
           {renaming?.sessionId === session.sessionId ? (
@@ -301,10 +315,6 @@ export function LongAgentProjectTree({ longAgentId, activeSessionId, activeProje
                 {t(kindLabelKey(session.kind))}{" · "}{session.messageCount} {t("laProjectTree.messagesSuffix")}
               </small>
             </button>
-            <SessionActionsMenu sessionId={session.sessionId} title={session.title}
-              onRename={(_, title) => { renameCancelled.current = false; setRenaming({ sessionId: session.sessionId, value: title }); }}
-              onRemove={() => removeProjectSession(session.sessionId, session.title)}
-              {...(session.sessionId === activeSessionId ? {} : {})} />
           </>)}
         </li>)}
         {sessionsLoaded && sessions.length === 0 && <li className={styles.hint}>{t("laProjectTree.emptySessions")}</li>}

@@ -807,6 +807,8 @@ export const enLocale: LocalePlugin = {
     "files.noneOpen": "No file open",
     "layout.resizeSidebar": "Resize sidebar",
     "layout.resizeFilePanel": "Resize file panel",
+    "layout.resizeProjectTree": "Resize project tree",
+    "layout.resizeFriendPanel": "Resize assistant panel",
     "layout.resizeHint": "Drag to resize. Double-click or press Enter to reset.",
     "layout.conversationWidth": "Conversation width",
     "layout.conversationWidthAuto": "Fits the window",
