@@ -104,7 +104,8 @@ function PromptCaptureBody({ record, detail, filters, rawPayload }: {
   </div>;
 }
 
-function contentText(content: unknown): string {
+/** TurnInteractions（B3）复用：消息内容取文本（同源，不复制第二份）。 */
+export function contentText(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return content === undefined || content === null ? "" : JSON.stringify(content);
   return content.map((block) => {
@@ -116,10 +117,11 @@ function contentText(content: unknown): string {
   }).join("\n");
 }
 
-function PromptCaptureBlock({ label, text, mono }: { readonly label: string; readonly text: string; readonly mono: boolean }) {
+/** TurnInteractions（B3）复用：单条消息块渲染（同源）；focus = 本轮输入高亮（D2 定位）。 */
+export function PromptCaptureBlock({ label, text, mono, focus }: { readonly label: string; readonly text: string; readonly mono: boolean; readonly focus?: boolean }) {
   const { t } = useI18n();
   const preview = text.length > 8000 ? `${text.slice(0, 8000)}\n… ${t("promptCapture.truncated")}` : text;
-  return <div className="prompt-capture-block">
+  return <div className={focus ? "prompt-capture-block is-focus" : "prompt-capture-block"}>
     <div className="prompt-capture-block-label">{label}</div>
     <pre className={`prompt-capture-block-text${mono ? " is-mono" : ""}`}>{preview}</pre>
   </div>;

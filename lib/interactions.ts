@@ -1,0 +1,349 @@
+/**
+ * 完整交互读模型数据层（B3 · U7）。
+ *
+ * 唯一事实源 = Backend 读模型 `/api/sessions/:id/interactions*`；聚合（tokenOut、失败数、
+ * 重试归并）全部由后端给出（02 T9：前端不自行聚合），本模块只做字段校验与视图归一化。
+ * legacy 会话（旧 prompt-captures schema1）：index 已由后端适配（legacy:true）；详情回落
+ * 旧 `prompt-captures/:id` 路由，归一化到同一 RequestDetailView，降级能力见 B3-design D3 矩阵。
+ */
+
+export interface InteractionRecordingState {
+  readonly enabled: boolean;
+  readonly revision: number;
+}
+
+export interface InteractionRegionMark {
+  readonly id: string;
+  readonly chars: number;
+}
+
+export interface InteractionOutcomeView {
+  readonly status: "success" | "error" | "aborted";
+  readonly stopReason?: string;
+  readonly errorMessage?: string;
+  readonly usage?: unknown;
+  readonly durationMs?: number;
+  readonly responseId?: string;
+}
+
+export interface InteractionTurnView {
+  readonly source: string;
+  readonly workflowId?: string;
+  readonly workflowInvocationId?: string;
+  readonly stageId?: string;
+  readonly turnKey?: string;
+  readonly stage: { readonly id: string; readonly nodeKind: string };
+}
+
+export interface InteractionRowView {
+  readonly requestId: string;
+  readonly seq: number;
+  readonly timestamp: string;
+  readonly kind: "agent" | "direct";
+  readonly turn: InteractionTurnView;
+  readonly agent: { readonly agentId: string; readonly agentName?: string; readonly longAgentId?: string };
+  readonly model: { readonly provider: string; readonly modelId: string; readonly api?: string };
+  readonly payloadChars: number;
+  readonly regions: readonly InteractionRegionMark[];
+  readonly messageCount: number;
+  readonly toolCount: number;
+  readonly attempt: number;
+  readonly retryOf?: string;
+  readonly outcome?: InteractionOutcomeView;
+  readonly degraded?: boolean;
+  readonly legacy?: boolean;
+}
+
+export interface InteractionRequestGroupView {
+  readonly requestId: string;
+  readonly attemptIds: readonly string[];
+  readonly attempts: number;
+  readonly failures: number;
+  readonly regions: readonly InteractionRegionMark[];
+  readonly messageCount: number;
+  readonly toolCount: number;
+  readonly lastOutcome?: InteractionOutcomeView;
+}
+
+export interface InteractionTurnSummaryView {
+  readonly requestCount: number;
+  readonly attempts: number;
+  readonly failures: number;
+  readonly tokenOut: number;
+}
+
+export interface InteractionGroupView {
+  readonly key: string;
+  readonly source: string;
+  readonly stage: { readonly id: string; readonly nodeKind: string };
+  readonly requestCount: number;
+  readonly failures: number;
+  readonly tokenOut: number;
+}
+
+export interface InteractionIndexView {
+  readonly legacy: boolean;
+  readonly groups: readonly InteractionGroupView[];
+  readonly rows: readonly InteractionRowView[];
+  readonly nextCursor?: number;
+  readonly recording: InteractionRecordingState;
+}
+
+export interface InteractionTurnGroupView {
+  readonly rows: readonly InteractionRowView[];
+  readonly summary: InteractionTurnSummaryView;
+  readonly requests: readonly InteractionRequestGroupView[];
+  readonly legacy: boolean;
+}
+
+/** 归一化的请求详情：v2 与 legacy（v1）两源在此收敛为同一视图模型。 */
+export interface RequestDetailView {
+  readonly row: InteractionRowView;
+  /** 原始请求体（messages/tools；legacy 同样来自旧 gz）。 */
+  readonly payload: Record<string, unknown> | null;
+  /** 消息区域标注（v2 来自 D2 messageRegions；legacy 来自 v1 regions.messages 的分类部分）。 */
+  readonly messageRegions: readonly { readonly index: number; readonly role: string; readonly region: string; readonly customType?: string }[];
+  /** 结果；legacy 无 → undefined，UI 显示“旧记录未保存结果”（D3 矩阵）。 */
+  readonly outcome?: InteractionOutcomeView;
+  readonly legacy: boolean;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function str(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+function num(value: unknown, fallback = 0): number {
+  return typeof value === "number" ? value : fallback;
+}
+function optionalStr(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function parseOutcome(value: unknown): InteractionOutcomeView | undefined {
+  if (!isRecord(value)) return undefined;
+  const status = value.status;
+  if (status !== "success" && status !== "error" && status !== "aborted") return undefined;
+  return {
+    status,
+    ...(optionalStr(value.stopReason) === undefined ? {} : { stopReason: optionalStr(value.stopReason) }),
+    ...(optionalStr(value.errorMessage) === undefined ? {} : { errorMessage: optionalStr(value.errorMessage) }),
+    ...(value.usage === undefined ? {} : { usage: value.usage }),
+    ...(typeof value.durationMs === "number" ? { durationMs: value.durationMs } : {}),
+    ...(optionalStr(value.responseId) === undefined ? {} : { responseId: optionalStr(value.responseId) }),
+  };
+}
+
+function parseTurn(value: unknown): InteractionTurnView {
+  const turn = isRecord(value) ? value : {};
+  const stage = isRecord(turn.stage) ? turn.stage : {};
+  return {
+    source: str(turn.source, "direct"),
+    ...(optionalStr(turn.workflowId) === undefined ? {} : { workflowId: optionalStr(turn.workflowId) }),
+    ...(optionalStr(turn.workflowInvocationId) === undefined ? {} : { workflowInvocationId: optionalStr(turn.workflowInvocationId) }),
+    ...(optionalStr(turn.stageId) === undefined ? {} : { stageId: optionalStr(turn.stageId) }),
+    ...(optionalStr(turn.turnKey) === undefined ? {} : { turnKey: optionalStr(turn.turnKey) }),
+    stage: { id: str(stage.id, "direct"), nodeKind: str(stage.nodeKind, "system") },
+  };
+}
+
+function parseRegions(value: unknown): InteractionRegionMark[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(isRecord).map(region => ({ id: str(region.id, "unknown"), chars: num(region.chars) }));
+}
+
+function parseRow(value: unknown): InteractionRowView {
+  if (!isRecord(value) || typeof value.requestId !== "string") throw new Error("读模型行缺少 requestId");
+  const agent = isRecord(value.agent) ? value.agent : {};
+  const model = isRecord(value.model) ? value.model : {};
+  const regions = parseRegions(value.regions);
+  return {
+    requestId: value.requestId,
+    seq: num(value.seq),
+    timestamp: str(value.timestamp),
+    kind: value.kind === "direct" ? "direct" : "agent",
+    turn: parseTurn(value.turn),
+    agent: {
+      agentId: str(agent.agentId),
+      ...(optionalStr(agent.agentName) === undefined ? {} : { agentName: optionalStr(agent.agentName) }),
+      ...(optionalStr(agent.longAgentId) === undefined ? {} : { longAgentId: optionalStr(agent.longAgentId) }),
+    },
+    model: { provider: str(model.provider), modelId: str(model.modelId), ...(optionalStr(model.api) === undefined ? {} : { api: optionalStr(model.api) }) },
+    payloadChars: num(value.payloadChars),
+    regions,
+    messageCount: num(value.messageCount),
+    toolCount: num(value.toolCount),
+    attempt: num(value.attempt, 1),
+    ...(optionalStr(value.retryOf) === undefined ? {} : { retryOf: optionalStr(value.retryOf) }),
+    ...(parseOutcome(value.outcome) === undefined ? {} : { outcome: parseOutcome(value.outcome) }),
+    ...(value.degraded === true ? { degraded: true } : {}),
+    ...(value.legacy === true ? { legacy: true } : {}),
+  };
+}
+
+function parseRecording(value: unknown): InteractionRecordingState {
+  if (!isRecord(value)) return { enabled: false, revision: 0 };
+  return { enabled: value.enabled === true, revision: num(value.revision) };
+}
+
+async function readJson(response: Response, label: string): Promise<unknown> {
+  if (!response.ok) throw new Error(`${label}：HTTP ${response.status}`);
+  return response.json();
+}
+
+export async function fetchInteractionIndex(
+  sessionId: string,
+  projectId: string,
+  options: { cursor?: number; limit?: number; signal?: AbortSignal } = {},
+): Promise<InteractionIndexView> {
+  const query = new URLSearchParams({ projectId, limit: String(options.limit ?? 50) });
+  if (options.cursor !== undefined) query.set("cursor", String(options.cursor));
+  const payload = await readJson(
+    await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/interactions?${query.toString()}`, { signal: options.signal, credentials: "same-origin" }),
+    "读取完整交互索引",
+  );
+  if (!isRecord(payload)) throw new Error("读模型索引响应不完整");
+  return {
+    legacy: payload.legacy === true,
+    groups: Array.isArray(payload.groups) ? payload.groups.filter(isRecord).map(group => ({
+      key: str(group.key),
+      source: str(group.source, "direct"),
+      stage: isRecord(group.stage) ? { id: str(group.stage.id, "direct"), nodeKind: str(group.stage.nodeKind, "system") } : { id: "direct", nodeKind: "system" },
+      requestCount: num(group.requestCount),
+      failures: num(group.failures),
+      tokenOut: num(group.tokenOut),
+    })) : [],
+    rows: Array.isArray(payload.rows) ? payload.rows.map(parseRow) : [],
+    ...(typeof payload.nextCursor === "number" ? { nextCursor: payload.nextCursor } : {}),
+    recording: parseRecording(payload.recording),
+  };
+}
+
+export async function fetchInteractionTurnGroup(
+  sessionId: string,
+  projectId: string,
+  turnKey: string,
+  signal?: AbortSignal,
+): Promise<InteractionTurnGroupView> {
+  const payload = await readJson(
+    await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/interactions/${encodeURIComponent(turnKey)}?projectId=${encodeURIComponent(projectId)}`, { signal, credentials: "same-origin" }),
+    "读取轮次交互",
+  );
+  if (!isRecord(payload)) throw new Error("轮次交互响应不完整");
+  const summary = isRecord(payload.summary) ? payload.summary : {};
+  return {
+    rows: Array.isArray(payload.rows) ? payload.rows.map(parseRow) : [],
+    summary: {
+      requestCount: num(summary.requestCount),
+      attempts: num(summary.attempts),
+      failures: num(summary.failures),
+      tokenOut: num(summary.tokenOut),
+    },
+    requests: Array.isArray(payload.requests) ? payload.requests.filter(isRecord).map(request => ({
+      requestId: str(request.requestId),
+      attemptIds: Array.isArray(request.attemptIds) ? request.attemptIds.filter((id): id is string => typeof id === "string") : [],
+      attempts: num(request.attempts, 1),
+      failures: num(request.failures),
+      regions: parseRegions(request.regions),
+      messageCount: num(request.messageCount),
+      toolCount: num(request.toolCount),
+      ...(parseOutcome(request.lastOutcome) === undefined ? {} : { lastOutcome: parseOutcome(request.lastOutcome) }),
+    })) : [],
+    legacy: payload.legacy === true,
+  };
+}
+
+function normalizeDetail(row: InteractionRowView, payload: unknown, messageRegions: unknown, legacy: boolean): RequestDetailView {
+  const payloadRecord = isRecord(payload) ? payload : null;
+  const regions = Array.isArray(messageRegions)
+    ? messageRegions.filter(isRecord).map(mark => ({
+        index: num(mark.index),
+        role: str(mark.role),
+        region: str(mark.region, "unclassified"),
+        ...(optionalStr(mark.customType) === undefined ? {} : { customType: optionalStr(mark.customType) }),
+      }))
+    : [];
+  return { row, payload: payloadRecord, messageRegions: regions, ...(row.outcome === undefined ? {} : { outcome: row.outcome }), legacy };
+}
+
+/** 详情读取：先打 v2 接口；legacy 会话（404 legacy）回落旧 prompt-captures 路由并归一化。 */
+export async function fetchRequestDetail(
+  sessionId: string,
+  projectId: string,
+  requestId: string,
+  signal?: AbortSignal,
+): Promise<RequestDetailView> {
+  const query = `projectId=${encodeURIComponent(projectId)}`;
+  const primary = await fetch(
+    `/api/sessions/${encodeURIComponent(sessionId)}/interactions/requests/${encodeURIComponent(requestId)}?${query}&payload=1`,
+    { signal, credentials: "same-origin" },
+  );
+  if (primary.status !== 404) {
+    const payload = await readJson(primary, "读取请求详情");
+    if (!isRecord(payload) || !isRecord(payload.row)) throw new Error("请求详情响应不完整");
+    return normalizeDetail(parseRow(payload.row), payload.payload, payload.messageRegions, false);
+  }
+  // legacy 回落：旧路由返回 v1 {record, payload}；v1 record.regions.messages 自带区域分类。
+  const legacy = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/prompt-captures/${encodeURIComponent(requestId)}?${query}`, { signal, credentials: "same-origin" });
+  const body = await readJson(legacy, "读取旧记录详情");
+  if (!isRecord(body) || !isRecord(body.record)) throw new Error("旧记录详情响应不完整");
+  const record = body.record;
+  const regions = isRecord(record.regions) ? record.regions : {};
+  const legacyTurn = isRecord(record.turn) ? record.turn : {};
+  const rowLike = {
+    ...record,
+    regions: [],
+    outcome: undefined,
+    legacy: true,
+    attempt: num(record.attempt, 1),
+    turn: { ...legacyTurn, stage: isRecord(legacyTurn.stage) ? legacyTurn.stage : { id: "direct", nodeKind: "system" } },
+  };
+  const messageRegions = Array.isArray(regions.messages)
+    ? regions.messages.filter(isRecord).map(mark => ({ index: num(mark.index), role: str(mark.role), region: str(mark.region, "unclassified"), ...(optionalStr(mark.customType) === undefined ? {} : { customType: optionalStr(mark.customType) }) }))
+    : [];
+  return normalizeDetail(parseRow(rowLike), body.payload, messageRegions, true);
+}
+
+export async function fetchInteractionRecording(sessionId: string, projectId: string, signal?: AbortSignal): Promise<InteractionRecordingState> {
+  const payload = await readJson(
+    await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/interaction-recording?projectId=${encodeURIComponent(projectId)}`, { signal, credentials: "same-origin" }),
+    "读取完整记录开关",
+  );
+  return parseRecording(payload);
+}
+
+/** 写开关；409（revision 冲突）重读一次后重试一次，仍冲突则抛给 UI。 */
+export async function setInteractionRecording(
+  sessionId: string,
+  projectId: string,
+  enabled: boolean,
+): Promise<InteractionRecordingState> {
+  const url = `/api/sessions/${encodeURIComponent(sessionId)}/interaction-recording?projectId=${encodeURIComponent(projectId)}`;
+  const attempt = async (expectedRevision: number): Promise<InteractionRecordingState> => {
+    const response = await fetch(url, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ enabled, expectedRevision }),
+    });
+    if (response.status === 409) {
+      // 并发修改：重读最新 revision 后重试一次；仍冲突抛给 UI（不再自动三试）。
+      const current = await fetchInteractionRecording(sessionId, projectId);
+      if (current.enabled === enabled) return current;
+      const retry = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ enabled, expectedRevision: current.revision }),
+      });
+      if (!retry.ok) throw new Error(`保存完整记录开关：HTTP ${retry.status}`);
+      return parseRecording(await retry.json());
+    }
+    if (!response.ok) throw new Error(`保存完整记录开关：HTTP ${response.status}`);
+    return parseRecording(await response.json());
+  };
+  // 路由要求 expectedRevision（乐观并发）——先读当前 revision 再写。
+  const current = await fetchInteractionRecording(sessionId, projectId);
+  return attempt(current.revision);
+}

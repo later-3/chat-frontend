@@ -36,7 +36,14 @@
 
 能力面板与上下文排除各一版（同一组件三层复用 / 批量操作模式复用），无变体分叉。
 
-**选定记录**：（待用户审核后回填：选定的变体、理由、对 §4 表达的修订。）
+**选定记录（T1 · 2026-10-10 · F-46）**：**全部屏幕选定变体 A**——摘要条：bar 内联宽度贴回复下方、展开占满全宽、展开后 sticky；完整历史：单列按轮列表 + 原位展开（与摘要条同一组件）。理由：所有迭代均在 A 上进行，侧栏变体 B 未再迭代；如需改随时提出。B3 落地范围 = 完整历史单列列表 + 原位展开；bar 归 B4（`TurnInteractions` 的 `mode="turn-summary"` 契约已在 B3 定形）。
+
+## 实现映射（B3 · U7 回填，2026-10-11）
+
+- **同源 token**：实现零新造视觉——轮行/请求行复用 `.prompt-capture-*` 与 `.ui-card` 既有样式，新增类全部使用 `--border/--bg/--text-muted/--danger/--accent/--shadow-popover` 等现有变量（`src/styles/components.css` 的 turn-interactions 区块）；未引入第二套视觉体系。
+- **组件契约**：`TurnInteractions({sessionId, projectId, turnKey, mode, defaultExpanded})`——B3 只用 `mode="full-history"`；B4 复用加 `mode="turn-summary"`（sticky 与 bar 内联宽度归 B4）。数据全部来自读模型（轮头统计 = 后端 `summary`，前端零聚合）。
+- **门禁从验收生成**：验收行 → `scripts/prompt-capture-browser.test.mjs` 断言表（按轮列出/区域树/×N 聚合/聊天页 0 详情请求/开关文案/首屏 ≤100KB/legacy 降级/真实 DOM 点击）。
+- **同状态截图**：`evidence/b3-screenshots/impl-fullhistory-{light-1440,light-390,dark-1440}.png`（与原型 `r1-s1*`/`r10-*` 系列并排对照；数据为手工注入的 v2 记录含重试与 outcome，开关徽标为 off 是该会话真实状态）。
 
 ## 与现状的差异（为什么必须重做）
 

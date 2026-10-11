@@ -1,3 +1,4 @@
+import { fetchInteractionRecording, setInteractionRecording } from "@/lib/interactions";
 "use client";
 import { friendSettlement, type ExecutionSettlement } from "@/lib/execution-completion";
 
@@ -481,23 +482,44 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
   const [notices, setNotices] = useState<NoticeItem[]>([]);
   // Prompt-capture switch: one UI setting flipped BEFORE sending. On = this round records every final
   // provider payload (full prompt regions, tools) to the session's prompt captures. Off = nothing written.
-  // 会话级开关：状态派生自 localStorage（按 session id），不依赖 effect 时序——
-  // 刷新后立即可恢复；override 非 null 时以本次会话内的手动切换为准。
-  const [promptCaptureOverride, setPromptCaptureState] = useState<boolean | null>(null);
-  const readPromptCapturePreference = (sessionId: string | null | undefined): boolean => {
-    try { return window.localStorage.getItem(`chat.prompt-capture:${sessionId ?? "new"}`) === "on"; }
-    catch { return false; }
-  };
-  const promptCaptureEnabled = promptCaptureOverride ?? (session === null || session === undefined ? false : readPromptCapturePreference(session.id));
-  const promptCaptureRef = useRef(promptCaptureEnabled);
+  // 会话级开关（B3 · U7）：服务端事实（会话条目），本 hook 只读写 interaction-recording。
+  // D5 方案①一次性迁移：本浏览器旧 key=on 且服务端 revision===0（从未设置过）→ 恢复用户显式
+  // 意图（PUT on）；迁移与否最后都删除旧 key——双头消除，请求体不再携带 promptCapture（L4）。
+  const [promptCaptureEnabled, setPromptCaptureState] = useState(false);
+  const promptCaptureRef = useRef(false);
   promptCaptureRef.current = promptCaptureEnabled;
-  const setPromptCaptureEnabled = useCallback((next: boolean) => {
-    setPromptCaptureState(next);
+  const recordingSessionId = session?.id ?? null;
+  useEffect(() => {
+    if (recordingSessionId === null) return;
+    const controller = new AbortController();
+    let legacyKey: string | null = null;
     try {
-      const key = `chat.prompt-capture:${sessionIdRef.current ?? "new"}`;
-      if (next) window.localStorage.setItem(key, "on"); else window.localStorage.removeItem(key);
-    } catch { /* private mode: the switch still applies to this session */ }
-  }, []);
+      const key = `chat.prompt-capture:${recordingSessionId}`;
+      if (window.localStorage.getItem(key) === "on") legacyKey = key;
+    } catch { /* private mode: no migration source */ }
+    void (async () => {
+      let state = await fetchInteractionRecording(recordingSessionId, projectId, controller.signal);
+      if (legacyKey !== null && state.revision === 0) {
+        state = await setInteractionRecording(recordingSessionId, projectId, true);
+      }
+      if (legacyKey !== null) {
+        try { window.localStorage.removeItem(legacyKey); } catch { /* ignore */ }
+      }
+      if (!controller.signal.aborted) setPromptCaptureState(state.enabled);
+    })().catch(cause => {
+      console.error("[interaction-recording] 读取开关失败", cause);
+    });
+    return () => controller.abort();
+  }, [recordingSessionId, projectId]);
+  const setPromptCaptureEnabled = useCallback((next: boolean) => {
+    setPromptCaptureState(next); // 乐观更新；服务端为事实源，失败时回滚
+    if (recordingSessionId === null) return;
+    void setInteractionRecording(recordingSessionId, projectId, next)
+      .then(state => setPromptCaptureState(state.enabled))
+      .catch(cause => {
+        console.error("[interaction-recording] 保存开关失败", cause);
+      });
+  }, [recordingSessionId, projectId]);
   const [workflowId, setWorkflowIdState] = useState<ChatWorkflowId>(DEFAULT_CHAT_WORKFLOW_ID);
   const [longAgentCatalog, setLongAgentCatalog] = useState<{
     readonly projectId: string | null;
@@ -1056,7 +1078,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
         const accepted = await acceptTopicNodeMessage(topicNode, {
           requestId: pendingId ?? crypto.randomUUID(),
           workflow: workflowId,
-          ...(promptCaptureRef.current ? { promptCapture: "on" as const } : {}),
           text: message,
           ...(images?.length ? { images: images.map(image => ({ type: "image" as const, data: image.data, mimeType: image.mimeType })) } : {}),
         }, controller.signal);
@@ -1081,7 +1102,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           text: message, ...(friendExecutionRef.current?.workId
             ? { contextProjectId: friendExecutionRef.current.contextProjectId }
             : { contextProjectId: friendContextProjectId }),
-          ...(promptCaptureRef.current ? { promptCapture: "on" as const } : {}),
           ...(images?.length ? { images: images.map(image => ({ type: "image" as const, data:image.data, mimeType:image.mimeType })) } : {}),
         }, controller.signal);
         longAgentAccepted = true;
@@ -1110,7 +1130,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             ? {}
             : { agentConfigs: submittedAgentConfigs }),
           ...(sessionIdRef.current === null ? {} : { sessionId: sessionIdRef.current }),
-          ...(promptCaptureRef.current ? { promptCapture: "on" as const } : {}),
         },
         controller.signal,
         handleRunEvent,
@@ -1358,7 +1377,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
           await acceptTopicNodeMessage(topicNode, {
             requestId: pendingId,
             workflow: reference.workflow?.id ?? workflowId,
-            ...(promptCaptureRef.current ? { promptCapture: "on" as const } : {}),
             text: message,
             ...(images?.length
               ? { images: images.map((image) => ({ type: "image" as const, data: image.data, mimeType: image.mimeType })) }
@@ -1370,7 +1388,6 @@ export function useAgentSession(opts: UseAgentSessionOptions) {
             requestId: pendingId,
             sessionId: reference.sessionId,
             workflow: reference.workflow?.id ?? workflowId,
-            ...(promptCaptureRef.current ? { promptCapture: "on" as const } : {}),
             text: message,
             ...(friendExecutionRef.current?.workId
               ? { contextProjectId: friendExecutionRef.current.contextProjectId }

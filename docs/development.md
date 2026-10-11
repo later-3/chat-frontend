@@ -218,9 +218,7 @@ Session 和 context 响应增加可选 `context.entryTimes`，与 messages/entry
 
 全量页面归属表见父仓库 `docs/modules/web/chat-web.md` §4.1。顶栏由 `AppShell` 直接拥有：Project Portal 与操作在同一 Header，ChatWindow 保持原挂载；全局页隐藏这个 Header。顶栏不显示会话名或分区标题；侧栏开关固定最左（与其控制的列表同侧），项目 slot 无内容时整体收起（`:empty`），会话动作经占位符推到右侧图标组。设置分类只改变显示，不新增配置源。
 
-`SurfaceDialog` 为 Tools 与完整历史复用原生 Dialog 生命周期。`history-document` 只对 Backend 返回的 Pi HTML 增加阅读样式，校验 Session data 标记；HTTP 失败、非 HTML、无效 HTML 和超时都可重试。iframe 保留 `allow-downloads allow-scripts`，不放开 same-origin。主题映射来自 Chat 当前 CSS Token，Pi Session 数据与分支脚本不替换。
-
-完整历史的请求成功必须通过 React state 触发文档合成及首帧呈现；不能只修改 ref 等待无关重渲染。缓存按 Project/Session 隔离，切换及卸载取消旧请求，文档随组件释放；稳定的 srcDoc 仅在内容、主题或语言变化时更新，兼容不支持 sandbox Blob 导航的内嵌浏览器。首次点击后不切标签、不改主题就应出现 iframe，门禁覆盖 `prompt-capture-browser` 与 `group-browser`。
+`SurfaceDialog` 为 Tools 与完整历史复用原生 Dialog 生命周期。**完整历史（B3 · U7）= 按轮列表 + 原位展开**：首屏只取 `interactions` 索引（全量轮分组轻摘要，默认 `limit=50`，响应体 ≤100KB），点开轮次由 `TurnInteractions` 自取该轮行（后端聚合 summary/requests），请求详情在展开时按需 `payload=1` 拉取；**Pi HTML 导出降为下载按钮，不再 iframe/srcDoc 载入整份导出**（读取失败、超时与取消语义保留在索引请求上：alert + 重试、关闭 dialog 即 abort）。detail 缓存为单一容器（`requestId → detail`，LRU 12）+ 默认只渲染展开的请求，历史内容不跨请求复制。`TurnInteractions` 的 `mode` prop 已定形（`full-history` 现用；`turn-summary` 供 B4 复用加 sticky）。门禁覆盖 `prompt-capture-browser`（按轮/区域/×N 聚合/0 详情请求/开关文案/首屏体积/legacy 降级）与 `group-browser`。连带死码（`history-document`、`history-theme.css` 的 srcDoc 样式链）已无组件引用，清理归后续批次（不在 B3 删除清单）。
 
 目录类诊断与选中资源分离；可用条目仍可浏览。Tools 中的使用关系以 Project 配置覆盖 Workflow 默认，不并列伪造冲突状态。工具实际装配仍由 Backend 检查。首次自动打开 Long Agent 的异步响应在用户已操作列表后失效，不能覆盖用户选择。
 

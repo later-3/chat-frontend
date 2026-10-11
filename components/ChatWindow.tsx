@@ -20,8 +20,6 @@ import { TurnSummary } from "./TurnSummary";
 import { Hint } from "@/components/ui/Tooltip";
 import { RunStatus, ToolActivityContext } from "./RunStatus";
 import { MessageView } from "./MessageView";
-import { TurnPromptCaptures } from "./TurnPromptCaptures";
-import { groupPromptCaptures, parsePromptCaptureList, type PromptCaptureTurnGroup } from "@/lib/prompt-captures";
 import { isSessionActivity } from "@/lib/session-activity";
 import { turnProcessIndices } from "@/lib/message-display";
 import { ChatInput, type ChatInputHandle } from "./ChatInput";
@@ -188,37 +186,6 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
     onConnectionFailure,
   });
   const sessionBusy = agentRunning || bashRunning || isCompacting;
-  // 完整 Prompt 记录（开启时）：消息流内逐轮内嵌真实发出的 Provider 请求解析。
-  const prevAgentRunningRef = useRef(agentRunning);
-  useEffect(() => {
-    // 一轮结束（running→false）后刷新捕获索引，新记录立即可展开。
-    if (prevAgentRunningRef.current && !agentRunning) setCaptureRevision((value) => value + 1);
-    prevAgentRunningRef.current = agentRunning;
-  }, [agentRunning]);
-  const promptCaptureActive = promptCaptureEnabled && longAgentId !== null && !readOnly;
-  const [captureGroups, setCaptureGroups] = useState<ReadonlyMap<string, PromptCaptureTurnGroup>>(() => new Map());
-  const [captureRevision, setCaptureRevision] = useState(0);
-  const captureSessionId = session?.id ?? sessionIdRef.current ?? null;
-  useEffect(() => {
-    if (!promptCaptureActive || captureSessionId === null) { setCaptureGroups(new Map()); return; }
-    const controller = new AbortController();
-    void fetch(`/api/sessions/${encodeURIComponent(captureSessionId)}/prompt-captures?projectId=${encodeURIComponent(projectId)}`, { signal: controller.signal })
-      .then(async (response) => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return parsePromptCaptureList(await response.json()); })
-      .then((parsed) => {
-        if (controller.signal.aborted) return;
-        const byKey = new Map<string, PromptCaptureTurnGroup>();
-        for (const group of groupPromptCaptures(parsed.records)) {
-          // 轮次匹配键 = turnKey（Long Agent 轮即轮次 ID）；无 turnKey 的直调请求（如压缩摘要）不入流。
-          for (const record of group.records) {
-            if (record.turn.turnKey !== undefined) byKey.set(record.turn.turnKey, group);
-          }
-        }
-        setCaptureGroups(byKey);
-      })
-      .catch(() => { if (!controller.signal.aborted) setCaptureGroups(new Map()); });
-    return () => controller.abort();
-  }, [promptCaptureActive, captureSessionId, projectId, captureRevision]);
-
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -693,11 +660,6 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
                 const workflowAgentId = msg.role === "assistant"
                   ? (msg as AssistantMessage).chatWorkflow?.agentId
                   : undefined;
-                // 完整 Prompt 内嵌：用户消息下挂本轮真实发出的 Provider 请求解析树（默认展开，可收起）。
-                const userTurnId = msg.role === "user" && longAgentId !== null
-                  ? (msg as { chatLongAgent?: { turnId?: string } }).chatLongAgent?.turnId ?? null
-                  : null;
-                const captureGroup = userTurnId === null ? undefined : captureGroups.get(userTurnId);
                 const view = workflowAgentId === undefined
                   ? messageView
                   : (
@@ -711,17 +673,12 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
                         {messageView}
                       </div>
                     );
-                const withCapture = captureGroup === undefined
-                  ? view
-                  : (<div key={`${keyPrefix}-capture-${idx}`} className="chat-message-with-capture">
-                      {view}
-                      <TurnPromptCaptures projectId={projectId} sessionId={captureSessionId ?? ""}
-                        group={captureGroup} defaultExpanded={promptCaptureEnabled} />
-                    </div>);
-                if (!isVisible || options.attachRef === false || currentRefIdx === undefined) return withCapture;
+                // 完整交互内嵌块已移除（B3 · U7）：详情只在完整历史/摘要条里按需拉取，
+                // 聊天页不再预取 prompt-captures（门禁断言 0 详情请求）。
+                if (!isVisible || options.attachRef === false || currentRefIdx === undefined) return view;
                 return (
                   <div key={`${keyPrefix}-${idx}`} ref={attachVisibleRef(currentRefIdx)}>
-                    {withCapture}
+                    {view}
                   </div>
                 );
               };
