@@ -15,6 +15,8 @@ export interface InteractionRecordingState {
 export interface InteractionRegionMark {
   readonly id: string;
   readonly chars: number;
+  /** 人话展示名（F6：读模型已补 registry label；缺失回退 id） */
+  readonly label: string;
 }
 
 export interface InteractionOutcomeView {
@@ -49,6 +51,8 @@ export interface InteractionRowView {
   readonly toolCount: number;
   readonly attempt: number;
   readonly retryOf?: string;
+  readonly excluded: { readonly count: number };
+  readonly payload: { readonly sha256: string; readonly chars: number; readonly file?: string };
   readonly outcome?: InteractionOutcomeView;
   readonly degraded?: boolean;
   readonly legacy?: boolean;
@@ -79,6 +83,9 @@ export interface InteractionGroupView {
   readonly requestCount: number;
   readonly failures: number;
   readonly tokenOut: number;
+  readonly firstTimestamp: string;
+  readonly agentLabel: string;
+  readonly state: "done" | "running";
 }
 
 export interface InteractionIndexView {
@@ -89,10 +96,19 @@ export interface InteractionIndexView {
   readonly recording: InteractionRecordingState;
 }
 
+export interface InteractionStageSummaryView {
+  readonly id: string;
+  readonly nodeKind: string;
+  readonly requestCount: number;
+  readonly attempts: number;
+  readonly failures: number;
+}
+
 export interface InteractionTurnGroupView {
   readonly rows: readonly InteractionRowView[];
   readonly summary: InteractionTurnSummaryView;
   readonly requests: readonly InteractionRequestGroupView[];
+  readonly stages: readonly InteractionStageSummaryView[];
   readonly legacy: boolean;
 }
 
@@ -150,7 +166,7 @@ function parseTurn(value: unknown): InteractionTurnView {
 
 function parseRegions(value: unknown): InteractionRegionMark[] {
   if (!Array.isArray(value)) return [];
-  return value.filter(isRecord).map(region => ({ id: str(region.id, "unknown"), chars: num(region.chars) }));
+  return value.filter(isRecord).map(region => ({ id: str(region.id, "unknown"), chars: num(region.chars), label: str(region.label, str(region.id, "unknown")) }));
 }
 
 function parseRow(value: unknown): InteractionRowView {
@@ -176,6 +192,12 @@ function parseRow(value: unknown): InteractionRowView {
     toolCount: num(value.toolCount),
     attempt: num(value.attempt, 1),
     ...(optionalStr(value.retryOf) === undefined ? {} : { retryOf: optionalStr(value.retryOf) }),
+    excluded: { count: num(isRecord(value.excluded) ? value.excluded.count : 0) },
+    payload: {
+      sha256: str(isRecord(value.payload) ? value.payload.sha256 : ""),
+      chars: num(isRecord(value.payload) ? value.payload.chars : 0),
+      ...(isRecord(value.payload) && typeof value.payload.file === "string" ? { file: value.payload.file } : {}),
+    },
     ...(parseOutcome(value.outcome) === undefined ? {} : { outcome: parseOutcome(value.outcome) }),
     ...(value.degraded === true ? { degraded: true } : {}),
     ...(value.legacy === true ? { legacy: true } : {}),
@@ -213,6 +235,9 @@ export async function fetchInteractionIndex(
       requestCount: num(group.requestCount),
       failures: num(group.failures),
       tokenOut: num(group.tokenOut),
+      firstTimestamp: str(group.firstTimestamp),
+      agentLabel: str(group.agentLabel),
+      state: group.state === "running" ? "running" : "done",
     })) : [],
     rows: Array.isArray(payload.rows) ? payload.rows.map(parseRow) : [],
     ...(typeof payload.nextCursor === "number" ? { nextCursor: payload.nextCursor } : {}),
@@ -249,6 +274,13 @@ export async function fetchInteractionTurnGroup(
       messageCount: num(request.messageCount),
       toolCount: num(request.toolCount),
       ...(parseOutcome(request.lastOutcome) === undefined ? {} : { lastOutcome: parseOutcome(request.lastOutcome) }),
+    })) : [],
+    stages: Array.isArray(payload.stages) ? payload.stages.filter(isRecord).map(stage => ({
+      id: str(stage.id, "direct"),
+      nodeKind: str(stage.nodeKind, "system"),
+      requestCount: num(stage.requestCount),
+      attempts: num(stage.attempts),
+      failures: num(stage.failures),
     })) : [],
     legacy: payload.legacy === true,
   };
@@ -291,9 +323,16 @@ export async function fetchRequestDetail(
   const record = body.record;
   const regions = isRecord(record.regions) ? record.regions : {};
   const legacyTurn = isRecord(record.turn) ? record.turn : {};
+  const legacySections = isRecord(regions.systemPrompt) && Array.isArray(regions.systemPrompt.sections)
+    ? (regions.systemPrompt.sections as unknown[]).filter(isRecord) : [];
   const rowLike = {
     ...record,
-    regions: [],
+    // F6：legacy 行同样带区域摘要+人话名（条形图数据），v1 sections 自带 label
+    regions: legacySections.map(section => ({
+      id: str(section.kind, "unknown"),
+      chars: num(isRecord(section.text) ? String(section.text).length : num(section.chars)),
+      label: str(section.label, str(section.kind, "unknown")),
+    })),
     outcome: undefined,
     legacy: true,
     attempt: num(record.attempt, 1),
@@ -346,4 +385,32 @@ export async function setInteractionRecording(
   // 路由要求 expectedRevision（乐观并发）——先读当前 revision 再写。
   const current = await fetchInteractionRecording(sessionId, projectId);
   return attempt(current.revision);
+}
+
+
+/** 会话消息视图（F3 a/b 层数据源）：`GET /api/sessions/:id?view=chat` 的 context.messages 投影。 */
+export interface SessionMessageView {
+  readonly role: string;
+  readonly content: unknown;
+  readonly timestamp?: number;
+  /** LA 轮绑定键（= turnKey）；旧消息可能缺失 → 用时间窗兜底匹配 */
+  readonly turnId?: string;
+}
+
+export async function fetchSessionMessages(sessionId: string, projectId: string, signal?: AbortSignal): Promise<readonly SessionMessageView[]> {
+  const payload = await readJson(
+    await fetch(`/api/sessions/${encodeURIComponent(sessionId)}?projectId=${encodeURIComponent(projectId)}&view=chat&deferThinking=1&deferMedia=1`, { signal, credentials: "same-origin" }),
+    "读取会话消息",
+  );
+  const context = isRecord(payload) && isRecord(payload.context) ? payload.context : undefined;
+  const messages = context !== undefined && Array.isArray(context.messages) ? context.messages : [];
+  return messages.filter(isRecord).map(message => {
+    const link = isRecord(message.chatLongAgent) ? message.chatLongAgent : undefined;
+    return {
+      role: str(message.role, ""),
+      content: message.content,
+      ...(typeof message.timestamp === "number" ? { timestamp: message.timestamp } : {}),
+      ...(link !== undefined && typeof link.turnId === "string" ? { turnId: link.turnId } : {}),
+    };
+  });
 }

@@ -1461,7 +1461,21 @@ span.token.table {
 .turn-outline { display: flex; flex-direction: column; gap: 8px; padding: 0 12px 8px; }
 .turn-outline-node > summary { justify-content: space-between; color: var(--text); font-weight: 600; }
 .turn-outline .prompt-capture-section { background: var(--bg-panel); }
-.full-history-turns { display: flex; flex-direction: column; gap: 10px; }
+/* F1：SurfaceDialog 固定高 + overflow:hidden——滚动职责由 children 承担（对齐旧 iframe 合同）。
+   Radix Content 无原生 [open] 属性，`:has()` 把 flex 列布局只施加给完整历史对话框（零全局回归）。 */
+.surface-dialog.surface-dialog:has(> .full-history-turns) {
+  display: flex; flex-direction: column;
+  height: min(860px, calc(100dvh - 48px)); max-height: calc(100dvh - 48px);
+}
+.full-history-turns {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  /* 不依赖父 flex 拉伸：内容超过视口余量即内部滚动（F1 验收）。132px ≈ header + 头部徽标行 + padding。 */
+  max-height: calc(100dvh - 48px - 132px);
+  display: flex; flex-direction: column; gap: 10px; padding: 4px 2px 12px;
+}
+/* flex 列容器内子项默认 shrink 会把内容压回容器高（scrollHeight 永不超出 → 滚不动）——
+   轮次卡片一律不收缩，内容自然增高交给 overflow 滚动（F1 根因二号）。 */
+.full-history-turns > * { flex: 0 0 auto; }
 .full-history-turn { border: 1px solid var(--border); border-radius: 12px; background: var(--bg-panel); overflow: hidden; }
 .full-history-turn-header {
   display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px;
@@ -1477,6 +1491,82 @@ span.token.table {
 @media (max-width: 768px) {
   .full-history-turn-stats { white-space: normal; }
   .turn-interactions-filter { margin-left: 0; width: 100%; }
+}
+
+/* --- B3-R 形态修复：轮头字段 / a-b 层 / 阶段头 / 条形 / 尝试列表（对齐原型 r1-s2 与 F-49） --- */
+.full-history-turn-header .turn-time { color: var(--text-muted); font-size: 12px; }
+.full-history-turn-header .turn-direction { color: var(--accent); font-size: 12px; }
+.full-history-turn-header .turn-state { padding: 1px 8px; border: 1px solid var(--border); border-radius: 999px; font-size: 11px; }
+.full-history-turn-header .turn-state.is-done { border-color: var(--success); color: var(--success); }
+.turn-exchange { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; }
+.turn-turn-note { margin: 0; font-size: 12px; color: var(--text-muted); }
+.turn-side-a { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.turn-side-b { display: flex; flex-direction: column; gap: 6px; }
+.turn-bubble {
+  max-width: min(72%, 42rem); padding: 10px 14px; border-radius: 14px;
+  background: var(--bg-hover); color: var(--text); font-size: 15px; line-height: 1.7;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.turn-bubble .turn-role { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+.turn-reply-card {
+  border: 1px solid var(--border); border-radius: 12px; background: var(--bg);
+  padding: 12px 14px; font-size: 15px; line-height: 1.7;
+}
+.turn-reply-card .turn-role { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
+.turn-side-b .markdown-body { font-size: 15px; }
+.initiator-bar, .reply-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  min-height: 34px; padding: 6px 12px; border: 1px solid var(--border);
+  background: var(--bg-panel); font-size: 12px; color: var(--text-muted);
+}
+.initiator-bar { align-self: flex-end; border-radius: 999px; max-width: 100%; }
+.reply-bar { border-radius: 10px; }
+.initiator-bar .bar-name, .reply-bar .bar-name {
+  padding: 1px 8px; border-radius: 999px; background: var(--bg-hover);
+  border: 1px solid var(--border); color: var(--text); font-weight: 650;
+}
+.turn-side-a .initiator-bar .bar-outcome { color: var(--success); }
+.turn-side-a .initiator-bar[data-failed="true"] .bar-outcome { color: var(--danger); }
+.stage-head {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 8px 12px; border-radius: 8px; background: var(--bg-hover);
+  border: 1px solid var(--border); font-size: 13px;
+}
+.stage-head .stage-name { font-weight: 700; }
+.stage-head .stage-kind { color: var(--accent); font-size: 11px; }
+.stage-head .stage-stats { color: var(--text-muted); font-size: 12px; margin-left: auto; }
+.region-bars { display: flex; flex-direction: column; gap: 6px; padding: 4px 0 8px; }
+.region-bar-row { display: grid; grid-template-columns: minmax(8rem, 14rem) 1fr auto; gap: 10px; align-items: center; font-size: 12px; }
+.region-bar-row .region-name { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.region-bar-row .region-track { height: 10px; border-radius: 999px; background: var(--bg-hover); overflow: hidden; }
+.region-bar-row .region-fill { height: 100%; background: var(--accent); border-radius: 999px; }
+.region-bar-row .region-chars { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.request-meta {
+  display: flex; flex-wrap: wrap; gap: 8px 14px; padding: 8px 12px;
+  border-bottom: 1px dashed var(--border); font-size: 12px; color: var(--text-muted);
+}
+.request-meta code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); }
+.attempt-list { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; }
+.attempt-row {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px;
+  padding: 6px 10px; border-left: 3px solid var(--border); font-size: 12px;
+}
+.attempt-row.is-error { border-left-color: var(--danger); }
+.attempt-row.is-success { border-left-color: var(--success); }
+.attempt-row .attempt-no { font-weight: 700; }
+.attempt-row .attempt-error { color: var(--danger); }
+.attempt-row .attempt-meta { color: var(--text-muted); }
+.region-pills { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.region-pill {
+  padding: 4px 12px; border: 1px solid var(--border); border-radius: 999px;
+  background: none; color: var(--text-muted); font-size: 12px; cursor: pointer; min-height: 30px;
+}
+.region-pill.is-active { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.turn-interactions-head .region-pills { margin-left: auto; }
+@media (max-width: 768px) {
+  .region-bar-row { grid-template-columns: minmax(6rem, 1fr) 1.2fr auto; }
+  .turn-bubble { max-width: 88%; }
+  .turn-interactions-head .region-pills { margin-left: 0; width: 100%; }
 }
 .session-activity-message {
   margin: 12px 0;
