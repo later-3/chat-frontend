@@ -59,19 +59,19 @@
 
 日期：2026-10-02。最小记录。
 
-- 任务与入口：用户在 Friend（长期助手）会话顶栏看到会话名 `Nexus · Ziji Content Lab · 新会话` 重新出现，且“Project”标签加空的 `workspace-project-slot` 在无选择器内容时仍占 112–240px 空位，侧栏收起开关单独占最左一格。入口：聊天顶栏（桌面与窄屏）。
-- 当前问题与证据：未提交改动把 `workspace-conversation-heading` 改为显示 long agent 会话名，违反 [ui-ux-guidelines §18.4/§620](../ui-ux-guidelines.md) 已固化的“Friend 会话顶栏不显示会话名”合同；slot 空置时仍保留 flex 基数形成死区域。
-- 信息清单与来源：会话名仅来自 Session 列表事实，顶栏不承载会话身份；项目选择器仍是普通项目会话的顶栏事实源（Portal 到 slot）；侧栏开关是面板控制，不是会话信息。
+- 任务与入口：用户在 Long Agent（长期助手）会话顶栏看到会话名 `Nexus · Ziji Content Lab · 新会话` 重新出现，且“Project”标签加空的 `workspace-project-slot` 在无选择器内容时仍占 112–240px 空位，侧栏收起开关单独占最左一格。入口：聊天顶栏（桌面与窄屏）。
+- 当前问题与证据：未提交改动把 `workspace-conversation-heading` 改为显示 long agent 会话名，违反 [ui-ux-guidelines §18.4/§620](../ui-ux-guidelines.md) 已固化的“Long Agent 会话顶栏不显示会话名”合同；slot 空置时仍保留 flex 基数形成死区域。
+- 信息清单与来源：会话名仅来自 Session 列表事实，顶栏不承载会话身份；项目选择器仍是会话的顶栏事实源（Portal 到 slot）；侧栏开关是面板控制，不是会话信息。
 - 关系推导：会话身份 → 会话列表/历史表达，顶栏只保留按用途命名的动作；无内容的 Portal 宿主 → 不参与布局（`:empty` 收起）；面板开关与其控制的面板同侧 → 侧栏开关固定最左，项目资料开关留在右端。
 - 实施映射：`AppShell` 移除独立左区（标签 + 空位）；heading 整体删除——顶栏不显示会话名，也不显示 "Friends" 分区标题，仅保留一个占位符把会话动作推到右侧图标组；`workspace.css` 删除 `.workspace-context-label` 与 `.workspace-conversation-heading` 全部规则，新增 `.workspace-project-slot:empty { display:none }`，分隔线改挂在非空 slot 上。
-- 验收：顶栏除功能图标外不显示任何文字标题；普通项目会话顶栏选择器、动作不变；窄屏与桌面、明暗主题下图标排列一致；`pnpm test`、`pnpm typecheck`、`pnpm build` 通过。
+- 验收：顶栏除功能图标外不显示任何文字标题；会话顶栏选择器、动作不变；窄屏与桌面、明暗主题下图标排列一致；`pnpm test`、`pnpm typecheck`、`pnpm build` 通过。
 - 修订（2026-10-02，用户纠正）：第一版把侧栏开关移到右侧图标组、并为 long agent/同事面板保留 "Friends" 分区标题，均为擅自发挥。用户明确：开关控制左侧列表，必须固定最左；顶栏彻底不显示任何标题文字，未要求的内容不得添加。规范同步见 ui-ux-guidelines §7 与 development.md §页面适配入口。
 
 ## LA 项目树：添加项目接通打开/创建
 
 日期：2026-10-02。最小记录。
 
-- 任务与入口：用户在 Friend 项目树点击"＋ 添加项目"时按钮禁用（两个已注册项目都已绑定），且即使可用也只能从已注册列表挑选——无法像 VSCode 打开 workspace、Codex 桌面版打开/创建项目那样从磁盘引入新项目。
+- 任务与入口：用户在 Long Agent 项目树点击"＋ 添加项目"时按钮禁用（两个已注册项目都已绑定），且即使可用也只能从已注册列表挑选——无法像 VSCode 打开 workspace、Codex 桌面版打开/创建项目那样从磁盘引入新项目。
 - 当前问题与证据：`LongAgentProjectTree` 的 Add 按钮 `disabled={busy || bindable.length === 0}`，全部绑死后成为死端；绑定选择器只列已注册项目。这违反 [LA 项目树评审](../../../docs/history/reviews/2026-10-01-la-project-session-tree.md) 的验收口径："添加项目与现有项目注册流程一致，仅入口移位"——现有注册流程即 `POST /api/projects/open` 按路径登记或初始化。
 - 信息与关系：添加 = 先有项目事实（已注册或按路径打开登记），再写 LA 配置 `boundProjectIds`（revision 校验、后端 `resolveProjectContext` 验证可解析）。两条来源（已注册未绑定 / 按路径打开）殊途同归到同一绑定动作。
 - 实施：Add 按钮仅 `busy` 时禁用；点击**直接弹出** [DirectoryPicker](../../components/DirectoryPicker.tsx)——复用其底层文件系统能力（后端 `/api/cwd/browse` 列目录，浏览器拿不到绝对路径），选择目录 → `openChatProject` 登记或初始化 → 绑定 → 刷新项目列表 → 选中该项目；打开已注册目录幂等（返回既有项目），无需任何中间层。新增 i18n `laProjectTree.openProject`（随后随中间层一起移除）。
@@ -94,9 +94,9 @@
 
 - 任务与入口：用户要求删除 Friends 侧栏面板的整个头部（"Friends" 标题、网关绿点、设置齿轮），齿轮移到顶栏。入口：左侧 Friends 面板 + 顶栏（桌面与窄屏）。
 - 当前问题与证据：面板头部在 224px 栏内占一行，绿点是裸圆点、含义不可读（截断成 "Gateway c…" 更糟）；齿轮与标题把面板高度花在非列表内容上。
-- 信息与关系：头部绿点与头像右下角绿点不是同一层——头部是 NanoClaw 网关（常驻门卫进程）健康检查，整个列表共用一盏（所有 Friend 默认共享一个 Host 实例）；头像点是单个 Agent 的 presence（就绪/工作中）。两层独立是刻意设计：网关挂了网页照常可用，只有 IM 断，bridge.ts 注释明确 channel health 不得影响 Web 可用性。用户拍板：网关状态保留但移到顶栏，且不得用裸圆点表达。
+- 信息与关系：头部绿点与头像右下角绿点不是同一层——头部是 NanoClaw 网关（常驻门卫进程）健康检查，整个列表共用一盏（所有 Long Agent 默认共享一个 Host 实例）；头像点是单个 Agent 的 presence（就绪/工作中）。两层独立是刻意设计：网关挂了网页照常可用，只有 IM 断，bridge.ts 注释明确 channel health 不得影响 Web 可用性。用户拍板：网关状态保留但移到顶栏，且不得用裸圆点表达。
 - 关系推导：网关健康 = 基础设施层状态 → 顶栏用「图标 + 文字」chip 表达（绿 = 已连接，红 = 未连接），tooltip 保留完整含义句（"不代表消息渠道已连接"）；设置齿轮 = 面板动作 → 与其控制的面板同侧（顶栏左侧、列表开关旁），沿用 Portal slot 惯例；面板不可见或 slot 为空 → `:empty` 收起不留空位。
 - 实施映射：`ProjectLongAgentSection` 删除整个 header 与 `.hostOnline/.hostOffline/.headerAction` 样式；新增 `toolbarSlot` prop，网关 chip（`IconPlugConnected` + `sidebar.longAgentImOnline/Offline` 文案）与齿轮（改用统一 `ToolbarAction`）通过 `createPortal` 渲染进顶栏 `workspace-la-tools-slot`；`AppShell` 新增 slot state 并经 `SessionSidebar` 透传。空 Agent 列表时 chip 不渲染、齿轮禁用（与原行为一致）。
-- 验收：Friends 面板无头部行，列表直接从面板顶部开始；仅 Friends 面板可见时顶栏出现 chip 与齿轮，切回普通会话列表则收起；网关未连接时 chip 变红并给出完整 tooltip；窄屏与桌面、明暗主题下排列正常；`pnpm test`、`pnpm typecheck`、`pnpm build` 通过。
+- 验收：Friends 面板无头部行，列表直接从面板顶部开始；仅 Friends 面板可见时顶栏出现 chip 与齿轮，切回会话列表则收起；网关未连接时 chip 变红并给出完整 tooltip；窄屏与桌面、明暗主题下排列正常；`pnpm test`、`pnpm typecheck`、`pnpm build` 通过。
 - 修订（2026-10-05，用户纠正）：齿轮不放左侧，移到顶栏最右（完整历史/压缩等会话动作之后），新增桌面专用 `workspace-la-actions-slot`，窄屏无此 slot 时回退到 chip 旁；网关 chip 默认只显示图标，跟随 Appearance"图标+文字"偏好（`useToolbarLabels`）显示文字，无障碍名称始终由 aria-label 提供。
 - 修订二（2026-10-05，用户纠正）：网关状态与齿轮合并为顶栏最右一个挂载点（`workspace-la-toolbar-slot`，桌面/窄屏各渲染一处、同一 ref），左侧 slot 链整体删除；新增 `ToolbarStatus`（`ToolbarAction` 的非交互孪生，同结构同类名同过渡动画，`is-status` 修饰禁 hover/pointer 并按 `tone-success/warning/danger` 着色），网关指示改用它，删掉独立的 gatewayChip 样式，顶栏小图标统一走 `toolbar-action` 一套方案。
