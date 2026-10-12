@@ -17,6 +17,7 @@ import { groupWorkflowProcess } from "@/lib/workflow-process";
 import { WorkflowProcess } from "./WorkflowProcess";
 import { summarizeTurn } from "@/lib/turn-summary";
 import { TurnSummary } from "./TurnSummary";
+import { TurnSummaryBar } from "./TurnSummaryBar";
 import { Hint } from "@/components/ui/Tooltip";
 import { RunStatus, ToolActivityContext } from "./RunStatus";
 import { MessageView } from "./MessageView";
@@ -758,14 +759,30 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
                 for (let renderIdx = finalAssistantIdx + 1; !memoryRound && renderIdx < endIdx; renderIdx++) {
                   rendered.push(renderMessage(renderIdx));
                 }
-                rendered.push(<div key={`turn-summary-${userIdx}-${finalAssistantIdx}`}
-                  ref={processRefIdx === undefined ? undefined : (el) => { messageRefs.current[processRefIdx] = el; }}>
-                  <TurnSummary summary={summarizeTurn(messages.slice(userIdx, endIdx), entryTimes.slice(userIdx, endIdx))}
-                    completed={activeLeafId === data?.leafId && endIdx === messages.length && activity?.phase === "completed"}
-                    defaultExpanded={!finalAnswerMessage}>
-                    {processContent}
-                  </TurnSummary>
-                </div>);
+                // B4 · P2：常规轮挂回复 bar（TurnSummaryBar，sticky/展开全宽 TurnInteractions）；
+                // memoryRound（compaction/会话记忆特殊轮，D-2 裁定）保留旧 TurnSummary。
+                if (memoryRound) {
+                  rendered.push(<div key={`turn-summary-${userIdx}-${finalAssistantIdx}`}
+                    ref={processRefIdx === undefined ? undefined : (el) => { messageRefs.current[processRefIdx] = el; }}>
+                    <TurnSummary summary={summarizeTurn(messages.slice(userIdx, endIdx), entryTimes.slice(userIdx, endIdx))}
+                      completed={activeLeafId === data?.leafId && endIdx === messages.length && activity?.phase === "completed"}
+                      defaultExpanded={!finalAnswerMessage}>
+                      {processContent}
+                    </TurnSummary>
+                  </div>);
+                } else {
+                  const turnKey = (messages[userIdx] as { chatLongAgent?: { turnId?: string } } | undefined)?.chatLongAgent?.turnId;
+                  rendered.push(<div key={`turn-summary-${userIdx}-${finalAssistantIdx}`}
+                    ref={processRefIdx === undefined ? undefined : (el) => { messageRefs.current[processRefIdx] = el; }}>
+                    <TurnSummaryBar
+                      summary={summarizeTurn(messages.slice(userIdx, endIdx), entryTimes.slice(userIdx, endIdx))}
+                      completed={activeLeafId === data?.leafId && endIdx === messages.length && activity?.phase === "completed"}
+                      turnKey={turnKey}
+                      turnStartedAt={entryTimes[userIdx]}
+                      projectId={projectId}
+                      sessionId={session?.id ?? sessionIdRef.current ?? undefined} />
+                  </div>);
+                }
                 idx = endIdx;
               }
               const { startIndex, hasMore } = getVisibleRenderWindow(rendered.length, visibleCount);

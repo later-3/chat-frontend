@@ -1467,6 +1467,19 @@ span.token.table {
 .message-segment { display: flex; flex-direction: column; gap: 6px; border-left: 3px solid var(--border); padding-left: 10px; }
 .message-segment.is-current { border-left-color: var(--accent); }
 .message-segment-title { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); }
+
+/* --- B4：消息流内回复 bar（sticky 展开态——G1 D1：挂接 scrollContainerRef 滚动容器；
+   top 计入容器 pt-4；失效先查 :595 overflow-hidden 祖先的包含块/层叠上下文） --- */
+.turn-summary-bar.is-expanded { position: sticky; top: 16px; z-index: 4; }
+.turn-summary-bar.is-expanded .reply-bar {
+  background: var(--bg-panel); box-shadow: var(--shadow-popover); border-color: var(--border);
+}
+.turn-summary-bar .bar-running { color: var(--warning); }
+.summary-detail-panel { margin-top: 8px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); padding: 10px 12px; }
+@media (max-width: 768px) {
+  /* G1 D4：390 sticky 保留、胶囊高度受限 */
+  .turn-summary-bar.is-expanded .reply-bar { max-height: 96px; overflow-y: auto; }
+}
 .turn-outline { display: flex; flex-direction: column; gap: 8px; padding: 0 12px 8px; }
 .turn-outline-node > summary { justify-content: space-between; color: var(--text); font-weight: 600; }
 .turn-outline .prompt-capture-section { background: var(--bg-panel); }
