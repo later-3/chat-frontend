@@ -74,18 +74,27 @@ export interface InteractionTurnSummaryView {
   readonly attempts: number;
   readonly failures: number;
   readonly tokenOut: number;
+  readonly promptChars: number;
+  readonly model: string;
+  readonly hasOutcome: boolean;
 }
 
 export interface InteractionGroupView {
   readonly key: string;
   readonly source: string;
   readonly stage: { readonly id: string; readonly nodeKind: string };
+  /** 去重请求数（E1） */
   readonly requestCount: number;
+  readonly attempts: number;
   readonly failures: number;
   readonly tokenOut: number;
+  readonly promptChars: number;
+  readonly model: string;
   readonly firstTimestamp: string;
   readonly agentLabel: string;
-  readonly state: "done" | "running";
+  /** unknown = legacy 无任何 outcome（UI 显示"未记录"而非 0/进行中，E2/E3） */
+  readonly state: "done" | "running" | "unknown";
+  readonly hasOutcome: boolean;
 }
 
 export interface InteractionIndexView {
@@ -233,11 +242,15 @@ export async function fetchInteractionIndex(
       source: str(group.source, "direct"),
       stage: isRecord(group.stage) ? { id: str(group.stage.id, "direct"), nodeKind: str(group.stage.nodeKind, "system") } : { id: "direct", nodeKind: "system" },
       requestCount: num(group.requestCount),
+      attempts: num(group.attempts, num(group.requestCount)),
       failures: num(group.failures),
       tokenOut: num(group.tokenOut),
+      promptChars: num(group.promptChars),
+      model: str(group.model),
       firstTimestamp: str(group.firstTimestamp),
       agentLabel: str(group.agentLabel),
-      state: group.state === "running" ? "running" : "done",
+      state: group.state === "running" ? "running" : group.state === "unknown" ? "unknown" : "done",
+      hasOutcome: group.hasOutcome === true,
     })) : [],
     rows: Array.isArray(payload.rows) ? payload.rows.map(parseRow) : [],
     ...(typeof payload.nextCursor === "number" ? { nextCursor: payload.nextCursor } : {}),
@@ -264,6 +277,9 @@ export async function fetchInteractionTurnGroup(
       attempts: num(summary.attempts),
       failures: num(summary.failures),
       tokenOut: num(summary.tokenOut),
+      promptChars: num(summary.promptChars),
+      model: str(summary.model),
+      hasOutcome: summary.hasOutcome === true,
     },
     requests: Array.isArray(payload.requests) ? payload.requests.filter(isRecord).map(request => ({
       requestId: str(request.requestId),
@@ -323,10 +339,17 @@ export async function fetchRequestDetail(
   const record = body.record;
   const regions = isRecord(record.regions) ? record.regions : {};
   const legacyTurn = isRecord(record.turn) ? record.turn : {};
+  // v1 record 的 sha/file 是顶层字段——归一成 payload 对象（否则 sha 空、占比分母丢失）
+  const legacyPayload = {
+    sha256: str(record.payloadSha256),
+    chars: num(record.payloadChars),
+    ...(isRecord(record.file) === false && typeof record.file === "string" ? { file: record.file } : {}),
+  };
   const legacySections = isRecord(regions.systemPrompt) && Array.isArray(regions.systemPrompt.sections)
     ? (regions.systemPrompt.sections as unknown[]).filter(isRecord) : [];
   const rowLike = {
     ...record,
+    payload: legacyPayload,
     // F6：legacy 行同样带区域摘要+人话名（条形图数据），v1 sections 自带 label
     regions: legacySections.map(section => ({
       id: str(section.kind, "unknown"),

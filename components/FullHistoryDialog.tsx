@@ -74,10 +74,20 @@ function FullHistoryContent({ projectId, sessionId, onClose }: Props) {
   const ensureMessages = useCallback(() => {
     if (messagesRef.current !== null || messagesInFlight.current) return;
     messagesInFlight.current = true;
-    void fetchSessionMessages(sessionId, projectId)
-      .then(value => setMessages(value))
-      .catch(() => setMessages([])) // 拉取失败：轮仍可看执行树，a/b 显示未关联
-      .finally(() => { messagesInFlight.current = false; });
+    void (async () => {
+      try {
+        setMessages(await fetchSessionMessages(sessionId, projectId));
+      } catch {
+        try {
+          // 偶发失败重试一次——不把单次失败固化成"未关联"空态
+          setMessages(await fetchSessionMessages(sessionId, projectId));
+        } catch {
+          setMessages([]);
+        }
+      } finally {
+        messagesInFlight.current = false;
+      }
+    })();
   }, [sessionId, projectId]);
 
   const retry = useCallback(() => setRevision(value => value + 1), []);
@@ -115,6 +125,7 @@ function FullHistoryContent({ projectId, sessionId, onClose }: Props) {
                 group={group}
                 position={position + 1}
                 nextTimestamp={index.groups[position + 1]?.firstTimestamp}
+                groups={index.groups}
                 rows={index.rows.filter(row => (row.turn.workflowInvocationId ?? row.turn.turnKey ?? "系统调用") === group.key)}
                 sessionId={sessionId}
                 projectId={projectId}
@@ -153,28 +164,36 @@ function messageText(content: unknown): string {
     .trim();
 }
 
-function matchExchange(group: InteractionGroupView, position: number, groups: readonly InteractionGroupView[], rows: readonly InteractionRowView[], messages: readonly SessionMessageView[]) {
+function matchExchange(group: InteractionGroupView, index: number, groups: readonly InteractionGroupView[], rows: readonly InteractionRowView[], messages: readonly SessionMessageView[], nextTimestamp?: string) {
   const byKey = messages.filter(message => message.turnId === group.key);
-  const windowStart = position === 0 ? -Infinity : Date.parse(groups[position - 1]!.firstTimestamp);
-  const windowEnd = group.key === "" ? Infinity : Date.parse(group.firstTimestamp);
-  const inWindow = (message: SessionMessageView) => {
+  // a 窗口 = (上一组首请求, 本组首请求]：发起方消息在受理前；b 窗口 = [本组首请求, 下一组首请求)：回复在请求后。
+  const prevTs = index <= 0 ? -Infinity : Date.parse(groups[index - 1]?.firstTimestamp ?? "");
+  const thisTs = Date.parse(group.firstTimestamp);
+  const nextTs = nextTimestamp === undefined || nextTimestamp === "" ? Infinity : Date.parse(nextTimestamp);
+  const aWindow = (message: SessionMessageView) => {
     const ts = message.timestamp ?? 0;
-    return ts >= (Number.isNaN(windowStart) ? -Infinity : windowStart) && ts <= (Number.isNaN(windowEnd) ? Infinity : windowEnd) + 1;
+    return ts > (Number.isNaN(prevTs) ? -Infinity : prevTs) && ts <= (Number.isNaN(thisTs) ? Infinity : thisTs);
   };
-  const userMessages = byKey.filter(message => message.role === "user");
-  const aCandidates = userMessages.length > 0 ? userMessages : messages.filter(message => message.role === "user" && inWindow(message));
-  const assistantCandidates = (byKey.length > 0 ? byKey : messages.filter(inWindow)).filter(message => message.role === "assistant");
-  // a = 本组发起方（turnId 命中优先；否则取窗口内最后一条 user——它紧邻本组首请求）
-  const a = aCandidates.length === 0 ? null : (byKey.length > 0 ? aCandidates[0]! : aCandidates[aCandidates.length - 1]!);
+  const bWindow = (message: SessionMessageView) => {
+    const ts = message.timestamp ?? 0;
+    return ts >= (Number.isNaN(thisTs) ? -Infinity : thisTs) && ts < (Number.isNaN(nextTs) ? Infinity : nextTs);
+  };
+  const keyedUser = byKey.filter(message => message.role === "user");
+  const windowUser = messages.filter(message => message.role === "user" && aWindow(message));
+  const a = keyedUser.length > 0 ? keyedUser[0]! : (windowUser.length > 0 ? windowUser[windowUser.length - 1]! : null);
+  const assistantSource = byKey.length > 0 ? byKey : messages;
+  const assistantCandidates = assistantSource.filter(message => message.role === "assistant"
+    && (byKey.length > 0 ? true : bWindow(message)));
   const bText = assistantCandidates.map(message => messageText(message.content)).filter(text => text.length > 0).join("\n\n");
   void rows;
   return { a, bText };
 }
 
-function FullHistoryTurnRow({ group, position, nextTimestamp, rows, sessionId, projectId, legacy, recordingOn, messages, onExpand, expanded, initiatorOpenKey, onInitiatorToggle, initiatorDetail, onToggle }: {
+function FullHistoryTurnRow({ group, position, nextTimestamp, groups, rows, sessionId, projectId, legacy, recordingOn, messages, onExpand, expanded, initiatorOpenKey, onInitiatorToggle, initiatorDetail, onToggle }: {
   readonly group: InteractionGroupView;
   readonly position: number;
   readonly nextTimestamp: string | undefined;
+  readonly groups: readonly InteractionGroupView[];
   readonly rows: readonly InteractionRowView[];
   readonly sessionId: string;
   readonly projectId: string;
@@ -193,7 +212,7 @@ function FullHistoryTurnRow({ group, position, nextTimestamp, rows, sessionId, p
   const firstRequest = rows.reduce<InteractionRowView | null>((oldest, row) =>
     oldest === null || row.timestamp < oldest.timestamp ? row : oldest, null);
   const firstChars = firstRequest?.regions.reduce((total, region) => total + region.chars, 0) ?? 0;
-  const exchange = expanded && messages !== null ? matchExchange(group, position - 1, [group], rows, messages) : null;
+  const exchange = expanded && messages !== null ? matchExchange(group, position - 1, groups, rows, messages, nextTimestamp) : null;
   const agentLabel = group.agentLabel || "agent";
   const direction = exchange?.a !== null && exchange?.a !== undefined && exchange.a.role === "user"
     ? t("promptCapture.directionUserToAgent", { name: agentLabel })
@@ -206,19 +225,23 @@ function FullHistoryTurnRow({ group, position, nextTimestamp, rows, sessionId, p
       <span className="full-history-turn-index">{t("promptCapture.turnN", { n: position })}</span>
       {time !== "" && <span className="turn-time">{time}</span>}
       <span className="turn-direction">{direction}</span>
-      <span className={`turn-state ${group.state === "done" ? "is-done" : ""}`} data-turn-state={group.state}>
-        {group.state === "done" ? t("promptCapture.turnDone") : t("promptCapture.turnRunning")}
+      <span className={`turn-state ${group.state === "done" ? "is-done" : group.state === "unknown" ? "is-unknown" : ""}`} data-turn-state={group.state}>
+        {group.state === "done" ? t("promptCapture.turnDone")
+          : group.state === "unknown" ? t("promptCapture.resultUnknown")
+          : t("promptCapture.turnRunning")}
       </span>
       {!recordingOn && <span className="workspace-muted">{t("promptCapture.recordingOffShort")}</span>}
       {legacy && <span className="turn-interactions-legacy" data-full-history-legacy title={t("promptCapture.legacyHint")}>{t("promptCapture.legacyBadge")}</span>}
+      {/* E1/E3：请求数=去重、尝试数=行数分列；无 outcome（legacy）失败显示"未记录"而非 0 */}
       <span className="full-history-turn-stats">
         {t("promptCapture.turnRequests", { count: group.requestCount })}
+        {" · "}{t("promptCapture.turnAttempts", { count: group.attempts })}
         {" · "}
-        <span className={group.failures > 0 ? "turn-interactions-failures" : undefined}>
-          {t("promptCapture.turnFailures", { count: group.failures })}
+        <span className={group.hasOutcome && group.failures > 0 ? "turn-interactions-failures" : undefined}>
+          {group.hasOutcome ? t("promptCapture.turnFailures", { count: group.failures }) : t("promptCapture.failuresUnknown")}
         </span>
         {" · "}
-        {group.tokenOut > 0 ? t("promptCapture.turnTokens", { count: group.tokenOut.toLocaleString() }) : t("promptCapture.tokensUnknown")}
+        {group.hasOutcome ? t("promptCapture.turnTokens", { count: group.tokenOut.toLocaleString() }) : t("promptCapture.tokensUnknown")}
       </span>
     </button>
     {expanded && <div className="full-history-turn-body">
@@ -238,9 +261,11 @@ function FullHistoryTurnRow({ group, position, nextTimestamp, rows, sessionId, p
                   onClick={() => onInitiatorToggle(firstRequest.requestId)}>
                   <span className="bar-name">{t("promptCapture.initiatorBar")}</span>
                   <span>{t("promptCapture.initiatorSummary", { chars: firstChars.toLocaleString() })}</span>
-                  <span className="bar-outcome">{group.failures > 0
-                    ? t("promptCapture.attemptsFailures", { count: group.failures })
-                    : t("promptCapture.turnDone")}</span>
+                  <span className="bar-outcome">{!group.hasOutcome
+                    ? t("promptCapture.resultUnknown")
+                    : group.failures > 0
+                      ? t("promptCapture.attemptsFailures", { count: group.failures })
+                      : t("promptCapture.turnDone")}</span>
                   <span className="bar-chev" aria-hidden="true">{initiatorOpenKey === firstRequest.requestId ? "▾" : "▸"}</span>
                 </button>}
               </div>
