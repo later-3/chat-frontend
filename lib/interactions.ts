@@ -420,6 +420,8 @@ export interface SessionMessageView {
   readonly turnId?: string;
   /** 完整原始消息（AgentMessage 形状——MessageView 过程展示直接消费） */
   readonly raw: Record<string, unknown>;
+  /** 条目 id（与 messages 平行——thinking 内容按需 API 需要 sessionId+entryId） */
+  readonly entryId?: string;
 }
 
 /**
@@ -460,14 +462,19 @@ export async function fetchSessionMessages(sessionId: string, projectId: string,
   );
   const context = isRecord(payload) && isRecord(payload.context) ? payload.context : undefined;
   const messages = context !== undefined && Array.isArray(context.messages) ? context.messages : [];
-  return messages.filter(isRecord).map(message => {
+  const entryIds = context !== undefined && Array.isArray(context.entryIds) ? context.entryIds : [];
+  return messages.filter((message, index) => isRecord(message) && true).map((message, filteredIndex) => {
+    // 过滤只去非 record——filteredIndex 与 entryIds 按原始 index 对齐（非 record 项极少见，原位对齐）
+    const originalIndex = messages.indexOf(message);
     const link = isRecord(message.chatLongAgent) ? message.chatLongAgent : undefined;
+    const entryId = entryIds[originalIndex];
     return {
       role: str(message.role, ""),
       content: message.content,
       ...(typeof message.timestamp === "number" ? { timestamp: message.timestamp } : {}),
       ...(link !== undefined && typeof link.turnId === "string" ? { turnId: link.turnId } : {}),
       raw: message,
+      ...(typeof entryId === "string" ? { entryId } : {}),
     };
   });
 }

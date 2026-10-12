@@ -107,7 +107,18 @@ export function TurnSummaryBar({ turnNumber, summary, completed, turnKey, turnSt
   const responseProcess = process === null ? null
     : (() => {
         const firstAssistant = process.findIndex(message => message.role === "assistant" || message.role === "toolResult");
-        return firstAssistant < 0 ? process.slice(1) : process.slice(firstAssistant, process.length);
+        let slice = firstAssistant < 0 ? process.slice(1) : process.slice(firstAssistant, process.length);
+        // 跳过空条目：toolResult 独立消息（结果已内联展示在上方 toolCall 卡）与无可见内容的占位消息
+        slice = slice.filter(message => {
+          if (message.role === "toolResult") return false;
+          const content = message.content;
+          const hasBlocks = Array.isArray(content) && content.length > 0;
+          const hasText = typeof content === "string" && content.trim().length > 0;
+          const hasThinking = hasBlocks && (content as { type?: string }[]).some(block => block?.type === "thinking");
+          const hasToolCall = hasBlocks && (content as { type?: string }[]).some(block => block?.type === "toolCall");
+          return hasText || hasThinking || hasToolCall || message.role === "assistant";
+        });
+        return slice;
       })();
 
   return <div className={`turn-summary-bar${expanded ? " is-expanded" : ""}`} data-summary-bar data-expanded={expanded ? "true" : "false"}>
@@ -139,7 +150,9 @@ export function TurnSummaryBar({ turnNumber, summary, completed, turnKey, turnSt
           ? <p className="workspace-muted">{t("promptCapture.noProcessMessages")}</p>
           : responseProcess.map((message, index) => (
               <div key={`${message.timestamp ?? index}-${index}`} className="turn-process-item" data-process-index={index}>
-                <MessageView message={message.raw as unknown as AgentMessage} cwd={undefined} />
+                <MessageView message={message.raw as unknown as AgentMessage}
+                  sessionId={sessionId} projectId={projectId}
+                  {...(message.entryId === undefined ? {} : { entryId: message.entryId })} />
               </div>
             ))}
     </div>}
