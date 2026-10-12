@@ -239,10 +239,11 @@ export function TurnInteractions({ sessionId, projectId, turnKey, mode, defaultE
   </div>;
 }
 
-function RequestDetailViewPanel({ detail, row, request, filter }: {
+/** 发起方 bar（F3 补）与请求组共用同一详情面板——同一条捕获记录、两个视图锚点（02 §2.1）。 */
+export function RequestDetailViewPanel({ detail, row, request, filter }: {
   readonly detail: RequestDetailView;
   readonly row: InteractionRowView | undefined;
-  readonly request: InteractionRequestGroupView;
+  readonly request?: InteractionRequestGroupView;
   readonly filter: BlockFilter;
 }) {
   const { t } = useI18n();
@@ -275,10 +276,10 @@ function RequestDetailViewPanel({ detail, row, request, filter }: {
     <div className="request-meta" data-request-meta>
       <span><code>{row?.model.provider}/{row?.model.modelId}</code></span>
       <span>{row !== undefined && `${row.turn.stage.id} · ${row.turn.stage.nodeKind}`}</span>
-      <span>{t("promptCapture.metaTools", { n: request.toolCount })}</span>
-      <span>{t("promptCapture.metaMessages", { n: request.messageCount })}</span>
+      <span>{t("promptCapture.metaTools", { n: request?.toolCount ?? row?.toolCount ?? 0 })}</span>
+      <span>{t("promptCapture.metaMessages", { n: request?.messageCount ?? row?.messageCount ?? 0 })}</span>
       <span>{t("promptCapture.metaExcluded", { n: excludedCount })}</span>
-      <span><code>{request.requestId}</code></span>
+      <span><code>{request?.requestId ?? detail.row.requestId}</code></span>
       <span><code>{t("promptCapture.metaSha", { sha: detail.row.payload.sha256.slice(0, 8) })}</code></span>
     </div>
 

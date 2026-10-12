@@ -3,14 +3,16 @@ import { InterfaceFeedback } from "./InterfaceFeedback";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { SurfaceDialog } from "./SurfaceDialog";
-import { TurnInteractions } from "./TurnInteractions";
+import { RequestDetailViewPanel, TurnInteractions } from "./TurnInteractions";
 import { MarkdownBody } from "./MarkdownBody";
 import {
   fetchInteractionIndex,
+  fetchRequestDetail,
   fetchSessionMessages,
   type InteractionGroupView,
   type InteractionIndexView,
   type InteractionRowView,
+  type RequestDetailView,
   type SessionMessageView,
 } from "@/lib/interactions";
 
@@ -33,6 +35,24 @@ function FullHistoryContent({ projectId, sessionId, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  // 发起方 bar 展开（02 §2.1：a 视角=同一请求详情，定位高亮"本轮输入"）
+  const [initiatorOpen, setInitiatorOpen] = useState<string | null>(null);
+  const [initiatorDetail, setInitiatorDetail] = useState<RequestDetailView | null>(null);
+  useEffect(() => {
+    if (initiatorDetail === null) return;
+    // a 视角（02 §2.1）：定位到高亮的"本轮输入"
+    const timer = window.setTimeout(() => {
+      document.querySelector('[data-initiator-detail] .prompt-capture-block.is-focus')
+        ?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [initiatorDetail]);
+  const loadInitiatorDetail = useCallback((requestId: string) => {
+    setInitiatorDetail(null);
+    void fetchRequestDetail(sessionId, projectId, requestId)
+      .then(detail => setInitiatorDetail(detail))
+      .catch(() => setInitiatorDetail(null));
+  }, [sessionId, projectId]);
   const [messages, setMessages] = useState<readonly SessionMessageView[] | null>(null);
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
@@ -103,8 +123,17 @@ function FullHistoryContent({ projectId, sessionId, onClose }: Props) {
                 messages={messages}
                 onExpand={ensureMessages}
                 expanded={expandedKey === `${group.key}-${position}`}
+                initiatorOpenKey={initiatorOpen}
+                onInitiatorToggle={(requestId) => {
+                  if (initiatorOpen === requestId) { setInitiatorOpen(null); setInitiatorDetail(null); return; }
+                  setInitiatorOpen(requestId);
+                  loadInitiatorDetail(requestId);
+                }}
+                initiatorDetail={initiatorDetail}
                 onToggle={() => {
                   ensureMessages();
+                  setInitiatorOpen(null);
+                  setInitiatorDetail(null);
                   setExpandedKey(current => current === `${group.key}-${position}` ? null : `${group.key}-${position}`);
                 }}
               />)}
@@ -142,7 +171,7 @@ function matchExchange(group: InteractionGroupView, position: number, groups: re
   return { a, bText };
 }
 
-function FullHistoryTurnRow({ group, position, nextTimestamp, rows, sessionId, projectId, legacy, recordingOn, messages, onExpand, expanded, onToggle }: {
+function FullHistoryTurnRow({ group, position, nextTimestamp, rows, sessionId, projectId, legacy, recordingOn, messages, onExpand, expanded, initiatorOpenKey, onInitiatorToggle, initiatorDetail, onToggle }: {
   readonly group: InteractionGroupView;
   readonly position: number;
   readonly nextTimestamp: string | undefined;
@@ -154,6 +183,9 @@ function FullHistoryTurnRow({ group, position, nextTimestamp, rows, sessionId, p
   readonly messages: readonly SessionMessageView[] | null;
   readonly onExpand: () => void;
   readonly expanded: boolean;
+  readonly initiatorOpenKey: string | null;
+  readonly onInitiatorToggle: (requestId: string) => void;
+  readonly initiatorDetail: RequestDetailView | null;
   readonly onToggle: () => void;
 }) {
   const { t } = useI18n();
@@ -200,14 +232,26 @@ function FullHistoryTurnRow({ group, position, nextTimestamp, rows, sessionId, p
                   <span className="turn-role">{t("promptCapture.sideA")}</span>
                   {messageText(exchange.a.content)}
                 </div>}
-                {firstRequest !== undefined && firstRequest !== null && <div className="initiator-bar" data-initiator-bar>
+                {firstRequest !== undefined && firstRequest !== null && <button type="button"
+                  className="initiator-bar" data-initiator-bar
+                  aria-expanded={initiatorOpenKey === firstRequest.requestId}
+                  onClick={() => onInitiatorToggle(firstRequest.requestId)}>
                   <span className="bar-name">{t("promptCapture.initiatorBar")}</span>
                   <span>{t("promptCapture.initiatorSummary", { chars: firstChars.toLocaleString() })}</span>
                   <span className="bar-outcome">{group.failures > 0
                     ? t("promptCapture.attemptsFailures", { count: group.failures })
                     : t("promptCapture.turnDone")}</span>
-                </div>}
+                  <span className="bar-chev" aria-hidden="true">{initiatorOpenKey === firstRequest.requestId ? "▾" : "▸"}</span>
+                </button>}
               </div>
+              {/* 发起方 bar 展开：同一请求详情、a 视角定位"本轮输入"（02 §2.1；占满全宽） */}
+              {firstRequest !== undefined && firstRequest !== null && initiatorOpenKey === firstRequest.requestId && (
+                initiatorDetail === null
+                  ? <div className="initiator-detail" data-initiator-detail role="status">{t("promptCapture.loadingPayload")}</div>
+                  : <div className="initiator-detail" data-initiator-detail data-view="initiator">
+                      <RequestDetailViewPanel detail={initiatorDetail} row={firstRequest} filter="all" />
+                    </div>
+              )}
               {/* b：回复方（左）+ 回复侧交互树 */}
               <div className="turn-side-b" data-side-b>
                 {exchange.bText !== "" && <div className="turn-reply-card">
