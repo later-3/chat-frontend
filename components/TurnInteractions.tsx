@@ -133,9 +133,9 @@ export function TurnInteractions({ sessionId, projectId, turnKey, mode, defaultE
 
   return <div className="turn-interactions" data-turn-interactions={turnKey} data-mode={mode}>
     {/* 回复 bar（S1）：内联胶囊、默认收起——统计入口，点开才见执行树 */}
-    <button type="button" className="reply-bar" data-reply-bar aria-expanded={barOpen}
+    <button type="button" className="turn-summary-head" data-reply-bar aria-expanded={barOpen}
       onClick={() => setBarOpen(open => !open)}>
-      <span className="bar-name">{t("promptCapture.replyBar")}</span>
+      <span className="turn-summary-number">{t("promptCapture.turnN", { n: 1 })}</span>
       <span className={group.summary.failures > 0 ? "bar-failures" : undefined} data-reply-state={
         !known ? "unknown" : group.summary.failures > 0 ? "failed" : "done"}>
         {!known ? t("promptCapture.resultUnknown")
@@ -190,7 +190,7 @@ export function TurnInteractions({ sessionId, projectId, turnKey, mode, defaultE
               <button className="prompt-capture-record-header" aria-expanded={expanded} data-prompt-capture-row-toggle
                 onClick={() => toggleRequest(request.requestId)}>
                 {expanded ? <IconChevronDown size={16} aria-hidden="true" /> : <IconChevronRight size={16} aria-hidden="true" />}
-                <span className="prompt-capture-seq">{t("promptCapture.requestN", { n: index + 1 })}</span>
+                <span className="prompt-capture-seq">{timeOf(row?.timestamp ?? "")}</span>
                 {request.attempts > 1 && <span className="prompt-capture-attempts">{t("promptCapture.attemptsX", { count: request.attempts })}</span>}
                 {request.failures > 0 && <span className="prompt-capture-failures">{t("promptCapture.attemptsFailures", { count: request.failures })}</span>}
                 {finalSuccess && <span className="prompt-capture-success">{t("promptCapture.finalSuccess")}</span>}

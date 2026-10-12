@@ -418,6 +418,39 @@ export interface SessionMessageView {
   readonly timestamp?: number;
   /** LA 轮绑定键（= turnKey）；旧消息可能缺失 → 用时间窗兜底匹配 */
   readonly turnId?: string;
+  /** 完整原始消息（AgentMessage 形状——MessageView 过程展示直接消费） */
+  readonly raw: Record<string, unknown>;
+}
+
+/**
+ * 按轮匹配会话消息（turnId 直配优先；时间窗：a=(上一组首请求, 本组首请求]、b=[本组首请求, 下一组)）。
+ * 消息流 bar 展开（B4 过程回放）与完整历史 a/b 层共用同一匹配。
+ */
+export function matchTurnMessages(
+  group: { readonly key: string; readonly firstTimestamp: string },
+  index: number,
+  groups: readonly { readonly key: string; readonly firstTimestamp: string }[],
+  messages: readonly SessionMessageView[],
+  nextTimestamp?: string,
+): readonly SessionMessageView[] {
+  const byKey = messages.filter(message => message.turnId === group.key);
+  const prevTs = index <= 0 ? -Infinity : Date.parse(groups[index - 1]?.firstTimestamp ?? "");
+  const thisTs = Date.parse(group.firstTimestamp);
+  const nextTs = nextTimestamp === undefined || nextTimestamp === "" ? Infinity : Date.parse(nextTimestamp);
+  const inWindow = (message: SessionMessageView, fromTs: number, toTs: number) => {
+    const ts = message.timestamp ?? 0;
+    return ts > (Number.isNaN(fromTs) ? -Infinity : fromTs) && ts <= (Number.isNaN(toTs) ? Infinity : toTs);
+  };
+  if (byKey.length > 0) {
+    // turnId 命中：取该轮 user 起点及其后的全部消息
+    const firstUser = byKey.findIndex(m => m.role === "user");
+    if (firstUser >= 0) return byKey.slice(firstUser);
+    return byKey;
+  }
+  // 时间窗：该轮 a 之后、下一组之前（含 a）
+  const aMessages = messages.filter(m => m.role === "user" && inWindow(m, prevTs, thisTs));
+  const startTs = aMessages.length > 0 ? (aMessages[aMessages.length - 1]!.timestamp ?? thisTs) : thisTs;
+  return messages.filter(m => (m.timestamp ?? 0) >= startTs - 1 && (m.timestamp ?? 0) < (Number.isNaN(nextTs) ? Infinity : nextTs));
 }
 
 export async function fetchSessionMessages(sessionId: string, projectId: string, signal?: AbortSignal): Promise<readonly SessionMessageView[]> {
@@ -434,6 +467,7 @@ export async function fetchSessionMessages(sessionId: string, projectId: string,
       content: message.content,
       ...(typeof message.timestamp === "number" ? { timestamp: message.timestamp } : {}),
       ...(link !== undefined && typeof link.turnId === "string" ? { turnId: link.turnId } : {}),
+      raw: message,
     };
   });
 }

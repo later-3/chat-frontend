@@ -1447,6 +1447,7 @@ export const zhCNLocale: LocalePlugin = {
     "promptCapture.piBaseBlock": "Pi 系统基础与资源",
     "promptCapture.messageRow": "[{index}] {role}",
     "promptCapture.blocksCount": "{n} 个区块",
+    "promptCapture.noProcessMessages": "无响应过程记录",
     "promptCapture.replyBarPrompt": "prompt {chars} 字符",
     "promptCapture.promptUnknown": "prompt 占用未记录",
     "promptCapture.noInteractions": "该轮无完整交互记录",

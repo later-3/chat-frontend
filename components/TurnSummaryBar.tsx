@@ -2,31 +2,35 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
-import { TurnInteractions } from "./TurnInteractions";
+import { IconChevronDown, IconChevronRight } from "@tabler/icons-react";
+import { MessageView } from "./MessageView";
+import type { AgentMessage } from "@/lib/types";
 import type { TurnSummaryData } from "@/lib/turn-summary";
-import { fetchInteractionIndex, type InteractionGroupView } from "@/lib/interactions";
+import {
+  fetchInteractionIndex,
+  fetchSessionMessages,
+  matchTurnMessages,
+  type InteractionGroupView,
+  type SessionMessageView,
+} from "@/lib/interactions";
 
 /**
- * 回复 bar（B4 · P2，变体 A）：跟随每条 agent 回复下方、内联宽度的收起态胶囊；
- * 点击展开 = 占满全宽详情面板（`TurnInteractions mode="turn-summary"`，B3-R3 全能力）；
- * **展开态 bar sticky 吸顶**（G1 D1：挂接 scrollContainerRef 真实滚动容器；失效先查 :595 overflow-hidden）。
- *
- * 数据双源（都在后端聚合，02 T9）：
- *   - Pi 会话侧 `summary`（summarizeTurn：usage/tokens/工具数/耗时/model）；
- *   - 交互侧 interactions 轮 summary（promptChars/请求/尝试/失败/状态——按 chatLongAgent.turnId 匹配；
- *     匹配不到（summaryDraft/daily-summary/群聊/普通会话，G1 D2 清单）→ 交互侧字段降级"未记录"，
- *     **不报错不伪造**）。
- * 运行中实时（G1 D3）：`completed` 翻转（true→false 边界之外，false→true 即轮结束）时强制 refetch，
- *   运行中每 5s 轮询（保守，不引 SSE）。
+ * 轮次摘要行（B4-R2，用户裁定重做）：
+ * - **不叫"回复 bar"**（去自标）——轮次号 + 本响应的属性与总结信息，直接打印（原 TurnSummary 的语义：一个东西）；
+ * - 点击展开 = **按 session 时间顺序的响应过程回放**：思考 → 工具调用（收起态行，点开看参数/结果）→ 最终回复，
+ *   **复用 Pi 生态的 MessageView**（Pi TUI 同款展示：thinking 折叠、toolCall 收起展开）——不做"请求 N"抽象；
+ * - 不含"看完整 prompt"入口（完整历史负责 (a)）；不嵌套第二层面板。
+ * - 属性数据双源（都在后端/既有聚合）：summarizeTurn（Pi 会话侧）+ interactions 轮 summary（交互侧，
+ *   未匹配降级"未记录"，G1 D2 清单）；运行中轮询 5s + completed 翻转强制 refetch（G1 D3）。
  */
 
 export interface TurnSummaryBarProps {
+  /** 轮次序号（1 起，直接打印） */
+  readonly turnNumber: number;
   readonly summary: TurnSummaryData;
-  /** 轮是否已完成（false = 运行中） */
   readonly completed: boolean;
-  /** 交互轮键（= chatLongAgent.turnId）；undefined = 匹配不到（G1 D2 降级清单） */
   readonly turnKey?: string;
-  /** 轮起点时间（entryTimes[userIdx]）——turnId 与交互分组键不同系时按时间窗匹配（B3-R2 后键系缺口） */
+  /** 轮起点时间（消息流 entryTimes[userIdx]）——轮键不同系时按时间窗匹配 */
   readonly turnStartedAt?: number | null;
   readonly projectId: string;
   readonly sessionId: string | undefined;
@@ -35,61 +39,83 @@ export interface TurnSummaryBarProps {
 
 const REFRESH_INTERVAL_MS = 5_000;
 
-export function TurnSummaryBar({ summary, completed, turnKey, turnStartedAt, projectId, sessionId, defaultExpanded = false }: TurnSummaryBarProps) {
+export function TurnSummaryBar({ turnNumber, summary, completed, turnKey, turnStartedAt, projectId, sessionId, defaultExpanded = false }: TurnSummaryBarProps) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState<boolean>(defaultExpanded);
   const [group, setGroup] = useState<InteractionGroupView | null>(null);
+  const [groups, setGroups] = useState<readonly InteractionGroupView[]>([]);
+  const [processMessages, setProcessMessages] = useState<readonly SessionMessageView[] | null>(null);
   const prevCompleted = useRef(completed);
 
+  // 交互侧轮属性（状态/失败/prompt 占用）——轮键不同系：turnId 直配 + 时间窗（G1 D2 清单）
   const refetch = useCallback(() => {
-    if (turnKey === undefined || sessionId === undefined) return;
+    if (sessionId === undefined) return;
     void fetchInteractionIndex(sessionId, projectId, { limit: 50 })
       .then(index => {
-        // 轮匹配：turnId 直配优先；分组键是 workflowInvocationId ?? turnKey（与消息 turnId 不同系）
-        // → 时间窗兜底（轮首请求在用户消息之后，取最近的组）。
         const direct = turnKey !== undefined ? index.groups.find(candidate => candidate.key === turnKey) : undefined;
         const started = turnStartedAt ?? null;
         const byTime = started === null ? undefined
           : [...index.groups].filter(candidate => Date.parse(candidate.firstTimestamp) >= started - 1_000)
             .sort((x, y) => Date.parse(x.firstTimestamp) - Date.parse(y.firstTimestamp))[0];
+        setGroups(index.groups);
         setGroup(direct ?? byTime ?? null);
       })
-      .catch(() => { /* 交互侧降级：字段保持"未记录"，不报错（G1 D2） */ });
+      .catch(() => { /* 交互侧降级"未记录"（G1 D2） */ });
   }, [sessionId, projectId, turnKey, turnStartedAt]);
 
-  useEffect(() => {
-    if (turnKey === undefined || sessionId === undefined) return;
-    refetch();
-  }, [turnKey, sessionId, refetch]);
+  // 过程回放数据：该轮 session 消息（展开时拉一次；完整原始消息给 MessageView）
+  const loadProcess = useCallback(() => {
+    if (sessionId === undefined) return;
+    void fetchSessionMessages(sessionId, projectId)
+      .then(value => setProcessMessages(value))
+      .catch(() => setProcessMessages([]));
+  }, [sessionId, projectId]);
 
-  // G1 D3：轮结束翻转（completed false→true）立即强制 refetch；运行中每 5s 轮询
+  useEffect(() => {
+    if (turnKey === undefined && turnStartedAt === undefined) return;
+    refetch();
+  }, [turnKey, turnStartedAt, refetch]);
+  useEffect(() => {
+    if (expanded) loadProcess();
+  }, [expanded, loadProcess]);
+
+  // G1 D3：轮结束翻转强制 refetch；运行中每 5s 轮询
   useEffect(() => {
     if (prevCompleted.current === false && completed === true) refetch();
     prevCompleted.current = completed;
   }, [completed, refetch]);
   useEffect(() => {
-    if (completed || turnKey === undefined || sessionId === undefined) return;
+    if (completed) return;
     const timer = window.setInterval(refetch, REFRESH_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [completed, turnKey, refetch]);
+  }, [completed, refetch]);
 
-  const known = group !== null && group.hasOutcome;
-  // 状态判定：interactions group.state 优先（unknown=legacy 未记录）；历史轮的 completed prop
-  // 不可靠（非末轮恒 false，会误显示"运行中"）——无交互数据时才退回 completed。
   const groupState = group?.state ?? null;
   const stateLabel = groupState === "unknown" ? t("promptCapture.resultUnknown")
-    : groupState === "done" ? (group!.failures > 0 ? t("promptCapture.attemptsFailures", { count: group!.failures }) : t("promptCapture.turnDone"))
+    : groupState === "done" ? (group !== null && group.failures > 0 ? t("promptCapture.attemptsFailures", { count: group.failures }) : t("promptCapture.turnDone"))
     : !completed ? t("promptCapture.turnRunning")
-    : known ? t("promptCapture.turnDone") : t("promptCapture.resultUnknown");
+    : group !== null && group.hasOutcome ? t("promptCapture.turnDone") : t("promptCapture.resultUnknown");
   const promptChars = group?.promptChars;
   const tokens = summary.tokens > 0 ? summary.tokens.toLocaleString() : null;
 
-  return <div className={`turn-summary-bar${expanded ? " is-expanded" : ""}`} data-summary-bar data-expanded={expanded ? "true" : "false"} data-group-key={group?.key ?? "none"} data-turn-started-at={String(turnStartedAt ?? "none")}>
-    <button type="button" className="reply-bar" aria-expanded={expanded} data-summary-bar-toggle
-      onClick={() => setExpanded((open: boolean) => !open)}>
-      <span className="bar-name">{t("promptCapture.replyBar")}</span>
-      <span className={groupState === "running" || (group === null && !completed) ? "bar-running"
-        : group !== null && group.failures > 0 ? "bar-failures" : undefined}
+  // 该轮响应过程（按 session 时间顺序，去掉发起方 a——展示"收到之后做了什么"）
+  const turnIndex = group !== null ? groups.findIndex(candidate => candidate.key === group.key) : -1;
+  const process = expanded && processMessages !== null && group !== null
+    ? matchTurnMessages(group, turnIndex >= 0 ? turnIndex : 0, groups, processMessages,
+        turnIndex >= 0 ? groups[turnIndex + 1]?.firstTimestamp : undefined)
+    : null;
+  const responseProcess = process === null ? null
+    : (() => {
+        const firstAssistant = process.findIndex(message => message.role === "assistant" || message.role === "toolResult");
+        return firstAssistant < 0 ? process.slice(1) : process.slice(firstAssistant, process.length);
+      })();
+
+  return <div className={`turn-summary-bar${expanded ? " is-expanded" : ""}`} data-summary-bar data-expanded={expanded ? "true" : "false"}>
+    {/* 轮次摘要行：轮号 + 属性（直接打印，无自标名） */}
+    <button type="button" className="turn-summary-head" aria-expanded={expanded} data-summary-bar-toggle
+      onClick={() => setExpanded(open => !open)}>
+      <span className="turn-summary-number">{t("promptCapture.turnN", { n: turnNumber })}</span>
+      <span className={groupState === "running" || (group === null && !completed) ? "bar-running" : undefined}
         data-reply-state={groupState === "unknown" ? "unknown"
           : groupState === "done" ? "done"
           : groupState === "running" || (group === null && !completed) ? "running" : "unknown"}>
@@ -102,14 +128,20 @@ export function TurnSummaryBar({ summary, completed, turnKey, turnStartedAt, pro
       <span>{t("promptCapture.metaTools", { n: summary.toolCount })}</span>
       {summary.durationMs !== null && <span>{t("promptCapture.durationMs", { ms: String(Math.round(summary.durationMs)) })}</span>}
       {summary.model !== null && <span className="bar-model">{summary.model}</span>}
-      <span className="bar-chev" aria-hidden="true">{expanded ? "▾" : "▸"}</span>
+      <span className="bar-chev" aria-hidden="true">{expanded ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}</span>
     </button>
-    {expanded && <div className="summary-detail-panel" data-summary-detail>
-      {turnKey === undefined
-        ? <p className="workspace-muted" data-no-interactions>{t("promptCapture.noInteractions")}</p>
-        : <TurnInteractions turnKey={group!.key} sessionId={sessionId ?? ""} projectId={projectId} mode="turn-summary" />}
+
+    {/* 展开 = 响应过程回放（session 顺序：思考/工具调用/结果/回复——Pi MessageView 同款） */}
+    {expanded && <div className="turn-process" data-turn-process>
+      {responseProcess === null
+        ? <p className="workspace-muted" role="status">{t("history.loading")}</p>
+        : responseProcess.length === 0
+          ? <p className="workspace-muted">{t("promptCapture.noProcessMessages")}</p>
+          : responseProcess.map((message, index) => (
+              <div key={`${message.timestamp ?? index}-${index}`} className="turn-process-item" data-process-index={index}>
+                <MessageView message={message.raw as unknown as AgentMessage} cwd={undefined} />
+              </div>
+            ))}
     </div>}
   </div>;
 }
-
-

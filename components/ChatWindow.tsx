@@ -775,6 +775,7 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
                   rendered.push(<div key={`turn-summary-${userIdx}-${finalAssistantIdx}`}
                     ref={processRefIdx === undefined ? undefined : (el) => { messageRefs.current[processRefIdx] = el; }}>
                     <TurnSummaryBar
+                      turnNumber={messages.slice(0, userIdx + 1).filter(candidate => candidate.role === "user").length}
                       summary={summarizeTurn(messages.slice(userIdx, endIdx), entryTimes.slice(userIdx, endIdx))}
                       completed={activeLeafId === data?.leafId && endIdx === messages.length && activity?.phase === "completed"}
                       turnKey={turnKey}

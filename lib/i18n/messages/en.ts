@@ -1449,6 +1449,7 @@ export const enLocale: LocalePlugin = {
     "promptCapture.piBaseBlock": "Pi base (prompt & resources)",
     "promptCapture.messageRow": "[{index}] {role}",
     "promptCapture.blocksCount": "{n} blocks",
+    "promptCapture.noProcessMessages": "No response process recorded",
     "promptCapture.replyBarPrompt": "Prompt {chars} chars",
     "promptCapture.promptUnknown": "Prompt usage not recorded",
     "promptCapture.noInteractions": "No interaction recording for this turn",
