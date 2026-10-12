@@ -1470,16 +1470,19 @@ span.token.table {
 
 /* --- B4：消息流内回复 bar（sticky 展开态——G1 D1：挂接 scrollContainerRef 滚动容器；
    top 计入容器 pt-4；失效先查 :595 overflow-hidden 祖先的包含块/层叠上下文） --- */
+/* 整体节奏：沿用旧 TurnSummary 的间距约定（上 8 / 下 24——与输入框的呼吸空间，workspace.css:.turn-summary） */
+.turn-summary-bar { margin: 8px 0 24px; }
+/* 字段排布沿用旧 TurnSummary toggle 约定：flex + wrap + gap 分隔（无 · 前缀挤压），字段不内部换行 */
 .turn-summary-head {
-  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 38px;
-  padding: 6px 12px; border: 0; border-radius: 8px; background: var(--bg-hover);
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; width: 100%; min-height: 34px;
+  padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel);
   cursor: pointer; text-align: left; color: var(--text); font-size: 13px;
 }
-.turn-summary-head:hover { background: var(--bg-selected, var(--bg-hover)); }
-.turn-summary-head > span + span::before { content: " · "; color: var(--text-dim); }
-.turn-summary-number { font-weight: 700; min-width: 2.4em; }
-.turn-summary-head .bar-model { color: var(--accent); }
-.turn-summary-head .bar-chev { margin-left: auto; color: var(--text-muted); }
+.turn-summary-head:hover { background: var(--bg-hover); }
+.turn-summary-head > span { white-space: nowrap; }
+.turn-summary-number { font-weight: 700; }
+.turn-summary-head .bar-model { color: var(--accent); max-width: 18em; overflow: hidden; text-overflow: ellipsis; }
+.turn-summary-head .bar-chev { margin-left: auto; flex-shrink: 0; }
 /* 展开态：轮头吸顶（父块=本组件含长过程面板，bar 可在其内吸附——G1 D1） */
 .turn-summary-bar.is-expanded .turn-summary-head {
   position: sticky; top: 16px; z-index: 4;
