@@ -55,26 +55,6 @@ interface OutlineNode {
   readonly subs: OutlineNode[];
 }
 
-function parseOutline(text: string): OutlineNode {
-  const root: OutlineNode = { level: 0, title: "", lines: [], subs: [] };
-  const stack: OutlineNode[] = [root];
-  for (const raw of text.split("\n")) {
-    const match = /^(#{1,6}) (.*)/.exec(raw.trimEnd());
-    if (match && match[2]!.trim().length <= 60) {
-      const node: OutlineNode = { level: match[1]!.length, title: match[2]!.trim(), lines: [], subs: [] };
-      while (stack.length > 1 && stack[stack.length - 1]!.level >= node.level) stack.pop();
-      stack[stack.length - 1]!.subs.push(node);
-      stack.push(node);
-    } else stack[stack.length - 1]!.lines.push(raw);
-  }
-  return root;
-}
-function outlineChars(node: OutlineNode): number {
-  return node.lines.join("\n").length + node.subs.reduce((total, sub) => total + outlineChars(sub), 0);
-}
-function stripTitle(text: string): string {
-  return text.replace(/^#{1,3} [^\n]{1,44}\s*\n/, "");
-}
 function timeOf(timestamp: string): string {
   const date = new Date(timestamp);
   return Number.isNaN(date.getTime()) ? "" : date.toTimeString().slice(0, 8);
@@ -246,7 +226,7 @@ export function TurnInteractions({ sessionId, projectId, turnKey, mode, defaultE
                     </div>
                   ))}
                 </div>}
-                <RequestDetailViewPanel detail={entry.detail} row={row} request={request} filter={blockFilter} attemptsOfRequest={request.attempts} />
+                <RequestDetailViewPanel detail={entry.detail} row={row} request={request} filter={blockFilter} />
               </div>}
             </section>;
           })}
@@ -274,70 +254,44 @@ function RequestMeta({ detail, row, request }: {
   </div>;
 }
 
-/** 发起方 bar（02 §2.1 a 视角）与请求组共用同一详情面板——同一条捕获记录、两个视图锚点。 */
-export function RequestDetailViewPanel({ detail, row, request, filter, attemptsOfRequest }: {
+/** 发起方 bar（02 §2.1 a 视角）与请求组共用同一详情面板——同一条捕获记录、两个视图锚点。
+ *  B3-R3：**按原始请求体自身的结构与顺序展示**（model → messages 逐条[system 内按自带 chat_* 标签块折叠] → tools 逐个），
+ *  把抽象定义（区域标签/人话名/revision）作为标注叠上去——以实现为准，不按自创解析重排。 */
+export function RequestDetailViewPanel({ detail, row, request, filter }: {
   readonly detail: RequestDetailView;
   readonly row: InteractionRowView | undefined;
   readonly request?: InteractionRequestGroupView;
   readonly filter: BlockFilter;
-  readonly attemptsOfRequest?: number;
 }) {
   const { t } = useI18n();
-  if (detail.payload === null && !detail.legacy) {
-    // 完整记录关闭的轮次：区域摘要在请求行可见，原文按契约不存在——如实说明（不伪造空树）。
-    return <div className="prompt-capture-detail" data-payload-missing>
-      {detail.outcome !== undefined && <div className="turn-interactions-outcome" data-outcome={detail.outcome.status}>
-        <span>{t("promptCapture.outcome", { status: detail.outcome.status })}</span>
-      </div>}
-      <p className="workspace-muted">{t("promptCapture.noOriginal")}</p>
-    </div>;
-  }
   const payload = detail.payload ?? {};
   const messages = Array.isArray(payload.messages) ? (payload.messages as { role?: string; content?: unknown }[]) : [];
-  const systemContent = typeof payload.system === "string"
-    ? payload.system
-    : messages[0] !== undefined && messages[0]?.role === "system" ? contentText(messages[0]?.content) : null;
-  const body = systemContent !== null ? messages.slice(1) : messages;
   const marks = detail.messageRegions;
-
-  // S4/S3：消息序列三段（历史 / 本轮输入 / 执行链），带过滤
-  const grouped = body.map((message, index) => {
-    const mark = marks[index] ?? { index, role: message.role ?? "", region: "unclassified" };
-    const seg = mark.region === "history-user" ? "history" as const
-      : mark.region === "current-user-message" ? "current" as const : "chain" as const;
-    return { message, mark, seg };
-  });
-  const historyItems = grouped.filter(item => item.seg === "history");
-  const currentItems = grouped.filter(item => item.seg === "current");
-  const chainItems = grouped.filter(item => item.seg === "chain");
-  const visible = (items: typeof grouped) => filter === "all" || filter === "history"
-    ? items
-    : items.filter(item => item.seg !== "history");
-
-  const outline = systemContent === null ? null : parseOutline(systemContent);
-  const systemChars = systemContent === null ? 0 : systemContent.length;
-  // S2 双源：优先大纲树（顶层=原文标题、天然两层，真实样本齐全）；system 无标题结构（E2E fixture）
-  // 时回退读模型 rows 的区域摘要（单层、人话 label）。
-  const barSections = outline !== null && outline.subs.length > 0
-    ? outline.subs.map(section => ({ id: section.title, label: section.title, chars: outlineChars(section), subs: section.subs }))
-    : (row ?? detail.row).regions.map(region => ({ id: region.id, label: region.label ?? region.id, chars: region.chars, subs: [] as OutlineNode[] }));
-  const maxSectionChars = Math.max(1, ...barSections.map(section => section.chars));
   const tools = Array.isArray(payload.tools) ? (payload.tools as { name?: string; function?: { name?: string } }[]) : [];
-  const attempts = attemptsOfRequest ?? request?.attempts ?? 1;
+  const excludedCount = row?.excluded.count ?? 0;
 
-  const renderItems = (items: typeof grouped, keyPrefix: string) => items.map(item => item.mark.region === "history-user"
-    ? <details key={`${keyPrefix}-${item.mark.index}`} className="prompt-capture-section prompt-capture-history">
-        <summary>{t(regionLabelKey(item.mark.region))} · {t("promptCapture.payloadChars", { chars: contentText(item.message.content).length.toLocaleString() })}</summary>
-        <PromptCaptureBlock label={t(regionLabelKey(item.mark.region)) + (item.message.role === undefined ? "" : ` · ${item.message.role}`)}
-          text={contentText(item.message.content)} mono={item.message.role === "tool"} />
-      </details>
-    : <PromptCaptureBlock key={`${keyPrefix}-${item.mark.index}`}
-        label={t(regionLabelKey(item.mark.region)) + (item.mark.customType !== undefined ? ` · ${item.mark.customType}` : item.message.role === undefined ? "" : ` · ${item.message.role}`)}
-        text={contentText(item.message.content)}
-        mono={item.message.role === "tool"}
-        focus={item.mark.region === "current-user-message"} />);
+  // system（messages[0]）content 内按自带 <chat_*> 标签切块；标签外前缀 = Pi 基础人设/资源（无标签区）。
+  const systemMessage = messages[0] !== undefined && messages[0]?.role === "system" ? messages[0] : undefined;
+  const bodyMessages = systemMessage !== undefined ? messages.slice(1) : messages;
+  const systemContent = systemMessage === undefined ? (typeof payload.system === "string" ? payload.system : null) : contentText(systemMessage.content);
+  const systemBlocks = systemContent === null ? [] : splitChatTagBlocks(systemContent);
 
-  return <div className="prompt-capture-detail">
+  const showSystem = filter === "all" || filter === "system";
+  const showMessages = filter === "all" || filter === "history";
+  const showTools = filter === "all" || filter === "tools";
+  const rawModel = typeof payload.model === "string" ? payload.model : `${row?.model.provider ?? ""}/${row?.model.modelId ?? ""}`;
+
+  return <div className="prompt-capture-detail" data-raw-request>
+    <div className="request-meta" data-request-meta>
+      <span><code>{rawModel}</code></span>
+      <span>{row !== undefined && `${row.turn.stage.id} · ${row.turn.stage.nodeKind}`}</span>
+      <span>{t("promptCapture.metaTools", { n: request?.toolCount ?? row?.toolCount ?? tools.length })}</span>
+      <span>{t("promptCapture.metaMessages", { n: request?.messageCount ?? row?.messageCount ?? messages.length })}</span>
+      <span>{t("promptCapture.metaExcluded", { n: excludedCount })}</span>
+      <span><code>{request?.requestId ?? detail.row.requestId}</code></span>
+      <span><code>{t("promptCapture.metaSha", { sha: detail.row.payload.sha256.slice(0, 8) })}</code></span>
+    </div>
+
     {detail.outcome !== undefined && <div className="turn-interactions-outcome" data-outcome={detail.outcome.status}>
       <span>{t("promptCapture.outcome", { status: detail.outcome.status })}</span>
       {detail.outcome.errorMessage !== undefined && <span className="surface-error">{detail.outcome.errorMessage}</span>}
@@ -346,57 +300,53 @@ export function RequestDetailViewPanel({ detail, row, request, filter, attemptsO
     </div>}
     {detail.outcome === undefined && detail.legacy && <p className="workspace-muted" data-legacy-no-outcome>{t("promptCapture.noOutcome")}</p>}
 
-    {/* S2：系统提示折叠区内 = 占比 + 两层区域条形（顶层带条、子层缩进列表）+ 同内容提示 */}
-    {systemContent !== null && outline !== null && (filter === "all" || filter === "system") &&
-      <details className="prompt-capture-section" data-prompt-capture-system open>
-        <summary>
-          <span>{t("promptCapture.systemPrompt", { chars: systemChars.toLocaleString() })}</span>
-          <span className="workspace-muted">{t("promptCapture.ofRequest", { pct: (Math.round(systemChars / Math.max(1, detail.row.payload.chars) * 1000) / 10).toFixed(1) })}</span>
-          {attempts > 1 && <span className="prompt-capture-success">{t("promptCapture.contentIdentical", { n: attempts })}</span>}
-        </summary>
-        {barSections.length > 0 && <div className="region-bars" data-region-bars>
-          {barSections.map((section, index) => (
-            <div key={index} className="region-bar-group">
-              <div className="region-bar-row">
-                <span className="region-name" title={section.id}>{section.label}</span>
-                <span className="region-track"><span className="region-fill" style={{ width: `${Math.max(4, Math.round(section.chars / maxSectionChars * 100))}%` }} /></span>
-                <span className="region-chars">{section.chars.toLocaleString()}</span>
-              </div>
-              {section.subs.map((sub, subIndex) => (
-                <div key={subIndex} className="region-bar-row is-sub">
-                  <span className="region-name">{sub.title}</span>
-                  <span className="region-chars">{outlineChars(sub).toLocaleString()}</span>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>}
-        <OutlineTree nodes={outline.subs} depth={0} />
-      </details>}
+    {showMessages && <div className="raw-messages" data-raw-messages>
+      {systemMessage !== undefined && <div className="raw-message" data-role="system">
+        <details className="prompt-capture-section" open>
+          <summary>
+            <span className="raw-role">{t("promptCapture.messageRow", { index: 0, role: "system" })}</span>
+            <span className="workspace-muted">{t("promptCapture.payloadChars", { chars: (systemContent ?? "").length.toLocaleString() })}
+              {" · "}{t("promptCapture.blocksCount", { n: systemBlocks.length })}</span>
+          </summary>
+          <div className="raw-system-blocks" data-raw-system-blocks>
+            {systemBlocks.map((block, index) => <details key={index} className="prompt-capture-section raw-tag-block"
+              data-tag={block.tag} open={false}>
+              <summary>
+                <span className="raw-tag">{block.tag === "" ? t("promptCapture.piBaseBlock") : `<${block.tag}>`}</span>
+                {block.attributes !== "" && <span className="raw-attrs" title={block.attributes}>{block.attributes}</span>}
+                <span className="workspace-muted">{t("promptCapture.payloadChars", { chars: block.text.length.toLocaleString() })}</span>
+              </summary>
+              <pre className="prompt-capture-block-text">{block.text}</pre>
+            </details>)}
+          </div>
+        </details>
+      </div>}
+      {bodyMessages.map((message, index) => {
+        const mark = marks[index] ?? { index, role: message.role ?? "", region: "unclassified" };
+        const text = contentText(message.content);
+        return <div key={index} className="raw-message" data-role={message.role} data-region={mark.region}>
+          <details className="prompt-capture-section">
+            <summary>
+              <span className="raw-role">{t("promptCapture.messageRow", { index: index + 1, role: message.role ?? "" })}</span>
+              {mark.region === "current-user-message" && <span className="prompt-capture-success">{t("promptCapture.seqCurrentInput")}</span>}
+              <span className="workspace-muted">{t(regionLabelKey(mark.region))}{mark.customType !== undefined ? ` · ${mark.customType}` : ""}
+                {" · "}{t("promptCapture.payloadChars", { chars: text.length.toLocaleString() })}</span>
+            </summary>
+            <pre className={`prompt-capture-block-text${message.role === "tool" ? " is-mono" : ""}`}>{text}</pre>
+          </details>
+        </div>;
+      })}
+    </div>}
 
-    {/* S3：消息序列三段（历史 / 本轮输入 / 执行链） */}
-    {(filter === "all" || filter === "history") && grouped.length > 0 &&
-      <details className="prompt-capture-section" data-message-seq open>
-        <summary>{t("promptCapture.messageSequence", { count: grouped.length, chars: grouped.reduce((total, item) => total + contentText(item.message.content).length, 0).toLocaleString() })}</summary>
-        <div className="message-segments">
-          {historyItems.length > 0 && <div className="message-segment" data-segment="history">
-            <div className="message-segment-title">{t("promptCapture.seqHistory")} · {t("promptCapture.payloadChars", { chars: historyItems.reduce((total, item) => total + contentText(item.message.content).length, 0).toLocaleString() })}</div>
-            {renderItems(visible(historyItems), "h")}
-          </div>}
-          {currentItems.length > 0 && <div className="message-segment is-current" data-segment="current">
-            <div className="message-segment-title">{t("promptCapture.seqCurrentInput")}</div>
-            {renderItems(currentItems, "c")}
-          </div>}
-          {chainItems.length > 0 && <div className="message-segment" data-segment="chain">
-            <div className="message-segment-title">{t("promptCapture.seqExecutionChain")}</div>
-            {renderItems(visible(chainItems), "k")}
-          </div>}
-        </div>
-      </details>}
-
-    {tools.length > 0 && (filter === "all" || filter === "tools") && <details className="prompt-capture-section" data-tool-schemas>
+    {showTools && tools.length > 0 && <details className="prompt-capture-section" data-tool-schemas open={false}>
       <summary>{t("promptCapture.tools", { count: tools.length })}</summary>
-      {tools.map((tool, index) => <div key={index} className="prompt-capture-tool">{tool.function?.name ?? tool.name ?? "?"}</div>)}
+      {tools.map((tool, index) => {
+        const name = tool.function?.name ?? tool.name ?? "?";
+        return <details key={index} className="prompt-capture-section raw-tool">
+          <summary><span className="raw-role">{name}</span></summary>
+          <pre className="prompt-capture-block-text is-mono">{JSON.stringify(tool, null, 2)}</pre>
+        </details>;
+      })}
     </details>}
 
     <details className="prompt-capture-section">
@@ -406,16 +356,32 @@ export function RequestDetailViewPanel({ detail, row, request, filter, attemptsO
   </div>;
 }
 
-function OutlineTree({ nodes, depth }: { readonly nodes: readonly OutlineNode[]; readonly depth: number }) {
-  const { t } = useI18n();
-  return <div className="turn-outline" data-depth={depth}>
-    {nodes.map((node, index) => <details key={index} className="prompt-capture-section turn-outline-node" open={depth === 0}>
-      <summary>
-        <span>{node.title}</span>
-        <span className="workspace-muted">{t("promptCapture.payloadChars", { chars: outlineChars(node).toLocaleString() })}</span>
-      </summary>
-      {node.lines.join("\n").trim().length > 0 && <pre className="prompt-capture-block-text">{stripTitle(node.lines.join("\n"))}</pre>}
-      {node.subs.length > 0 && <OutlineTree nodes={node.subs} depth={depth + 1} />}
-    </details>)}
-  </div>;
+/** system 内容按自带 <chat_*> 标签切块（原始结构还原）；标签外的前缀 = Pi 基础区（tag 为空串）。 */
+export interface ChatTagBlock {
+  readonly tag: string;
+  readonly attributes: string;
+  readonly text: string;
+}
+export function splitChatTagBlocks(systemContent: string): readonly ChatTagBlock[] {
+  const blocks: ChatTagBlock[] = [];
+  const first = /<([a-z_][a-z0-9_]*)([^>]*)>/.exec(systemContent);
+  const headText = first === null ? systemContent : systemContent.slice(0, first.index);
+  if (headText.trim().length > 0) blocks.push({ tag: "", attributes: "", text: headText });
+  const pattern = /<([a-z_][a-z0-9_]*)([^>]*)>/g;
+  let cursor = first === null ? systemContent.length : first.index;
+  pattern.lastIndex = cursor;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(systemContent)) !== null) {
+    const tag = match[1]!;
+    if (!tag.startsWith("chat_")) continue;
+    const attributes = match[2]!.trim();
+    const closeTag = `</${tag}>`;
+    const contentStart = match.index + match[0].length;
+    const contentEnd = systemContent.indexOf(closeTag, contentStart);
+    const text = contentEnd === -1 ? systemContent.slice(contentStart) : systemContent.slice(contentStart, contentEnd);
+    blocks.push({ tag, attributes, text });
+    cursor = contentEnd === -1 ? systemContent.length : contentEnd + closeTag.length;
+    pattern.lastIndex = cursor;
+  }
+  return blocks;
 }

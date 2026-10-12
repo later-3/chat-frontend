@@ -1485,6 +1485,15 @@ span.token.table {
 /* flex 列容器内子项默认 shrink 会把内容压回容器高（scrollHeight 永不超出 → 滚不动）——
    轮次卡片一律不收缩，内容自然增高交给 overflow 滚动（F1 根因二号）。 */
 .full-history-turns > * { flex: 0 0 auto; }
+/* --- B3-R3：原始请求体结构树（model → messages[system 内标签块] → tools） --- */
+.raw-messages { display: flex; flex-direction: column; gap: 8px; }
+.raw-message > .prompt-capture-section > summary { gap: 10px; }
+.raw-role { font-weight: 700; color: var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.raw-message[data-role="user"] .raw-role { color: var(--accent); }
+.raw-tag { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); font-weight: 650; }
+.raw-attrs { color: var(--text-dim); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
+.raw-system-blocks { display: flex; flex-direction: column; gap: 6px; padding: 4px 0 8px; }
+.raw-tag-block > summary { gap: 10px; }
 .full-history-turn { border: 0; background: none; overflow: visible; }
 .full-history-turn-header {
   display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px;
