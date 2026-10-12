@@ -74,10 +74,13 @@ export function TurnSummaryBar({ summary, completed, turnKey, turnStartedAt, pro
   }, [completed, turnKey, refetch]);
 
   const known = group !== null && group.hasOutcome;
-  const stateLabel = !completed ? t("promptCapture.turnRunning")
-    : !known ? t("promptCapture.resultUnknown")
-    : group!.failures > 0 ? t("promptCapture.attemptsFailures", { count: group!.failures })
-    : t("promptCapture.turnDone");
+  // 状态判定：interactions group.state 优先（unknown=legacy 未记录）；历史轮的 completed prop
+  // 不可靠（非末轮恒 false，会误显示"运行中"）——无交互数据时才退回 completed。
+  const groupState = group?.state ?? null;
+  const stateLabel = groupState === "unknown" ? t("promptCapture.resultUnknown")
+    : groupState === "done" ? (group!.failures > 0 ? t("promptCapture.attemptsFailures", { count: group!.failures }) : t("promptCapture.turnDone"))
+    : !completed ? t("promptCapture.turnRunning")
+    : known ? t("promptCapture.turnDone") : t("promptCapture.resultUnknown");
   const promptChars = group?.promptChars;
   const tokens = summary.tokens > 0 ? summary.tokens.toLocaleString() : null;
 
@@ -85,8 +88,11 @@ export function TurnSummaryBar({ summary, completed, turnKey, turnStartedAt, pro
     <button type="button" className="reply-bar" aria-expanded={expanded} data-summary-bar-toggle
       onClick={() => setExpanded((open: boolean) => !open)}>
       <span className="bar-name">{t("promptCapture.replyBar")}</span>
-      <span className={!completed ? "bar-running" : known && group!.failures > 0 ? "bar-failures" : undefined}
-        data-reply-state={!completed ? "running" : !known ? "unknown" : "done"}>
+      <span className={groupState === "running" || (group === null && !completed) ? "bar-running"
+        : group !== null && group.failures > 0 ? "bar-failures" : undefined}
+        data-reply-state={groupState === "unknown" ? "unknown"
+          : groupState === "done" ? "done"
+          : groupState === "running" || (group === null && !completed) ? "running" : "unknown"}>
         {stateLabel}
       </span>
       <span>{promptChars !== undefined

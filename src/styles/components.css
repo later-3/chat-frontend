@@ -1470,8 +1470,8 @@ span.token.table {
 
 /* --- B4：消息流内回复 bar（sticky 展开态——G1 D1：挂接 scrollContainerRef 滚动容器；
    top 计入容器 pt-4；失效先查 :595 overflow-hidden 祖先的包含块/层叠上下文） --- */
-.turn-summary-bar.is-expanded { position: sticky; top: 16px; z-index: 4; }
 .turn-summary-bar.is-expanded .reply-bar {
+  position: sticky; top: 16px; z-index: 4;
   background: var(--bg-panel); box-shadow: var(--shadow-popover); border-color: var(--border);
 }
 .turn-summary-bar .bar-running { color: var(--warning); }
