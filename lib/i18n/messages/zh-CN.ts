@@ -167,7 +167,7 @@ export const zhCNLocale: LocalePlugin = {
     "friendArchive.sources": "当天事项与来源",
     "friendArchive.noSources": "当天暂无会话或任务记录",
     "chat.contextPreview": "即将发送的内容",
-    "chat.contextPreviewNote": "这是即将发给模型的内容（基于最近一次请求的块清单）；取消勾选的块下一轮不再发送，原记录不改写。",
+    "chat.contextPreviewNote": "这是即将发给模型的内容（按真实装配链实时生成，含历史工具结果与正在输入的本轮内容）；取消勾选的块/条目下一轮不再发送，原记录不改写。HTTP 编码细节（如 tool_calls、reasoning_content）由 Provider 适配器完成。",
     "chat.contextPreviewEmpty": "还没有发送记录——先发一条消息，之后就能在这里调整要发送的内容。",
     "chat.contextPreviewSendSummary": "将发送 {n} 块 · {chars} 字符",
     "chat.contextPreviewTools": "工具 {n}",
