@@ -567,6 +567,14 @@ export interface ContextPreviewView {
   readonly payloadPresent: boolean;
   /** tag → 中文名（后端 registry 唯一事实源）。 */
   readonly blockLabels: Readonly<Record<string, string>>;
+  /** 上下文窗口占比（后端按 Pi 同一估算函数给出）。 */
+  readonly usage: ContextUsageView;
+}
+
+export interface ContextUsageView {
+  readonly contextWindowTokens: number;
+  readonly totalTokens: number;
+  readonly blocks: readonly { readonly tag: string; readonly tokens: number }[];
 }
 
 export async function fetchContextPreview(
@@ -589,8 +597,16 @@ export async function fetchContextPreview(
   if (isRecord(payload.blockLabels)) {
     for (const [key, value] of Object.entries(payload.blockLabels)) if (typeof value === "string") blockLabels[key] = value;
   }
+  const usageRecord = isRecord(payload.usage) ? payload.usage : {};
+  const usage: ContextUsageView = {
+    contextWindowTokens: num(usageRecord.contextWindowTokens),
+    totalTokens: num(usageRecord.totalTokens),
+    blocks: Array.isArray(usageRecord.blocks)
+      ? usageRecord.blocks.filter(isRecord).map((block) => ({ tag: str(block.tag), tokens: num(block.tokens) }))
+      : [],
+  };
   const raw = isRecord(payload.payload) ? payload.payload : null;
-  if (raw === null) return { detail: null, edit, payloadPresent: false, blockLabels };
+  if (raw === null) return { detail: null, edit, payloadPresent: false, blockLabels, usage };
   const messages = Array.isArray(raw.messages) ? raw.messages : [];
   const tools = Array.isArray(raw.tools) ? raw.tools : [];
   const model = isRecord(raw.model) ? raw.model : {};
@@ -612,5 +628,5 @@ export async function fetchContextPreview(
     payload: { sha256: "", chars: 0 },
   };
   // 与真实详情一致：使用后端给的消息区域分类（否则显示"未分类"）。
-  return { detail: normalizeDetail(row, raw, payload.messageRegions, false), edit, payloadPresent: true, blockLabels };
+  return { detail: normalizeDetail(row, raw, payload.messageRegions, false), edit, payloadPresent: true, blockLabels, usage };
 }

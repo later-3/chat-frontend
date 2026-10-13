@@ -12,6 +12,7 @@ import {
   fetchRequestDetail,
   saveContextEdit,
   type ContextEditState,
+  type ContextUsageView,
   type InteractionRequestGroupView,
   type InteractionRowView,
   type InteractionTurnGroupView,
@@ -263,7 +264,7 @@ function RequestMeta({ detail, row, request }: {
 /** 发起方 bar（02 §2.1 a 视角）与请求组共用同一详情面板——同一条捕获记录、两个视图锚点。
  *  B3-R3：**按原始请求体自身的结构与顺序展示**（model → messages 逐条[system 内按自带 chat_* 标签块折叠] → tools 逐个），
  *  把抽象定义（区域标签/人话名/revision）作为标注叠上去——以实现为准，不按自创解析重排。 */
-export function RequestDetailViewPanel({ detail, row, request, filter, sessionId, projectId, editable = false, onEditSaved, blockLabels = {} }: {
+export function RequestDetailViewPanel({ detail, row, request, filter, sessionId, projectId, editable = false, onEditSaved, blockLabels = {}, usage }: {
   readonly detail: RequestDetailView;
   readonly row: InteractionRowView | undefined;
   readonly request?: InteractionRequestGroupView;
@@ -274,6 +275,8 @@ export function RequestDetailViewPanel({ detail, row, request, filter, sessionId
   readonly onEditSaved?: () => void;
   /** tag → 中文名（后端 registry）；用于区块展示，不必前端自造。 */
   readonly blockLabels?: Readonly<Record<string, string>>;
+  /** 上下文窗口占比（顶部已显示整轮；每个区块显示自己的比例）。 */
+  readonly usage?: ContextUsageView;
   /** B5：可编辑（勾选/恢复“发给模型的内容”）。默认 false = 只读展示。 */
   readonly editable?: boolean;
 }) {
@@ -411,7 +414,8 @@ export function RequestDetailViewPanel({ detail, row, request, filter, sessionId
           </p>}
           <div className="raw-system-blocks" data-raw-system-blocks>
             {keptBlocks.map((block, index) => <SystemBlockRow key={index} block={block} excluded={false}
-              canEdit={canEdit} excludedIds={excludedSet} onToggleBlock={toggleBlock} rowEdit={rowEdit} blockLabels={blockLabels} />)}
+              canEdit={canEdit} excludedIds={excludedSet} onToggleBlock={toggleBlock} rowEdit={rowEdit}
+              blockLabels={blockLabels} usage={usage} />)}
             {(excludedTagIds.length + excludedSubIds.length) > 0 && <details className="prompt-capture-section context-excluded-region" data-context-excluded open={false}>
               <summary><span className="raw-role">{t("promptCapture.editExcludedRegion", { n: excludedTagIds.length + excludedSubIds.length })}</span></summary>
               {excludedTagIds.map((id) => <details key={id} className="prompt-capture-section raw-tag-block is-excluded" data-excluded>
@@ -509,7 +513,7 @@ export function RequestDetailViewPanel({ detail, row, request, filter, sessionId
   </div>;
 }
 
-function SystemBlockRow({ block, excluded, canEdit, excludedIds, onToggleBlock, rowEdit, blockLabels }: {
+function SystemBlockRow({ block, excluded, canEdit, excludedIds, onToggleBlock, rowEdit, blockLabels, usage }: {
   readonly block: ChatTagBlock;
   readonly excluded: boolean;
   readonly canEdit: boolean;
@@ -517,6 +521,7 @@ function SystemBlockRow({ block, excluded, canEdit, excludedIds, onToggleBlock, 
   readonly onToggleBlock: (blockId: string) => void;
   readonly rowEdit: RowEdit;
   readonly blockLabels: Readonly<Record<string, string>>;
+  readonly usage?: ContextUsageView;
 }) {
   const { t } = useI18n();
   const blockId = `tag:${block.tag}`;
@@ -533,6 +538,14 @@ function SystemBlockRow({ block, excluded, canEdit, excludedIds, onToggleBlock, 
         onClick={(event) => { event.preventDefault(); event.stopPropagation(); onToggleBlock(blockId); }} />}
       <span className="raw-tag">{block.tag === "" ? t("promptCapture.piBaseBlock") : `<${block.tag}>`}</span>
       {block.tag !== "" && blockLabels[block.tag] !== undefined && <span className="raw-label">{blockLabels[block.tag]}</span>}
+      {(() => {
+        const tokens = usage?.blocks.find((entry) => entry.tag === block.tag)?.tokens;
+        const window = usage?.contextWindowTokens ?? 0;
+        if (tokens === undefined || window <= 0) return null;
+        return <span className="raw-block-usage" data-block-usage={block.tag}>
+          {t("promptCapture.blockUsage", { percent: ((tokens / window) * 100).toFixed(2) })}
+        </span>;
+      })()}
       {block.attributes !== "" && <span className="raw-attrs" title={block.attributes}>{block.attributes}</span>}
       {subEntries.length > 0 && <span className="workspace-muted" data-sub-entries-count>
         {t("promptCapture.subEntriesCount", { kept: keptSubs.length, total: subEntries.length })}

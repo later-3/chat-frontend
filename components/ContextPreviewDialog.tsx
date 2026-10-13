@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { SurfaceDialog } from "./SurfaceDialog";
 import { useI18n } from "@/hooks/useI18n";
 import { fetchContextPreview, type ContextPreviewView } from "@/lib/interactions";
+import { ContextUsageBar } from "./ContextUsageBar";
 import { RequestDetailViewPanel } from "./TurnInteractions";
 
 /**
@@ -55,9 +56,12 @@ export function ContextPreviewDialog({ sessionId, projectId, longAgentId, contex
       {preview !== null && refreshing && <p className="workspace-muted" role="status" data-context-preview-refreshing>
         {t("chat.contextPreviewRefreshing")}
       </p>}
-      {preview?.detail != null && <RequestDetailViewPanel detail={preview.detail} row={preview.detail.row}
-        filter="all" sessionId={sessionId} projectId={projectId} editable blockLabels={preview.blockLabels}
-        onEditSaved={scheduleRefresh} />}
+      {preview?.detail != null && <>
+        <ContextUsageBar usage={preview.usage} />
+        <RequestDetailViewPanel detail={preview.detail} row={preview.detail.row}
+          filter="all" sessionId={sessionId} projectId={projectId} editable blockLabels={preview.blockLabels}
+          usage={preview.usage} onEditSaved={scheduleRefresh} />
+      </>}
     </div>
   </SurfaceDialog>;
 }

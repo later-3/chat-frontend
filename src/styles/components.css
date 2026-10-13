@@ -1542,6 +1542,14 @@ span.token.table {
 .context-edit-actions { display: flex; gap: 8px; }
 [data-modified-badge] { color: var(--accent); font-size: 11px; }
 .raw-label { color: var(--text-dim); font-size: 11px; white-space: nowrap; }
+.context-usage-bar { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-hover); margin-bottom: 10px; }
+.context-usage-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.context-usage-title { font-size: 12px; color: var(--text-dim); }
+.context-usage-percent { font-size: 15px; font-weight: 700; color: var(--accent); }
+.context-usage-tokens { font-size: 11px; color: var(--text-muted); margin-left: auto; }
+.context-usage-track { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+.context-usage-fill { height: 100%; background: var(--accent); border-radius: 3px; }
+.raw-block-usage { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
 .context-added-list { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 6px 8px; }
 .context-added-item { display: flex; align-items: center; gap: 8px; font-size: 12px; border-left: 2px solid var(--accent); padding-left: 8px; }
 .context-added-mark { color: var(--accent); font-size: 11px; white-space: nowrap; }
