@@ -1457,6 +1457,7 @@ export const zhCNLocale: LocalePlugin = {
     "promptCapture.editSaveError": "编辑保存失败：{message}",
     "promptCapture.editSaving": "保存中…",
     "promptCapture.editExcludedBadge": "已排除",
+    "promptCapture.subEntriesCount": "条目 {kept}/{total}",
     "promptCapture.piBaseBlock": "Pi 系统基础与资源",
     "promptCapture.messageRow": "[{index}] {role}",
     "promptCapture.blocksCount": "{n} 个区块",

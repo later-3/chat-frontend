@@ -1459,6 +1459,7 @@ export const enLocale: LocalePlugin = {
     "promptCapture.editSaveError": "Failed to save edit: {message}",
     "promptCapture.editSaving": "Saving…",
     "promptCapture.editExcludedBadge": "Excluded",
+    "promptCapture.subEntriesCount": "entries {kept}/{total}",
     "promptCapture.piBaseBlock": "Pi base (prompt & resources)",
     "promptCapture.messageRow": "[{index}] {role}",
     "promptCapture.blocksCount": "{n} blocks",

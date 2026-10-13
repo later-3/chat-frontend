@@ -559,3 +559,22 @@ export async function saveContextEdit(
   const current = await fetchContextEdit(sessionId, projectId);
   return attempt(current.revision);
 }
+
+/** 发送前预览视图（B5）：最近一次完整请求体（可展开区块看条目与内容）+ 当前编辑层。 */
+export interface ContextPreviewView {
+  readonly detail: RequestDetailView | null;
+  readonly edit: ContextEditState;
+  readonly payloadPresent: boolean;
+}
+
+export async function fetchContextPreview(sessionId: string, projectId: string, signal?: AbortSignal): Promise<ContextPreviewView> {
+  const payload = await readJson(
+    await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/context-preview?projectId=${encodeURIComponent(projectId)}`, { signal, credentials: "same-origin" }),
+    "读取发送前预览",
+  );
+  if (!isRecord(payload)) throw new Error("预览响应不完整");
+  const edit = parseContextEdit(isRecord(payload.edit) ? payload.edit : {});
+  const payloadPresent = payload.payloadPresent === true;
+  if (!payloadPresent || !isRecord(payload.row)) return { detail: null, edit, payloadPresent };
+  return { detail: normalizeDetail(parseRow(payload.row), payload.payload, payload.messageRegions, false), edit, payloadPresent };
+}

@@ -358,11 +358,11 @@ export function RequestDetailViewPanel({ detail, row, request, filter, sessionId
           </p>}
           <div className="raw-system-blocks" data-raw-system-blocks>
             {keptBlocks.map((block, index) => <SystemBlockRow key={index} block={block} excluded={false}
-              canEdit={canEdit} onToggleBlock={toggleBlock} />)}
+              canEdit={canEdit} excludedIds={excludedSet} onToggleBlock={toggleBlock} />)}
             {excludedBlocks.length > 0 && <details className="prompt-capture-section context-excluded-region" data-context-excluded open={false}>
               <summary><span className="raw-role">{t("promptCapture.editExcludedRegion", { n: excludedBlocks.length })}</span></summary>
               {excludedBlocks.map((block, index) => <SystemBlockRow key={index} block={block} excluded
-                canEdit={canEdit} onToggleBlock={toggleBlock} />)}
+                canEdit={canEdit} excludedIds={excludedSet} onToggleBlock={toggleBlock} />)}
             </details>}
           </div>
         </details>
@@ -410,14 +410,18 @@ export function RequestDetailViewPanel({ detail, row, request, filter, sessionId
   </div>;
 }
 
-function SystemBlockRow({ block, excluded, canEdit, onToggleBlock }: {
+function SystemBlockRow({ block, excluded, canEdit, excludedIds, onToggleBlock }: {
   readonly block: ChatTagBlock;
   readonly excluded: boolean;
   readonly canEdit: boolean;
+  readonly excludedIds: ReadonlySet<string>;
   readonly onToggleBlock: (blockId: string) => void;
 }) {
   const { t } = useI18n();
   const blockId = `tag:${block.tag}`;
+  // 用户 2026-10-13：区块要能展开看**条目与内容**，条目可单独勾选（规则与后端 splitSubEntries 一致）。
+  const subEntries = block.tag === "" ? [] : splitBlockSubEntries(block.tag, block.text);
+  const keptSubs = subEntries.filter((entry) => !excludedIds.has(`${blockId}#${entry.id}`));
   return <details className={`prompt-capture-section raw-tag-block${excluded ? " is-excluded" : ""}`}
     data-tag={block.tag} data-excluded={excluded || undefined} open={false}>
     <summary>
@@ -426,11 +430,72 @@ function SystemBlockRow({ block, excluded, canEdit, onToggleBlock }: {
         onClick={(event) => { event.preventDefault(); event.stopPropagation(); onToggleBlock(blockId); }} />}
       <span className="raw-tag">{block.tag === "" ? t("promptCapture.piBaseBlock") : `<${block.tag}>`}</span>
       {block.attributes !== "" && <span className="raw-attrs" title={block.attributes}>{block.attributes}</span>}
+      {subEntries.length > 0 && <span className="workspace-muted" data-sub-entries-count>
+        {t("promptCapture.subEntriesCount", { kept: keptSubs.length, total: subEntries.length })}
+      </span>}
       {excluded && <span className="workspace-muted" data-excluded-badge>{t("promptCapture.editExcludedBadge")}</span>}
       <span className="workspace-muted">{t("promptCapture.payloadChars", { chars: block.text.length.toLocaleString() })}</span>
     </summary>
-    <pre className="prompt-capture-block-text">{block.text}</pre>
+    {subEntries.length === 0
+      ? <pre className="prompt-capture-block-text">{block.text}</pre>
+      : <div className="raw-sub-entries">
+          {subEntries.map((entry) => {
+            const subId = `${blockId}#${entry.id}`;
+            const subExcluded = excludedIds.has(subId);
+            return <details key={entry.id} className={`prompt-capture-section raw-sub-entry${subExcluded ? " is-excluded" : ""}`}
+              data-sub-entry={entry.id} data-excluded={subExcluded || undefined} open={false}>
+              <summary>
+                {canEdit && <input type="checkbox" data-context-edit-toggle={subId} checked={!subExcluded}
+                  aria-label={subExcluded ? t("promptCapture.editRestore") : t("promptCapture.editExclude")}
+                  onClick={(event) => { event.preventDefault(); event.stopPropagation(); onToggleBlock(subId); }} />}
+                <span className="raw-role">{entry.title}</span>
+                {subExcluded && <span className="workspace-muted" data-excluded-badge>{t("promptCapture.editExcludedBadge")}</span>}
+                <span className="workspace-muted">{t("promptCapture.payloadChars", { chars: entry.text.length.toLocaleString() })}</span>
+              </summary>
+              <pre className="prompt-capture-block-text">{entry.text}</pre>
+            </details>;
+          })}
+        </div>}
   </details>;
+}
+
+/** 块内子条目（镜像后端 `src/context-edit.ts` 的 `splitSubEntries`：同一规则，两端一致）。 */
+export interface ChatSubEntry {
+  readonly id: string;
+  readonly title: string;
+  readonly text: string;
+}
+const HARNESS_SUB_ENTRY = /^##\s+(纯规则|通用规范|通用资产|本项目专属规范)\s*·\s*(\S.*)$/;
+const SECTION_SUB_ENTRY = /^##\s+(\S.*)$/;
+
+function normalizeSubId(value: string): string {
+  return value.trim().replace(/\s+/g, " ").replace(/#/g, "_");
+}
+
+export function splitBlockSubEntries(tag: string, text: string): readonly ChatSubEntry[] {
+  const pattern = tag === "chat_interaction_harness" ? HARNESS_SUB_ENTRY : SECTION_SUB_ENTRY;
+  const lines = text.split("\n");
+  const entries: ChatSubEntry[] = [];
+  let current: { id: string; title: string; lines: string[] } | null = null;
+  const push = () => {
+    if (current === null) return;
+    const body = current.lines.slice(1).join("\n").replace(/^\n+/, "");
+    entries.push({ id: current.id, title: current.title, text: body });
+    current = null;
+  };
+  for (const line of lines) {
+    const match = pattern.exec(line);
+    if (match !== null) {
+      push();
+      const isHarness = tag === "chat_interaction_harness";
+      const raw = (isHarness ? match[2] : match[1]) as string;
+      current = { id: normalizeSubId(raw), title: raw.trim(), lines: [line] };
+      continue;
+    }
+    if (current !== null) current.lines.push(line);
+  }
+  push();
+  return entries;
 }
 
 /** system 内容按自带 <chat_*> 标签切块（原始结构还原）；标签外的前缀 = Pi 基础区（tag 为空串）。 */

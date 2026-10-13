@@ -1533,6 +1533,10 @@ span.token.table {
 .context-excluded-region { border-left: 2px solid var(--border); padding-left: 8px; }
 .context-excluded-region > summary { color: var(--text-muted); }
 [data-context-edit-summary] { margin-left: auto; }
+.raw-sub-entries { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 4px 14px; }
+.raw-sub-entry > summary { gap: 8px; }
+.raw-sub-entry.is-excluded > summary { opacity: 0.55; }
+.raw-sub-entry.is-excluded .raw-role { text-decoration: line-through; }
 .full-history-turn { border: 0; background: none; overflow: visible; }
 .full-history-turn-header {
   display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px;
