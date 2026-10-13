@@ -1461,6 +1461,7 @@ export const enLocale: LocalePlugin = {
     "promptCapture.editSaving": "Saving…",
     "promptCapture.editExcludedBadge": "Excluded",
     "promptCapture.subEntriesCount": "entries {kept}/{total}",
+    "promptCapture.editExcludedMessages": "Excluded {n} history messages",
     "promptCapture.piBaseBlock": "Pi base (prompt & resources)",
     "promptCapture.messageRow": "[{index}] {role}",
     "promptCapture.blocksCount": "{n} blocks",

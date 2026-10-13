@@ -320,6 +320,7 @@ export function RequestDetailViewPanel({ detail, row, request, filter, sessionId
   const excludedTagIds = contextEdit.excluded.filter((id) => id.startsWith("tag:") && !id.includes("#"));
   const excludedSubIds = contextEdit.excluded.filter((id) => id.startsWith("tag:") && id.includes("#"));
   const excludedToolNames = contextEdit.excluded.filter((id) => id.startsWith("tools:")).map((id) => id.slice("tools:".length));
+  const excludedEntryIds = contextEdit.excluded.filter((id) => id.startsWith("entry:"));
   const sendChars = keptBlocks.reduce((total, block) => total + block.text.length, 0);
 
   const showSystem = filter === "all" || filter === "system";
@@ -389,11 +390,21 @@ export function RequestDetailViewPanel({ detail, row, request, filter, sessionId
       {bodyMessages.map((message, index) => {
         const mark = marks[index] ?? { index, role: message.role ?? "", region: "unclassified" };
         const text = contentText(message.content);
-        return <div key={index} className="raw-message" data-role={message.role} data-region={mark.region}>
+        // 用户 2026-10-13：历史消息（用户消息 / 助手回答 / 工具输出）也是历史信息，也要能勾选。
+        // 每条消息带它所属的会话条目 id（预览接口提供）；当前正在输入的那条没有 entryId → 不可排除。
+        const entryId = (message as { entryId?: string }).entryId;
+        const messageBlockId = entryId === undefined ? null : `entry:${entryId}`;
+        const messageExcluded = messageBlockId !== null && excludedSet.has(messageBlockId);
+        return <div key={index} className={`raw-message${messageExcluded ? " is-excluded" : ""}`} data-role={message.role}
+          data-region={mark.region} data-entry-id={entryId} data-excluded={messageExcluded || undefined}>
           <details className="prompt-capture-section">
             <summary>
+              {canEdit && messageBlockId !== null && <input type="checkbox" data-context-edit-toggle={messageBlockId} checked={!messageExcluded}
+                aria-label={t("promptCapture.editExclude")}
+                onClick={(event) => { event.preventDefault(); event.stopPropagation(); toggleBlock(messageBlockId); }} />}
               <span className="raw-role">{t("promptCapture.messageRow", { index: index + 1, role: message.role ?? "" })}</span>
               {mark.region === "current-user-message" && <span className="prompt-capture-success">{t("promptCapture.seqCurrentInput")}</span>}
+              {messageExcluded && <span className="workspace-muted" data-excluded-badge>{t("promptCapture.editExcludedBadge")}</span>}
               <span className="workspace-muted">{t(regionLabelKey(mark.region))}{mark.customType !== undefined ? ` · ${mark.customType}` : ""}
                 {" · "}{t("promptCapture.payloadChars", { chars: text.length.toLocaleString() })}</span>
             </summary>
@@ -401,6 +412,17 @@ export function RequestDetailViewPanel({ detail, row, request, filter, sessionId
           </details>
         </div>;
       })}
+      {excludedEntryIds.length > 0 && <details className="prompt-capture-section context-excluded-region" data-context-excluded open={false}>
+        <summary><span className="raw-role">{t("promptCapture.editExcludedMessages", { n: excludedEntryIds.length })}</span></summary>
+        {excludedEntryIds.map((id) => <details key={id} className="prompt-capture-section raw-message is-excluded" data-excluded>
+          <summary>
+            {canEdit && <input type="checkbox" data-context-edit-toggle={id} aria-label={t("promptCapture.editRestore")}
+              onClick={(event) => { event.preventDefault(); event.stopPropagation(); toggleBlock(id); }} />}
+            <span className="raw-role">{id.slice("entry:".length)}</span>
+            <span className="workspace-muted" data-excluded-badge>{t("promptCapture.editExcludedBadge")}</span>
+          </summary>
+        </details>)}
+      </details>}
     </div>}
 
     {showTools && (tools.length > 0 || excludedToolNames.length > 0) && <details className="prompt-capture-section" data-tool-schemas open={false}>
