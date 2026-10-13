@@ -1710,45 +1710,35 @@ export const interfaceCopy: Record<string, { en: string; "zh-CN": string; source
     "zh-CN": "根据用户的明确指令管理个人长期记忆。",
     "source": "根据用户的明确指令管理个人长期记忆。"
   },
-  "workflowCopy.minimal-pi-coding-agent.name": {
+  "workflowCopy.chat-direct.name": {
     "en": "Direct execution",
     "zh-CN": "直接执行",
     "source": "直接执行"
   },
-  "workflowCopy.minimal-pi-coding-agent.description": {
+  "workflowCopy.chat-direct.description": {
     "en": "Handle your request directly with one Pi coding agent.",
     "zh-CN": "使用一个Pi 编程智能体直接处理当前用户请求。",
     "source": "使用一个Pi Coding Agent直接处理当前用户请求。"
   },
-  "workflowCopy.minimal-pi-coding-agent.node.execute.name": {
+  "workflowCopy.chat-direct.node.execute.name": {
     "en": "Execute",
     "zh-CN": "执行",
     "source": "执行"
   },
-  "workflowCopy.minimal-pi-coding-agent.node.execute.description": {
+  "workflowCopy.chat-direct.node.execute.description": {
     "en": "Handle the request with a Pi coding agent.",
     "zh-CN": "由Pi 编程智能体处理用户请求。",
     "source": "由Pi Coding Agent处理用户请求。"
   },
-  "workflowCopy.minimal-pi-coding-agent.node.remember.name": {
+  "workflowCopy.chat-direct.node.remember.name": {
     "en": "Record session memory",
     "zh-CN": "记录会话记忆",
     "source": "记录会话记忆"
   },
-  "workflowCopy.minimal-pi-coding-agent.node.remember.description": {
+  "workflowCopy.chat-direct.node.remember.description": {
     "en": "Update session memory using this turn’s messages and work results.",
     "zh-CN": "只依据本轮（用户消息与工作阶段产物）维护本会话的会话记忆。",
     "source": "只依据本轮（用户消息与工作阶段产物）维护本会话的会话记忆。"
-  },
-  "workflowCopy.minimal-pi-coding-agent.agent.pi-coding-agent.name": {
-    "en": "Pi coding agent",
-    "zh-CN": "Pi 编程智能体",
-    "source": "Pi Coding Agent"
-  },
-  "workflowCopy.minimal-pi-coding-agent.agent.pi-coding-agent.description": {
-    "en": "Handle the request using native Pi coding capabilities.",
-    "zh-CN": "使用Pi 编程智能体原生能力直接处理用户请求。",
-    "source": "使用Pi Coding Agent原生能力直接处理用户请求。"
   },
   "workflowCopy.planner-orchestrator.name": {
     "en": "Plan and coordinate",

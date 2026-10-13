@@ -4,7 +4,7 @@ export const CHAT_WORKFLOW_ADAPTER_ENABLED = true;
 
 export type ChatWorkflowId = string;
 
-export const DEFAULT_CHAT_WORKFLOW_ID: ChatWorkflowId = "minimal-pi-coding-agent";
+export const DEFAULT_CHAT_WORKFLOW_ID: ChatWorkflowId = "chat-direct";
 
 /** One image attachment in the Workflow prompt wire format (matches Pi ImageContent). */
 export interface ChatWorkflowImageInput {
