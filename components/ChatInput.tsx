@@ -61,6 +61,8 @@ interface Props {
   projectId: string;
   /** 当前会话 id：发送前编辑入口（B5）读取上下文块清单与编辑层用。 */
   sessionId?: string | null;
+  /** 当前对话所在项目（Agent 容器为 null）：预览装配的协作上下文依据。 */
+  contextProjectId?: string | null;
   onSend: (message: string, images?: AttachedImage[]) => void;
   onAbort: () => void;
   stopLabel?: string;
@@ -357,6 +359,7 @@ function QueuedMessageRow({ kind, text }: { kind: "steer" | "follow-up"; text: s
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   projectId,
   sessionId,
+  contextProjectId,
   onSend, onAbort, stopLabel, stopping, onSteer, onFollowUp, isStreaming, workflowId, onWorkflowChange, workflowAgentConfigs, promptResourceProposals, onWorkflowAgentConfigsChange,
   longAgentId, friendImages = false,
   onCompact, onAbortCompaction, isCompacting, compactError, compactResult,
@@ -1894,7 +1897,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               label={t("chat.contextPreview")}
               iconOnly
               data-context-preview-open
-              disabled={isStreaming || sessionId === null || sessionId === undefined}
+              disabled={isStreaming || sessionId === null || sessionId === undefined || longAgentId === null || longAgentId === ""}
               onClick={() => setContextPreviewOpen(true)}
               icon={<IconListDetails size={18} stroke={1.8} />}
             />
@@ -1961,8 +1964,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
         </div>
       </div>
-      {contextPreviewOpen && sessionId !== null && sessionId !== undefined && (
-        <ContextPreviewDialog sessionId={sessionId} projectId={projectId} onClose={() => setContextPreviewOpen(false)} />
+      {contextPreviewOpen && sessionId !== null && sessionId !== undefined && longAgentId !== null && longAgentId !== "" && (
+        <ContextPreviewDialog sessionId={sessionId} projectId={projectId} longAgentId={longAgentId}
+          contextProjectId={contextProjectId ?? null} draft={value} onClose={() => setContextPreviewOpen(false)} />
       )}
       {workflowAgentDialogOpen && cwd && selectedWorkflow && selectedWorkflow.agents.length > 0 && (
         <WorkflowAgentConfigDialog

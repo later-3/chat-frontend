@@ -560,21 +560,49 @@ export async function saveContextEdit(
   return attempt(current.revision);
 }
 
-/** 发送前预览视图（B5）：最近一次完整请求体（可展开区块看条目与内容）+ 当前编辑层。 */
+/** 发送前预览视图（B5）：**实时装配**的"这一次将发送的内容"（不调用模型）+ 当前编辑层。 */
 export interface ContextPreviewView {
   readonly detail: RequestDetailView | null;
   readonly edit: ContextEditState;
   readonly payloadPresent: boolean;
 }
 
-export async function fetchContextPreview(sessionId: string, projectId: string, signal?: AbortSignal): Promise<ContextPreviewView> {
+export async function fetchContextPreview(
+  sessionId: string,
+  projectId: string,
+  longAgentId: string,
+  options: { draft?: string; contextProjectId?: string | null; signal?: AbortSignal } = {},
+): Promise<ContextPreviewView> {
+  const query = new URLSearchParams({ projectId, longAgentId });
+  if (options.contextProjectId != null && options.contextProjectId !== "") query.set("contextProjectId", options.contextProjectId);
+  if (options.draft !== undefined && options.draft.trim() !== "") query.set("draft", options.draft);
   const payload = await readJson(
-    await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/context-preview?projectId=${encodeURIComponent(projectId)}`, { signal, credentials: "same-origin" }),
+    await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/context-preview?${query.toString()}`, { signal: options.signal, credentials: "same-origin" }),
     "读取发送前预览",
   );
   if (!isRecord(payload)) throw new Error("预览响应不完整");
   const edit = parseContextEdit(isRecord(payload.edit) ? payload.edit : {});
-  const payloadPresent = payload.payloadPresent === true;
-  if (!payloadPresent || !isRecord(payload.row)) return { detail: null, edit, payloadPresent };
-  return { detail: normalizeDetail(parseRow(payload.row), payload.payload, payload.messageRegions, false), edit, payloadPresent };
+  const raw = isRecord(payload.payload) ? payload.payload : null;
+  if (raw === null) return { detail: null, edit, payloadPresent: false };
+  const messages = Array.isArray(raw.messages) ? raw.messages : [];
+  const tools = Array.isArray(raw.tools) ? raw.tools : [];
+  const model = isRecord(raw.model) ? raw.model : {};
+  // 预览没有历史行记录：构造一个最小行，让同一套树组件可以渲染（row 只用于元信息显示）。
+  const row: InteractionRowView = {
+    requestId: "assembly-preview",
+    seq: 0,
+    timestamp: new Date().toISOString(),
+    kind: "agent",
+    turn: { source: "workflow", stage: { id: "preview", nodeKind: "agent" } },
+    agent: { agentId: longAgentId },
+    model: { provider: str(model.provider), modelId: str(model.modelId) },
+    payloadChars: 0,
+    regions: [],
+    messageCount: messages.length,
+    toolCount: tools.length,
+    attempt: 1,
+    excluded: { count: edit.excluded.length },
+    payload: { sha256: "", chars: 0 },
+  };
+  return { detail: normalizeDetail(row, raw, [], false), edit, payloadPresent: true };
 }

@@ -434,6 +434,7 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
       ref={chatInputRef}
       projectId={projectId}
       sessionId={memorySessionId}
+      contextProjectId={contextProjectId ?? null}
       onSend={handleSend}
       onAbort={isCompacting ? handleAbortCompaction : handleAbort}
       stopLabel={activity?.phase === "stopping" ? t("runStatus.stopping") : undefined}

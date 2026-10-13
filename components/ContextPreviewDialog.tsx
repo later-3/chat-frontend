@@ -12,9 +12,14 @@ import { RequestDetailViewPanel } from "./TurnInteractions";
  * 展示最近一次发送的**完整请求体**：区块可展开 → 看到块内条目与内容 → 区块级/条目级勾选（下一轮生效）。
  * 底层与完整历史共用同一套树与编辑接口，入口与语义分开。
  */
-export function ContextPreviewDialog({ sessionId, projectId, onClose }: {
+export function ContextPreviewDialog({ sessionId, projectId, longAgentId, contextProjectId, draft, onClose }: {
   readonly sessionId: string;
   readonly projectId: string;
+  readonly longAgentId: string;
+  /** 当前对话所在项目（Agent 容器为 null）。 */
+  readonly contextProjectId?: string | null;
+  /** 用户正在输入的本轮内容（会作为本轮 user 消息出现）。 */
+  readonly draft: string;
   readonly onClose: () => void;
 }) {
   const { t } = useI18n();
@@ -25,11 +30,11 @@ export function ContextPreviewDialog({ sessionId, projectId, onClose }: {
     const controller = new AbortController();
     setPreview(null);
     setError(null);
-    void fetchContextPreview(sessionId, projectId, controller.signal)
+    void fetchContextPreview(sessionId, projectId, longAgentId, { draft, contextProjectId: contextProjectId ?? null, signal: controller.signal })
       .then((value) => { if (!controller.signal.aborted) setPreview(value); })
       .catch((cause) => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : String(cause)); });
     return () => controller.abort();
-  }, [sessionId, projectId]);
+  }, [sessionId, projectId, longAgentId, contextProjectId, draft]);
 
   return <SurfaceDialog title={t("chat.contextPreview")} description={t("chat.contextPreviewNote")} onClose={onClose}>
     <div className="ui-scroll-20" data-context-preview>
