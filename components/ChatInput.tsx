@@ -32,7 +32,6 @@ import { FolderIcon, getFileIcon } from "./FileIcons";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useI18n } from "@/hooks/useI18n";
 import { ToolbarAction } from "./ui/ToolbarAction";
-import { WorkflowPicker } from "./WorkflowPicker";
 import {
   IconAdjustmentsHorizontal, IconListDetails, IconPhoto, IconArrowUp, IconPlayerStop,
   IconX,
@@ -1868,13 +1867,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
             }}
           />
           <div data-chat-toolbar className="composer-actions">
-            <WorkflowPicker
-              disabled={isStreaming}
-              onChange={(next) => onWorkflowChange(next as ChatWorkflowId)}
-              selected={selectedWorkflow}
-              summaries={visibleWorkflows}
-              value={workflowId}
-            />
+            {/* P3-U5（用户 2026-10-13 定界）：对话框不再提供"直接执行 / 其他 Agent 工作流"选择器——
+                默认就是连续会话（= 默认工作流）；工作流以工具形式存在，由 Agent 侧调用。 */}
             <ToolbarAction
               shape="frame"
               label={attachImageTitle}
