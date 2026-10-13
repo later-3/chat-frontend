@@ -132,6 +132,9 @@ export function TurnSummaryBar({ turnNumber, summary, completed, turnKey, turnSt
           : groupState === "running" || (group === null && !completed) ? "running" : "unknown"}>
         {stateLabel}
       </span>
+      {(group?.excluded ?? 0) > 0 && <span className="turn-summary-excluded" data-turn-excluded={group?.excluded}>
+        {t("promptCapture.turnExcluded", { n: group?.excluded ?? 0 })}
+      </span>}
       <span>{promptChars !== undefined
         ? t("promptCapture.replyBarPrompt", { chars: promptChars.toLocaleString() })
         : t("promptCapture.promptUnknown")}</span>

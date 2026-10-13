@@ -81,11 +81,15 @@ export interface InteractionTurnSummaryView {
   readonly failures: number;
   readonly tokenOut: number;
   readonly promptChars: number;
+  /** B5：本轮被编辑层排除的条目数（0 = 没排除）。 */
+  readonly excluded?: number;
   readonly model: string;
   readonly hasOutcome: boolean;
 }
 
 export interface InteractionGroupView {
+  /** B5：本轮被编辑层排除的条目数（后端 groups 就绪后即有值）。 */
+  readonly excluded?: number;
   readonly key: string;
   readonly source: string;
   readonly stage: { readonly id: string; readonly nodeKind: string };

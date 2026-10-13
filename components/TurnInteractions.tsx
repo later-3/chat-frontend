@@ -404,6 +404,14 @@ export function RequestDetailViewPanel({ detail, row, request, filter, sessionId
             <span className="raw-role">{t("promptCapture.messageRow", { index: 0, role: "system" })}</span>
             <span className="workspace-muted">{t("promptCapture.payloadChars", { chars: (systemContent ?? "").length.toLocaleString() })}
               {" · "}{t("promptCapture.blocksCount", { n: systemBlocks.length })}</span>
+            {(() => {
+              const tokens = usage?.messages[0]?.tokens;
+              const window = usage?.contextWindowTokens ?? 0;
+              if (tokens === undefined || window <= 0) return null;
+              return <span className="raw-block-usage" data-system-usage>
+                {t("promptCapture.blockUsage", { percent: ((tokens / window) * 100).toFixed(2) })}
+              </span>;
+            })()}
             {canEdit && <span className="workspace-muted" data-context-edit-summary>
               {t("promptCapture.editSendSummary", { n: keptBlocks.length, chars: sendChars.toLocaleString() })}
             </span>}
@@ -556,10 +564,12 @@ function SystemBlockRow({ block, excluded, canEdit, excludedIds, onToggleBlock, 
       <span className="raw-tag">{block.tag === "" ? t("promptCapture.piBaseBlock") : `<${block.tag}>`}</span>
       {block.tag !== "" && blockLabels[block.tag] !== undefined && <span className="raw-label">{blockLabels[block.tag]}</span>}
       {(() => {
-        const tokens = usage?.blocks.find((entry) => entry.tag === block.tag)?.tokens;
+        // pi-base 是"标签外的文本"（tag 为空串），后端在 usage 里以 registry id `pi-base` 记录。
+        const usageKey = block.tag === "" ? "pi-base" : block.tag;
+        const tokens = usage?.blocks.find((entry) => entry.tag === usageKey)?.tokens;
         const window = usage?.contextWindowTokens ?? 0;
         if (tokens === undefined || window <= 0) return null;
-        return <span className="raw-block-usage" data-block-usage={block.tag}>
+        return <span className="raw-block-usage" data-block-usage={usageKey}>
           {t("promptCapture.blockUsage", { percent: ((tokens / window) * 100).toFixed(2) })}
         </span>;
       })()}

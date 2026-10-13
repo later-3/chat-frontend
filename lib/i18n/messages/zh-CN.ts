@@ -1473,6 +1473,7 @@ export const zhCNLocale: LocalePlugin = {
     "chat.contextPreviewUsage": "本轮占上下文窗口",
     "chat.contextPreviewUsageTokens": "{tokens} / {window} tokens",
     "promptCapture.blockUsage": "占窗口 {percent}%",
+    "promptCapture.turnExcluded": "本轮排除 {n} 条",
     "promptCapture.piBaseBlock": "Pi 系统基础与资源",
     "promptCapture.messageRow": "[{index}] {role}",
     "promptCapture.blocksCount": "{n} 个区块",

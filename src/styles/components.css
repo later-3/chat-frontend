@@ -1550,6 +1550,7 @@ span.token.table {
 .context-usage-track { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
 .context-usage-fill { height: 100%; background: var(--accent); border-radius: 3px; }
 .raw-block-usage { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+.turn-summary-excluded { color: var(--accent); font-size: 11px; white-space: nowrap; }
 .context-added-list { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 6px 8px; }
 .context-added-item { display: flex; align-items: center; gap: 8px; font-size: 12px; border-left: 2px solid var(--accent); padding-left: 8px; }
 .context-added-mark { color: var(--accent); font-size: 11px; white-space: nowrap; }

@@ -1475,6 +1475,7 @@ export const enLocale: LocalePlugin = {
     "chat.contextPreviewUsage": "This turn vs context window",
     "chat.contextPreviewUsageTokens": "{tokens} / {window} tokens",
     "promptCapture.blockUsage": "{percent}% of window",
+    "promptCapture.turnExcluded": "excluded {n}",
     "promptCapture.piBaseBlock": "Pi base (prompt & resources)",
     "promptCapture.messageRow": "[{index}] {role}",
     "promptCapture.blocksCount": "{n} blocks",
