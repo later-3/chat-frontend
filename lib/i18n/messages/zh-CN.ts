@@ -1502,7 +1502,7 @@ export const zhCNLocale: LocalePlugin = {
     "promptCapture.finalSuccess": "最终成功",
     "promptCapture.messageSequence": "消息序列（{count} 条 · {chars} 字符）",
     "promptCapture.seqHistory": "历史",
-    "promptCapture.seqCurrentInput": "本轮输入（a 的消息）",
+    "promptCapture.seqCurrentInput": "最后一条 user = 本轮要发的内容",
     "promptCapture.seqExecutionChain": "本轮执行链（toolUse/toolResult 按序）",
     "promptCapture.turnN": "第 {n} 轮",
     "promptCapture.recordingOn": "完整记录：已开启 · 请求与原文都会保存",

@@ -454,11 +454,20 @@ export function RequestDetailViewPanel({ detail, row, request, filter, sessionId
                 aria-label={t("promptCapture.editExclude")}
                 onClick={(event) => { event.preventDefault(); event.stopPropagation(); toggleBlock(messageBlockId); }} />}
               <span className="raw-role">{t("promptCapture.messageRow", { index: index + 1, role: message.role ?? "" })}</span>
-              {mark.region === "current-user-message" && <span className="prompt-capture-success">{t("promptCapture.seqCurrentInput")}</span>}
+              {mark.region === "current-user-message" && <span className="prompt-capture-success" data-last-user-note>{t("promptCapture.seqCurrentInput")}</span>}
               {messageBlockId !== null && rowEdit.modified[messageBlockId] !== undefined && <span className="workspace-muted" data-modified-badge>{t("promptCapture.editModifiedBadge")}</span>}
               {messageExcluded && <span className="workspace-muted" data-excluded-badge>{t("promptCapture.editExcludedBadge")}</span>}
-              <span className="workspace-muted">{t(regionLabelKey(mark.region))}{mark.customType !== undefined ? ` · ${mark.customType}` : ""}
-                {" · "}{t("promptCapture.payloadChars", { chars: text.length.toLocaleString() })}</span>
+              <span className="workspace-muted">{mark.customType !== undefined ? `${mark.customType} · ` : ""}
+                {t("promptCapture.payloadChars", { chars: text.length.toLocaleString() })}</span>
+              {/* 角色用 Pi 原本的 role（不自造"历史/本轮"分类）；这里只显示该条占上下文窗口的比例 */}
+              {(() => {
+                const tokens = usage?.messages[index + 1]?.tokens;
+                const window = usage?.contextWindowTokens ?? 0;
+                if (tokens === undefined || window <= 0) return null;
+                return <span className="raw-block-usage" data-message-usage={index + 1}>
+                  {t("promptCapture.blockUsage", { percent: ((tokens / window) * 100).toFixed(2) })}
+                </span>;
+              })()}
               {messageBlockId !== null && <RowEditButtons blockId={messageBlockId} text={text} rowEdit={rowEdit} />}
             </summary>
             {messageBlockId !== null && rowEdit.editing?.blockId === messageBlockId && <InlineTextEditor blockId={messageBlockId} rowEdit={rowEdit} />}
@@ -500,6 +509,14 @@ export function RequestDetailViewPanel({ detail, row, request, filter, sessionId
               onClick={(event) => { event.preventDefault(); event.stopPropagation(); toggleBlock(`tools:${name}`); }} />}
             <span className="raw-role">{name}</span>
             {toolExcluded && <span className="workspace-muted" data-excluded-badge>{t("promptCapture.editExcludedBadge")}</span>}
+            {(() => {
+              const tokens = usage?.tools.find((entry) => entry.name === name)?.tokens;
+              const window = usage?.contextWindowTokens ?? 0;
+              if (tokens === undefined || window <= 0) return null;
+              return <span className="raw-block-usage" data-tool-usage={name}>
+                {t("promptCapture.blockUsage", { percent: ((tokens / window) * 100).toFixed(2) })}
+              </span>;
+            })()}
           </summary>
           <pre className="prompt-capture-block-text is-mono">{JSON.stringify(tool, null, 2)}</pre>
         </details>;

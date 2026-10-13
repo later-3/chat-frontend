@@ -575,6 +575,10 @@ export interface ContextUsageView {
   readonly contextWindowTokens: number;
   readonly totalTokens: number;
   readonly blocks: readonly { readonly tag: string; readonly tokens: number }[];
+  /** 每条消息（含 assistant/toolResult）的 tokens。 */
+  readonly messages: readonly { readonly index: number; readonly tokens: number }[];
+  /** 每个工具的 tokens。 */
+  readonly tools: readonly { readonly name: string; readonly tokens: number }[];
 }
 
 export async function fetchContextPreview(
@@ -603,6 +607,12 @@ export async function fetchContextPreview(
     totalTokens: num(usageRecord.totalTokens),
     blocks: Array.isArray(usageRecord.blocks)
       ? usageRecord.blocks.filter(isRecord).map((block) => ({ tag: str(block.tag), tokens: num(block.tokens) }))
+      : [],
+    messages: Array.isArray(usageRecord.messages)
+      ? usageRecord.messages.filter(isRecord).map((message) => ({ index: num(message.index), tokens: num(message.tokens) }))
+      : [],
+    tools: Array.isArray(usageRecord.tools)
+      ? usageRecord.tools.filter(isRecord).map((tool) => ({ name: str(tool.name), tokens: num(tool.tokens) }))
       : [],
   };
   const raw = isRecord(payload.payload) ? payload.payload : null;

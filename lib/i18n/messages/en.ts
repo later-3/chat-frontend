@@ -1504,7 +1504,7 @@ export const enLocale: LocalePlugin = {
     "promptCapture.finalSuccess": "Final attempt succeeded",
     "promptCapture.messageSequence": "Message sequence ({count} messages · {chars} chars)",
     "promptCapture.seqHistory": "History",
-    "promptCapture.seqCurrentInput": "Current input (a's message)",
+    "promptCapture.seqCurrentInput": "last user = this turn's message",
     "promptCapture.seqExecutionChain": "Execution chain (toolUse/toolResult in order)",
     "promptCapture.turnN": "Turn {n}",
     "promptCapture.recordingOn": "Full record: on · requests and originals are saved",
