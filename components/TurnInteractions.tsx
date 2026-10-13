@@ -263,13 +263,15 @@ function RequestMeta({ detail, row, request }: {
 /** 发起方 bar（02 §2.1 a 视角）与请求组共用同一详情面板——同一条捕获记录、两个视图锚点。
  *  B3-R3：**按原始请求体自身的结构与顺序展示**（model → messages 逐条[system 内按自带 chat_* 标签块折叠] → tools 逐个），
  *  把抽象定义（区域标签/人话名/revision）作为标注叠上去——以实现为准，不按自创解析重排。 */
-export function RequestDetailViewPanel({ detail, row, request, filter, sessionId, projectId, editable = false }: {
+export function RequestDetailViewPanel({ detail, row, request, filter, sessionId, projectId, editable = false, onEditSaved }: {
   readonly detail: RequestDetailView;
   readonly row: InteractionRowView | undefined;
   readonly request?: InteractionRequestGroupView;
   readonly filter: BlockFilter;
   readonly sessionId?: string;
   readonly projectId?: string;
+  /** 编辑保存成功后通知外层（发送前预览据此重新装配，让展示与"将发送"保持一致）。 */
+  readonly onEditSaved?: () => void;
   /** B5：可编辑（勾选/恢复“发给模型的内容”）。默认 false = 只读展示。 */
   readonly editable?: boolean;
 }) {
@@ -294,7 +296,7 @@ export function RequestDetailViewPanel({ detail, row, request, filter, sessionId
     setSavingEdit(true);
     setEditError(null);
     void saveContextEdit(sessionId, projectId, { excluded: nextExcluded, modified: contextEdit.modified, added: contextEdit.added })
-      .then((saved) => setContextEdit(saved))
+      .then((saved) => { setContextEdit(saved); onEditSaved?.(); })
       .catch((cause) => {
         setEditError(cause instanceof Error ? cause.message : String(cause));
         void fetchContextEdit(sessionId, projectId).then(setContextEdit).catch(() => undefined);

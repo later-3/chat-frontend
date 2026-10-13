@@ -166,6 +166,7 @@ export const enLocale: LocalePlugin = {
     "friendArchive.loading": "Loading daily activity…",
     "friendArchive.sources": "Daily activity and sources",
     "friendArchive.noSources": "No sessions or tasks recorded for this day",
+    "chat.contextPreviewRefreshing": "Re-assembling…",
     "chat.contextPreview": "What will be sent",
     "chat.contextPreviewNote": "What goes to the model — assembled live through the real pipeline (includes history tool results and the text you are typing). Unchecked blocks/entries are left out of the next turn; the original record is untouched. HTTP-level encoding (tool_calls, reasoning_content) is done by the provider adapter.",
     "chat.contextPreviewEmpty": "Nothing sent yet — send a message first, then you can adjust what gets sent here.",

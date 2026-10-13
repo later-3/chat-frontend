@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { SurfaceDialog } from "./SurfaceDialog";
 import { useI18n } from "@/hooks/useI18n";
 import { fetchContextPreview, type ContextPreviewView } from "@/lib/interactions";
 import { RequestDetailViewPanel } from "./TurnInteractions";
 
 /**
- * 发送前编辑入口（B5，用户 2026-10-13 定界）：
- *   **这是"这一次要发给模型什么"的地方**（composer 旁）；完整历史是事后只读回看。
- * 展示最近一次发送的**完整请求体**：区块可展开 → 看到块内条目与内容 → 区块级/条目级勾选（下一轮生效）。
- * 底层与完整历史共用同一套树与编辑接口，入口与语义分开。
+ * 发送前编辑入口（B5）：**实时装配**"这一次将发送的内容"（不调用模型）。
+ * 勾选/恢复后**防抖重新装配**（与后端同一条过滤链），让面板内容、块/条目/工具与"将发送"统计立即跟上；
+ * 刷新期间保留旧内容（不闪屏），仅显示"刷新中"。
  */
+const REFRESH_DEBOUNCE_MS = 600;
+
 export function ContextPreviewDialog({ sessionId, projectId, longAgentId, contextProjectId, draft, onClose }: {
   readonly sessionId: string;
   readonly projectId: string;
@@ -25,26 +26,37 @@ export function ContextPreviewDialog({ sessionId, projectId, longAgentId, contex
   const { t } = useI18n();
   const [preview, setPreview] = useState<ContextPreviewView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
-    setPreview(null);
+    setRefreshing(true);
     setError(null);
     void fetchContextPreview(sessionId, projectId, longAgentId, { draft, contextProjectId: contextProjectId ?? null, signal: controller.signal })
       .then((value) => { if (!controller.signal.aborted) setPreview(value); })
-      .catch((cause) => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : String(cause)); });
+      .catch((cause) => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : String(cause)); })
+      .finally(() => { if (!controller.signal.aborted) setRefreshing(false); });
     return () => controller.abort();
-  }, [sessionId, projectId, longAgentId, contextProjectId, draft]);
+  }, [sessionId, projectId, longAgentId, contextProjectId, draft, reloadToken]);
+
+  const scheduleRefresh = useCallback(() => {
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    setRefreshing(true);
+    timerRef.current = window.setTimeout(() => setReloadToken((token) => token + 1), REFRESH_DEBOUNCE_MS);
+  }, []);
+  useEffect(() => () => { if (timerRef.current !== null) window.clearTimeout(timerRef.current); }, []);
 
   return <SurfaceDialog title={t("chat.contextPreview")} description={t("chat.contextPreviewNote")} onClose={onClose}>
     <div className="ui-scroll-20" data-context-preview>
       {error !== null && <p className="surface-error" role="alert" data-context-preview-error>{error}</p>}
       {preview === null && error === null && <p className="workspace-muted" role="status">{t("promptCapture.loadingPayload")}</p>}
-      {preview !== null && !preview.payloadPresent && <p className="workspace-muted" data-context-preview-empty>
-        {t("chat.contextPreviewEmpty")}
+      {preview !== null && refreshing && <p className="workspace-muted" role="status" data-context-preview-refreshing>
+        {t("chat.contextPreviewRefreshing")}
       </p>}
       {preview?.detail != null && <RequestDetailViewPanel detail={preview.detail} row={preview.detail.row}
-        filter="all" sessionId={sessionId} projectId={projectId} editable />}
+        filter="all" sessionId={sessionId} projectId={projectId} editable onEditSaved={scheduleRefresh} />}
     </div>
   </SurfaceDialog>;
 }
