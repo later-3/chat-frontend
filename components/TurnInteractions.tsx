@@ -312,9 +312,12 @@ export function RequestDetailViewPanel({ detail, row, request, filter, sessionId
   const bodyMessages = systemMessage !== undefined ? messages.slice(1) : messages;
   const systemContent = systemMessage === undefined ? (typeof payload.system === "string" ? payload.system : null) : contentText(systemMessage.content);
   const systemBlocks = systemContent === null ? [] : splitChatTagBlocks(systemContent);
-  // B5 编辑层：将发送块 = 未被排除的块（Pi base 块不可排除）。
-  const keptBlocks = systemBlocks.filter((block) => block.tag === "" || !excludedSet.has(`tag:${block.tag}`));
-  const excludedBlocks = systemBlocks.filter((block) => block.tag !== "" && excludedSet.has(`tag:${block.tag}`));
+  // B5 编辑层：预览 payload 已由后端按同一过滤函数剔除，所以树里只剩下"将发送"的部分。
+  // 被排除的块/子条目/工具由**编辑层本体**驱动"已排除"区（可恢复）——不依赖 payload 里是否还留着。
+  const keptBlocks = systemBlocks;
+  const excludedTagIds = contextEdit.excluded.filter((id) => id.startsWith("tag:") && !id.includes("#"));
+  const excludedSubIds = contextEdit.excluded.filter((id) => id.startsWith("tag:") && id.includes("#"));
+  const excludedToolNames = contextEdit.excluded.filter((id) => id.startsWith("tools:")).map((id) => id.slice("tools:".length));
   const sendChars = keptBlocks.reduce((total, block) => total + block.text.length, 0);
 
   const showSystem = filter === "all" || filter === "system";
@@ -359,10 +362,24 @@ export function RequestDetailViewPanel({ detail, row, request, filter, sessionId
           <div className="raw-system-blocks" data-raw-system-blocks>
             {keptBlocks.map((block, index) => <SystemBlockRow key={index} block={block} excluded={false}
               canEdit={canEdit} excludedIds={excludedSet} onToggleBlock={toggleBlock} />)}
-            {excludedBlocks.length > 0 && <details className="prompt-capture-section context-excluded-region" data-context-excluded open={false}>
-              <summary><span className="raw-role">{t("promptCapture.editExcludedRegion", { n: excludedBlocks.length })}</span></summary>
-              {excludedBlocks.map((block, index) => <SystemBlockRow key={index} block={block} excluded
-                canEdit={canEdit} excludedIds={excludedSet} onToggleBlock={toggleBlock} />)}
+            {(excludedTagIds.length + excludedSubIds.length) > 0 && <details className="prompt-capture-section context-excluded-region" data-context-excluded open={false}>
+              <summary><span className="raw-role">{t("promptCapture.editExcludedRegion", { n: excludedTagIds.length + excludedSubIds.length })}</span></summary>
+              {excludedTagIds.map((id) => <details key={id} className="prompt-capture-section raw-tag-block is-excluded" data-excluded>
+                <summary>
+                  {canEdit && <input type="checkbox" data-context-edit-toggle={id} aria-label={t("promptCapture.editRestore")}
+                    onClick={(event) => { event.preventDefault(); event.stopPropagation(); toggleBlock(id); }} />}
+                  <span className="raw-tag">{`<${id.slice("tag:".length)}>`}</span>
+                  <span className="workspace-muted" data-excluded-badge>{t("promptCapture.editExcludedBadge")}</span>
+                </summary>
+              </details>)}
+              {excludedSubIds.map((id) => <details key={id} className="prompt-capture-section raw-sub-entry is-excluded" data-excluded>
+                <summary>
+                  {canEdit && <input type="checkbox" data-context-edit-toggle={id} aria-label={t("promptCapture.editRestore")}
+                    onClick={(event) => { event.preventDefault(); event.stopPropagation(); toggleBlock(id); }} />}
+                  <span className="raw-role">{id.slice("tag:".length)}</span>
+                  <span className="workspace-muted" data-excluded-badge>{t("promptCapture.editExcludedBadge")}</span>
+                </summary>
+              </details>)}
             </details>}
           </div>
         </details>
@@ -384,8 +401,16 @@ export function RequestDetailViewPanel({ detail, row, request, filter, sessionId
       })}
     </div>}
 
-    {showTools && tools.length > 0 && <details className="prompt-capture-section" data-tool-schemas open={false}>
-      <summary>{t("promptCapture.tools", { count: tools.length })}</summary>
+    {showTools && (tools.length > 0 || excludedToolNames.length > 0) && <details className="prompt-capture-section" data-tool-schemas open={false}>
+      <summary>{t("promptCapture.tools", { count: tools.length })}{excludedToolNames.length > 0 ? ` · ${t("promptCapture.editExcludedRegion", { n: excludedToolNames.length })}` : ""}</summary>
+      {excludedToolNames.map((name) => <details key={name} className="prompt-capture-section raw-tool is-excluded" data-excluded>
+        <summary>
+          {canEdit && <input type="checkbox" data-context-edit-toggle={`tools:${name}`} aria-label={t("promptCapture.editRestore")}
+            onClick={(event) => { event.preventDefault(); event.stopPropagation(); toggleBlock(`tools:${name}`); }} />}
+          <span className="raw-role">{name}</span>
+          <span className="workspace-muted" data-excluded-badge>{t("promptCapture.editExcludedBadge")}</span>
+        </summary>
+      </details>)}
       {tools.map((tool, index) => {
         const name = tool.function?.name ?? tool.name ?? "?";
         const toolExcluded = excludedSet.has(`tools:${name}`);
