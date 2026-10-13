@@ -230,8 +230,9 @@ export function TurnInteractions({ sessionId, projectId, turnKey, mode, defaultE
                     </div>
                   ))}
                 </div>}
+                {/* B5 边界（用户 2026-10-13）：完整历史 = 事后回看，只读；发送前的编辑入口在 composer 旁。 */}
                 <RequestDetailViewPanel detail={entry.detail} row={row} request={request} filter={blockFilter}
-                  sessionId={sessionId} projectId={projectId} editable={mode === "full-history"} />
+                  sessionId={sessionId} projectId={projectId} editable={false} />
               </div>}
             </section>;
           })}

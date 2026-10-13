@@ -17,6 +17,10 @@ export interface InteractionRegionMark {
   readonly chars: number;
   /** 人话展示名（F6：读模型已补 registry label；缺失回退 id） */
   readonly label: string;
+  /** B5：内容前 80 字符预览（发送前编辑入口识别块用；无条件记录） */
+  readonly preview?: string;
+  /** B5：XML 标签名（= registry.id，如 chat_identity；pi-base 无标签不写） */
+  readonly tag?: string;
 }
 
 export interface InteractionOutcomeView {
@@ -49,6 +53,8 @@ export interface InteractionRowView {
   readonly regions: readonly InteractionRegionMark[];
   readonly messageCount: number;
   readonly toolCount: number;
+  /** B5：工具名清单（发送前编辑入口用） */
+  readonly toolNames?: readonly string[];
   readonly attempt: number;
   readonly retryOf?: string;
   readonly excluded: { readonly count: number };
@@ -175,7 +181,9 @@ function parseTurn(value: unknown): InteractionTurnView {
 
 function parseRegions(value: unknown): InteractionRegionMark[] {
   if (!Array.isArray(value)) return [];
-  return value.filter(isRecord).map(region => ({ id: str(region.id, "unknown"), chars: num(region.chars), label: str(region.label, str(region.id, "unknown")) }));
+  return value.filter(isRecord).map(region => ({ id: str(region.id, "unknown"), chars: num(region.chars), label: str(region.label, str(region.id, "unknown")),
+    ...(optionalStr(region.preview) === undefined ? {} : { preview: optionalStr(region.preview) }),
+    ...(optionalStr(region.tag) === undefined ? {} : { tag: optionalStr(region.tag) }) }));
 }
 
 function parseRow(value: unknown): InteractionRowView {
@@ -199,6 +207,9 @@ function parseRow(value: unknown): InteractionRowView {
     regions,
     messageCount: num(value.messageCount),
     toolCount: num(value.toolCount),
+    ...(Array.isArray(value.toolNames)
+      ? { toolNames: value.toolNames.filter((name): name is string => typeof name === "string") }
+      : {}),
     attempt: num(value.attempt, 1),
     ...(optionalStr(value.retryOf) === undefined ? {} : { retryOf: optionalStr(value.retryOf) }),
     excluded: { count: num(isRecord(value.excluded) ? value.excluded.count : 0) },

@@ -433,6 +433,7 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
       key={session?.owner.type === "long-agent" ? composerDraftKey(session.id, true, contextProjectId) : "ordinary-composer"}
       ref={chatInputRef}
       projectId={projectId}
+      sessionId={memorySessionId}
       onSend={handleSend}
       onAbort={isCompacting ? handleAbortCompaction : handleAbort}
       stopLabel={activity?.phase === "stopping" ? t("runStatus.stopping") : undefined}

@@ -34,7 +34,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { ToolbarAction } from "./ui/ToolbarAction";
 import { WorkflowPicker } from "./WorkflowPicker";
 import {
-  IconAdjustmentsHorizontal, IconPhoto, IconArrowUp, IconPlayerStop,
+  IconAdjustmentsHorizontal, IconListDetails, IconPhoto, IconArrowUp, IconPlayerStop,
   IconX,
 } from "@tabler/icons-react";
 import {
@@ -47,6 +47,7 @@ import {
   type ChatWorkflowSummary,
 } from "@/lib/chat-workflows-browser";
 import { WorkflowAgentConfigDialog } from "./WorkflowAgentConfigDialog";
+import { ContextPreviewDialog } from "./ContextPreviewDialog";
 import { readPendingSubmission, clearPendingSubmission, subscribePendingSubmissions } from "@/lib/pending-submission";
 import { BUILTIN_SLASH_COMMANDS, getBuiltinSlashCommand, type BuiltinSlashCommand } from "@/lib/builtin-slash-commands";
 
@@ -58,6 +59,8 @@ export interface AttachedImage {
 
 interface Props {
   projectId: string;
+  /** 当前会话 id：发送前编辑入口（B5）读取上下文块清单与编辑层用。 */
+  sessionId?: string | null;
   onSend: (message: string, images?: AttachedImage[]) => void;
   onAbort: () => void;
   stopLabel?: string;
@@ -353,6 +356,7 @@ function QueuedMessageRow({ kind, text }: { kind: "steer" | "follow-up"; text: s
 
 export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   projectId,
+  sessionId,
   onSend, onAbort, stopLabel, stopping, onSteer, onFollowUp, isStreaming, workflowId, onWorkflowChange, workflowAgentConfigs, promptResourceProposals, onWorkflowAgentConfigsChange,
   longAgentId, friendImages = false,
   onCompact, onAbortCompaction, isCompacting, compactError, compactResult,
@@ -372,6 +376,8 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
   const [value, setValue] = useState(() => (draftKey ? getDraft(draftKey)?.value ?? "" : ""));
   const [workflowSummaries, setWorkflowSummaries] = useState<ChatWorkflowSummary[]>([]);
   const [workflowAgentDialogOpen, setWorkflowAgentDialogOpen] = useState(false);
+  // B5 发送前编辑入口（用户 2026-10-13：编辑在发送前，完整历史只读）
+  const [contextPreviewOpen, setContextPreviewOpen] = useState(false);
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>(() => (
     draftKey ? draftImagesToAttachedImages(getDraft(draftKey)?.images) : []
   ));
@@ -1883,6 +1889,15 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
               disabled={isStreaming || !cwd || selectedWorkflow?.agents.length === 0}
               icon={<IconAdjustmentsHorizontal size={18} stroke={1.8} />}
             />}
+            <ToolbarAction
+              shape="frame"
+              label={t("chat.contextPreview")}
+              iconOnly
+              data-context-preview-open
+              disabled={isStreaming || sessionId === null || sessionId === undefined}
+              onClick={() => setContextPreviewOpen(true)}
+              icon={<IconListDetails size={18} stroke={1.8} />}
+            />
           <span className="composer-actions-space" />
           {isStreaming ? (
             <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, alignSelf: "flex-end" }}>
@@ -1946,6 +1961,9 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput({
 
         </div>
       </div>
+      {contextPreviewOpen && sessionId !== null && sessionId !== undefined && (
+        <ContextPreviewDialog sessionId={sessionId} projectId={projectId} onClose={() => setContextPreviewOpen(false)} />
+      )}
       {workflowAgentDialogOpen && cwd && selectedWorkflow && selectedWorkflow.agents.length > 0 && (
         <WorkflowAgentConfigDialog
           workflow={selectedWorkflow}
