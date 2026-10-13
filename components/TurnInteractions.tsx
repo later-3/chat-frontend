@@ -263,7 +263,7 @@ function RequestMeta({ detail, row, request }: {
 /** 发起方 bar（02 §2.1 a 视角）与请求组共用同一详情面板——同一条捕获记录、两个视图锚点。
  *  B3-R3：**按原始请求体自身的结构与顺序展示**（model → messages 逐条[system 内按自带 chat_* 标签块折叠] → tools 逐个），
  *  把抽象定义（区域标签/人话名/revision）作为标注叠上去——以实现为准，不按自创解析重排。 */
-export function RequestDetailViewPanel({ detail, row, request, filter, sessionId, projectId, editable = false, onEditSaved }: {
+export function RequestDetailViewPanel({ detail, row, request, filter, sessionId, projectId, editable = false, onEditSaved, blockLabels = {} }: {
   readonly detail: RequestDetailView;
   readonly row: InteractionRowView | undefined;
   readonly request?: InteractionRequestGroupView;
@@ -272,6 +272,8 @@ export function RequestDetailViewPanel({ detail, row, request, filter, sessionId
   readonly projectId?: string;
   /** 编辑保存成功后通知外层（发送前预览据此重新装配，让展示与"将发送"保持一致）。 */
   readonly onEditSaved?: () => void;
+  /** tag → 中文名（后端 registry）；用于区块展示，不必前端自造。 */
+  readonly blockLabels?: Readonly<Record<string, string>>;
   /** B5：可编辑（勾选/恢复“发给模型的内容”）。默认 false = 只读展示。 */
   readonly editable?: boolean;
 }) {
@@ -289,6 +291,7 @@ export function RequestDetailViewPanel({ detail, row, request, filter, sessionId
   const excludedSet = new Set(contextEdit.excluded);
   // 行内编辑（B5 编辑层第三类操作：改文字）。保存进同一个编辑层，下一轮生效、原稿不改写。
   const [editing, setEditing] = useState<{ readonly blockId: string; readonly text: string } | null>(null);
+  const [adding, setAdding] = useState<{ readonly groupId: string; readonly text: string } | null>(null);
   const persistEdit = (next: ContextEditState) => {
     if (sessionId === undefined || projectId === undefined) return;
     setContextEdit(next);
@@ -324,6 +327,26 @@ export function RequestDetailViewPanel({ detail, row, request, filter, sessionId
       persistEdit({ ...contextEdit, modified: nextModified });
     },
     change: (text: string) => setEditing((current) => (current === null ? null : { ...current, text })),
+    // 手写新增（用户 2026-10-13）：在某个区块里加一条自己的文字。
+    added: contextEdit.added,
+    adding,
+    startAdd: (groupId: string) => setAdding({ groupId, text: "" }),
+    changeAdd: (text: string) => setAdding((current) => (current === null ? null : { ...current, text })),
+    cancelAdd: () => setAdding(null),
+    addItem: (groupId: string, text: string) => {
+      setAdding(null);
+      if (text.trim() === "") return;
+      const current = contextEdit.added[groupId] ?? [];
+      persistEdit({ ...contextEdit, added: { ...contextEdit.added, [groupId]: [...current, text] } });
+    },
+    removeItem: (groupId: string, index: number) => {
+      const current = [...(contextEdit.added[groupId] ?? [])];
+      current.splice(index, 1);
+      const nextAdded = { ...contextEdit.added };
+      if (current.length === 0) delete nextAdded[groupId];
+      else nextAdded[groupId] = current;
+      persistEdit({ ...contextEdit, added: nextAdded });
+    },
     saving: savingEdit,
     enabled: canEdit,
   };
@@ -388,7 +411,7 @@ export function RequestDetailViewPanel({ detail, row, request, filter, sessionId
           </p>}
           <div className="raw-system-blocks" data-raw-system-blocks>
             {keptBlocks.map((block, index) => <SystemBlockRow key={index} block={block} excluded={false}
-              canEdit={canEdit} excludedIds={excludedSet} onToggleBlock={toggleBlock} rowEdit={rowEdit} />)}
+              canEdit={canEdit} excludedIds={excludedSet} onToggleBlock={toggleBlock} rowEdit={rowEdit} blockLabels={blockLabels} />)}
             {(excludedTagIds.length + excludedSubIds.length) > 0 && <details className="prompt-capture-section context-excluded-region" data-context-excluded open={false}>
               <summary><span className="raw-role">{t("promptCapture.editExcludedRegion", { n: excludedTagIds.length + excludedSubIds.length })}</span></summary>
               {excludedTagIds.map((id) => <details key={id} className="prompt-capture-section raw-tag-block is-excluded" data-excluded>
@@ -486,13 +509,14 @@ export function RequestDetailViewPanel({ detail, row, request, filter, sessionId
   </div>;
 }
 
-function SystemBlockRow({ block, excluded, canEdit, excludedIds, onToggleBlock, rowEdit }: {
+function SystemBlockRow({ block, excluded, canEdit, excludedIds, onToggleBlock, rowEdit, blockLabels }: {
   readonly block: ChatTagBlock;
   readonly excluded: boolean;
   readonly canEdit: boolean;
   readonly excludedIds: ReadonlySet<string>;
   readonly onToggleBlock: (blockId: string) => void;
   readonly rowEdit: RowEdit;
+  readonly blockLabels: Readonly<Record<string, string>>;
 }) {
   const { t } = useI18n();
   const blockId = `tag:${block.tag}`;
@@ -508,6 +532,7 @@ function SystemBlockRow({ block, excluded, canEdit, excludedIds, onToggleBlock, 
         aria-label={t("promptCapture.editExclude")}
         onClick={(event) => { event.preventDefault(); event.stopPropagation(); onToggleBlock(blockId); }} />}
       <span className="raw-tag">{block.tag === "" ? t("promptCapture.piBaseBlock") : `<${block.tag}>`}</span>
+      {block.tag !== "" && blockLabels[block.tag] !== undefined && <span className="raw-label">{blockLabels[block.tag]}</span>}
       {block.attributes !== "" && <span className="raw-attrs" title={block.attributes}>{block.attributes}</span>}
       {subEntries.length > 0 && <span className="workspace-muted" data-sub-entries-count>
         {t("promptCapture.subEntriesCount", { kept: keptSubs.length, total: subEntries.length })}
@@ -516,8 +541,23 @@ function SystemBlockRow({ block, excluded, canEdit, excludedIds, onToggleBlock, 
       {excluded && <span className="workspace-muted" data-excluded-badge>{t("promptCapture.editExcludedBadge")}</span>}
       <span className="workspace-muted">{t("promptCapture.payloadChars", { chars: block.text.length.toLocaleString() })}</span>
       <RowEditButtons blockId={blockId} text={block.text} rowEdit={rowEdit} />
+      {rowEdit.enabled && block.tag !== "" && <button type="button" className="context-edit-button" data-context-edit-add={blockId}
+        onClick={(event) => { event.preventDefault(); event.stopPropagation(); rowEdit.startAdd(block.tag); }}>
+        {t("promptCapture.editAdd")}
+      </button>}
     </summary>
     {isEditingBlock && <InlineTextEditor blockId={blockId} rowEdit={rowEdit} />}
+    {rowEdit.adding?.groupId === block.tag && <InlineAddEditor groupId={block.tag} rowEdit={rowEdit} />}
+    {(rowEdit.added[block.tag]?.length ?? 0) > 0 && <div className="context-added-list" data-context-added>
+      {(rowEdit.added[block.tag] ?? []).map((text, index) => <div key={index} className="context-added-item" data-added-entry>
+        <span className="context-added-mark">{t("promptCapture.editAddedBadge")}</span>
+        <span className="context-added-text">{text.length > 120 ? `${text.slice(0, 120)}…` : text}</span>
+        {rowEdit.enabled && <button type="button" className="context-edit-button" data-context-edit-remove={`${block.tag}#${index}`}
+          onClick={(event) => { event.preventDefault(); event.stopPropagation(); rowEdit.removeItem(block.tag, index); }}>
+          {t("promptCapture.editRemove")}
+        </button>}
+      </div>)}
+    </div>}
     {subEntries.length === 0
       ? <pre className="prompt-capture-block-text">{block.text}</pre>
       : <div className="raw-sub-entries">
@@ -553,6 +593,13 @@ interface RowEdit {
   readonly change: (text: string) => void;
   readonly save: (blockId: string, text: string) => void;
   readonly revert: (blockId: string) => void;
+  readonly adding: { readonly groupId: string; readonly text: string } | null;
+  readonly added: Readonly<Record<string, readonly string[]>>;
+  readonly startAdd: (groupId: string) => void;
+  readonly changeAdd: (text: string) => void;
+  readonly cancelAdd: () => void;
+  readonly addItem: (groupId: string, text: string) => void;
+  readonly removeItem: (groupId: string, index: number) => void;
   readonly saving: boolean;
   readonly enabled: boolean;
 }
@@ -575,6 +622,24 @@ function RowEditButtons({ blockId, text, rowEdit }: {
       {t("promptCapture.editRevert")}
     </button>}
   </>;
+}
+
+function InlineAddEditor({ groupId, rowEdit }: { readonly groupId: string; readonly rowEdit: RowEdit }) {
+  const { t } = useI18n();
+  const adding = rowEdit.adding;
+  if (adding === null || adding.groupId !== groupId) return null;
+  return <div className="context-edit-inline" data-context-add-inline={groupId}>
+    <textarea data-context-add-input={groupId} value={adding.text} rows={4}
+      placeholder={t("promptCapture.editAddPlaceholder")}
+      onChange={(event) => rowEdit.changeAdd(event.target.value)} />
+    <div className="context-edit-actions">
+      <button type="button" className="context-edit-button is-primary" data-context-add-save={groupId}
+        disabled={rowEdit.saving || adding.text.trim() === ""} onClick={() => rowEdit.addItem(groupId, adding.text)}>
+        {t("promptCapture.editAddSave")}
+      </button>
+      <button type="button" className="context-edit-button" onClick={rowEdit.cancelAdd}>{t("promptCapture.editCancel")}</button>
+    </div>
+  </div>;
 }
 
 function InlineTextEditor({ blockId, rowEdit }: { readonly blockId: string; readonly rowEdit: RowEdit }) {

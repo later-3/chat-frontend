@@ -1541,6 +1541,11 @@ span.token.table {
 .context-edit-inline textarea { width: 100%; font-family: var(--font-mono); font-size: 12px; line-height: 1.5; border: 1px solid var(--border); border-radius: 8px; padding: 8px; background: var(--bg); color: var(--text); resize: vertical; }
 .context-edit-actions { display: flex; gap: 8px; }
 [data-modified-badge] { color: var(--accent); font-size: 11px; }
+.raw-label { color: var(--text-dim); font-size: 11px; white-space: nowrap; }
+.context-added-list { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 6px 8px; }
+.context-added-item { display: flex; align-items: center; gap: 8px; font-size: 12px; border-left: 2px solid var(--accent); padding-left: 8px; }
+.context-added-mark { color: var(--accent); font-size: 11px; white-space: nowrap; }
+.context-added-text { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .raw-message.is-excluded .raw-role { text-decoration: line-through; }
 .raw-sub-entries { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 4px 14px; }
 .raw-sub-entry > summary { gap: 8px; }

@@ -565,6 +565,8 @@ export interface ContextPreviewView {
   readonly detail: RequestDetailView | null;
   readonly edit: ContextEditState;
   readonly payloadPresent: boolean;
+  /** tag → 中文名（后端 registry 唯一事实源）。 */
+  readonly blockLabels: Readonly<Record<string, string>>;
 }
 
 export async function fetchContextPreview(
@@ -582,8 +584,13 @@ export async function fetchContextPreview(
   );
   if (!isRecord(payload)) throw new Error("预览响应不完整");
   const edit = parseContextEdit(isRecord(payload.edit) ? payload.edit : {});
+  // tag → 中文名（后端 registry 唯一事实源）：界面直接显示"长期记忆/交互规范/自定义指令（含规则）"等。
+  const blockLabels: Record<string, string> = {};
+  if (isRecord(payload.blockLabels)) {
+    for (const [key, value] of Object.entries(payload.blockLabels)) if (typeof value === "string") blockLabels[key] = value;
+  }
   const raw = isRecord(payload.payload) ? payload.payload : null;
-  if (raw === null) return { detail: null, edit, payloadPresent: false };
+  if (raw === null) return { detail: null, edit, payloadPresent: false, blockLabels };
   const messages = Array.isArray(raw.messages) ? raw.messages : [];
   const tools = Array.isArray(raw.tools) ? raw.tools : [];
   const model = isRecord(raw.model) ? raw.model : {};
@@ -605,5 +612,5 @@ export async function fetchContextPreview(
     payload: { sha256: "", chars: 0 },
   };
   // 与真实详情一致：使用后端给的消息区域分类（否则显示"未分类"）。
-  return { detail: normalizeDetail(row, raw, payload.messageRegions, false), edit, payloadPresent: true };
+  return { detail: normalizeDetail(row, raw, payload.messageRegions, false), edit, payloadPresent: true, blockLabels };
 }

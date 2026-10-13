@@ -56,7 +56,8 @@ export function ContextPreviewDialog({ sessionId, projectId, longAgentId, contex
         {t("chat.contextPreviewRefreshing")}
       </p>}
       {preview?.detail != null && <RequestDetailViewPanel detail={preview.detail} row={preview.detail.row}
-        filter="all" sessionId={sessionId} projectId={projectId} editable onEditSaved={scheduleRefresh} />}
+        filter="all" sessionId={sessionId} projectId={projectId} editable blockLabels={preview.blockLabels}
+        onEditSaved={scheduleRefresh} />}
     </div>
   </SurfaceDialog>;
 }
