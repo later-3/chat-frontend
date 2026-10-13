@@ -1534,6 +1534,13 @@ span.token.table {
 .context-excluded-region > summary { color: var(--text-muted); }
 [data-context-edit-summary] { margin-left: auto; }
 .raw-message.is-excluded > .prompt-capture-section > summary { opacity: 0.55; }
+.context-edit-button { font-size: 11px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-hover); color: var(--text); cursor: pointer; }
+.context-edit-button:hover { border-color: var(--accent); }
+.context-edit-button.is-primary { border-color: var(--accent); color: var(--accent); }
+.context-edit-inline { display: flex; flex-direction: column; gap: 6px; padding: 6px 0 8px; }
+.context-edit-inline textarea { width: 100%; font-family: var(--font-mono); font-size: 12px; line-height: 1.5; border: 1px solid var(--border); border-radius: 8px; padding: 8px; background: var(--bg); color: var(--text); resize: vertical; }
+.context-edit-actions { display: flex; gap: 8px; }
+[data-modified-badge] { color: var(--accent); font-size: 11px; }
 .raw-message.is-excluded .raw-role { text-decoration: line-through; }
 .raw-sub-entries { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 4px 14px; }
 .raw-sub-entry > summary { gap: 8px; }

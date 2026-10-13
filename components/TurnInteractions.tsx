@@ -287,21 +287,45 @@ export function RequestDetailViewPanel({ detail, row, request, filter, sessionId
     return () => controller.abort();
   }, [canEdit, sessionId, projectId]);
   const excludedSet = new Set(contextEdit.excluded);
-  const toggleBlock = (blockId: string) => {
-    if (!canEdit || savingEdit) return;
-    const nextExcluded = excludedSet.has(blockId)
-      ? contextEdit.excluded.filter((id) => id !== blockId)
-      : [...contextEdit.excluded, blockId];
-    setContextEdit({ ...contextEdit, excluded: nextExcluded });
+  // 行内编辑（B5 编辑层第三类操作：改文字）。保存进同一个编辑层，下一轮生效、原稿不改写。
+  const [editing, setEditing] = useState<{ readonly blockId: string; readonly text: string } | null>(null);
+  const persistEdit = (next: ContextEditState) => {
+    if (sessionId === undefined || projectId === undefined) return;
+    setContextEdit(next);
     setSavingEdit(true);
     setEditError(null);
-    void saveContextEdit(sessionId, projectId, { excluded: nextExcluded, modified: contextEdit.modified, added: contextEdit.added })
+    void saveContextEdit(sessionId, projectId, { excluded: next.excluded, modified: next.modified, added: next.added })
       .then((saved) => { setContextEdit(saved); onEditSaved?.(); })
       .catch((cause) => {
         setEditError(cause instanceof Error ? cause.message : String(cause));
         void fetchContextEdit(sessionId, projectId).then(setContextEdit).catch(() => undefined);
       })
       .finally(() => setSavingEdit(false));
+  };
+  const toggleBlock = (blockId: string) => {
+    if (!canEdit || savingEdit) return;
+    const nextExcluded = excludedSet.has(blockId)
+      ? contextEdit.excluded.filter((id) => id !== blockId)
+      : [...contextEdit.excluded, blockId];
+    persistEdit({ ...contextEdit, excluded: nextExcluded });
+  };
+  const rowEdit = {
+    modified: contextEdit.modified,
+    editing,
+    start: (blockId: string, text: string) => setEditing({ blockId, text }),
+    cancel: () => setEditing(null),
+    save: (blockId: string, text: string) => {
+      setEditing(null);
+      persistEdit({ ...contextEdit, modified: { ...contextEdit.modified, [blockId]: text } });
+    },
+    revert: (blockId: string) => {
+      const nextModified = { ...contextEdit.modified };
+      delete nextModified[blockId];
+      persistEdit({ ...contextEdit, modified: nextModified });
+    },
+    change: (text: string) => setEditing((current) => (current === null ? null : { ...current, text })),
+    saving: savingEdit,
+    enabled: canEdit,
   };
   const payload = detail.payload ?? {};
   const messages = Array.isArray(payload.messages) ? (payload.messages as { role?: string; content?: unknown }[]) : [];
@@ -364,7 +388,7 @@ export function RequestDetailViewPanel({ detail, row, request, filter, sessionId
           </p>}
           <div className="raw-system-blocks" data-raw-system-blocks>
             {keptBlocks.map((block, index) => <SystemBlockRow key={index} block={block} excluded={false}
-              canEdit={canEdit} excludedIds={excludedSet} onToggleBlock={toggleBlock} />)}
+              canEdit={canEdit} excludedIds={excludedSet} onToggleBlock={toggleBlock} rowEdit={rowEdit} />)}
             {(excludedTagIds.length + excludedSubIds.length) > 0 && <details className="prompt-capture-section context-excluded-region" data-context-excluded open={false}>
               <summary><span className="raw-role">{t("promptCapture.editExcludedRegion", { n: excludedTagIds.length + excludedSubIds.length })}</span></summary>
               {excludedTagIds.map((id) => <details key={id} className="prompt-capture-section raw-tag-block is-excluded" data-excluded>
@@ -404,10 +428,13 @@ export function RequestDetailViewPanel({ detail, row, request, filter, sessionId
                 onClick={(event) => { event.preventDefault(); event.stopPropagation(); toggleBlock(messageBlockId); }} />}
               <span className="raw-role">{t("promptCapture.messageRow", { index: index + 1, role: message.role ?? "" })}</span>
               {mark.region === "current-user-message" && <span className="prompt-capture-success">{t("promptCapture.seqCurrentInput")}</span>}
+              {messageBlockId !== null && rowEdit.modified[messageBlockId] !== undefined && <span className="workspace-muted" data-modified-badge>{t("promptCapture.editModifiedBadge")}</span>}
               {messageExcluded && <span className="workspace-muted" data-excluded-badge>{t("promptCapture.editExcludedBadge")}</span>}
               <span className="workspace-muted">{t(regionLabelKey(mark.region))}{mark.customType !== undefined ? ` · ${mark.customType}` : ""}
                 {" · "}{t("promptCapture.payloadChars", { chars: text.length.toLocaleString() })}</span>
+              {messageBlockId !== null && <RowEditButtons blockId={messageBlockId} text={text} rowEdit={rowEdit} />}
             </summary>
+            {messageBlockId !== null && rowEdit.editing?.blockId === messageBlockId && <InlineTextEditor blockId={messageBlockId} rowEdit={rowEdit} />}
             <pre className={`prompt-capture-block-text${message.role === "tool" ? " is-mono" : ""}`}>{text}</pre>
           </details>
         </div>;
@@ -459,15 +486,18 @@ export function RequestDetailViewPanel({ detail, row, request, filter, sessionId
   </div>;
 }
 
-function SystemBlockRow({ block, excluded, canEdit, excludedIds, onToggleBlock }: {
+function SystemBlockRow({ block, excluded, canEdit, excludedIds, onToggleBlock, rowEdit }: {
   readonly block: ChatTagBlock;
   readonly excluded: boolean;
   readonly canEdit: boolean;
   readonly excludedIds: ReadonlySet<string>;
   readonly onToggleBlock: (blockId: string) => void;
+  readonly rowEdit: RowEdit;
 }) {
   const { t } = useI18n();
   const blockId = `tag:${block.tag}`;
+  const isEditingBlock = rowEdit.editing?.blockId === blockId;
+  const blockModified = rowEdit.modified[blockId] !== undefined;
   // 用户 2026-10-13：区块要能展开看**条目与内容**，条目可单独勾选（规则与后端 splitSubEntries 一致）。
   const subEntries = block.tag === "" ? [] : splitBlockSubEntries(block.tag, block.text);
   const keptSubs = subEntries.filter((entry) => !excludedIds.has(`${blockId}#${entry.id}`));
@@ -482,9 +512,12 @@ function SystemBlockRow({ block, excluded, canEdit, excludedIds, onToggleBlock }
       {subEntries.length > 0 && <span className="workspace-muted" data-sub-entries-count>
         {t("promptCapture.subEntriesCount", { kept: keptSubs.length, total: subEntries.length })}
       </span>}
+      {blockModified && <span className="workspace-muted" data-modified-badge>{t("promptCapture.editModifiedBadge")}</span>}
       {excluded && <span className="workspace-muted" data-excluded-badge>{t("promptCapture.editExcludedBadge")}</span>}
       <span className="workspace-muted">{t("promptCapture.payloadChars", { chars: block.text.length.toLocaleString() })}</span>
+      <RowEditButtons blockId={blockId} text={block.text} rowEdit={rowEdit} />
     </summary>
+    {isEditingBlock && <InlineTextEditor blockId={blockId} rowEdit={rowEdit} />}
     {subEntries.length === 0
       ? <pre className="prompt-capture-block-text">{block.text}</pre>
       : <div className="raw-sub-entries">
@@ -498,14 +531,67 @@ function SystemBlockRow({ block, excluded, canEdit, excludedIds, onToggleBlock }
                   aria-label={subExcluded ? t("promptCapture.editRestore") : t("promptCapture.editExclude")}
                   onClick={(event) => { event.preventDefault(); event.stopPropagation(); onToggleBlock(subId); }} />}
                 <span className="raw-role">{entry.title}</span>
+                {rowEdit.modified[subId] !== undefined && <span className="workspace-muted" data-modified-badge>{t("promptCapture.editModifiedBadge")}</span>}
                 {subExcluded && <span className="workspace-muted" data-excluded-badge>{t("promptCapture.editExcludedBadge")}</span>}
                 <span className="workspace-muted">{t("promptCapture.payloadChars", { chars: entry.text.length.toLocaleString() })}</span>
+                <RowEditButtons blockId={subId} text={entry.text} rowEdit={rowEdit} />
               </summary>
+              {rowEdit.editing?.blockId === subId && <InlineTextEditor blockId={subId} rowEdit={rowEdit} />}
               <pre className="prompt-capture-block-text">{entry.text}</pre>
             </details>;
           })}
         </div>}
   </details>;
+}
+
+/** 行内编辑状态（区块 / 子条目 / 历史消息共用；改文字走同一个编辑层）。 */
+interface RowEdit {
+  readonly modified: Readonly<Record<string, string>>;
+  readonly editing: { readonly blockId: string; readonly text: string } | null;
+  readonly start: (blockId: string, text: string) => void;
+  readonly cancel: () => void;
+  readonly change: (text: string) => void;
+  readonly save: (blockId: string, text: string) => void;
+  readonly revert: (blockId: string) => void;
+  readonly saving: boolean;
+  readonly enabled: boolean;
+}
+
+function RowEditButtons({ blockId, text, rowEdit }: {
+  readonly blockId: string;
+  readonly text: string;
+  readonly rowEdit: RowEdit;
+}) {
+  const { t } = useI18n();
+  if (!rowEdit.enabled || rowEdit.editing?.blockId === blockId) return null;
+  return <>
+    <button type="button" className="context-edit-button" data-context-edit-modify={blockId}
+      aria-label={t("promptCapture.editModify")}
+      onClick={(event) => { event.preventDefault(); event.stopPropagation(); rowEdit.start(blockId, text); }}>
+      {t("promptCapture.editModify")}
+    </button>
+    {rowEdit.modified[blockId] !== undefined && <button type="button" className="context-edit-button" data-context-edit-revert={blockId}
+      onClick={(event) => { event.preventDefault(); event.stopPropagation(); rowEdit.revert(blockId); }}>
+      {t("promptCapture.editRevert")}
+    </button>}
+  </>;
+}
+
+function InlineTextEditor({ blockId, rowEdit }: { readonly blockId: string; readonly rowEdit: RowEdit }) {
+  const { t } = useI18n();
+  const editing = rowEdit.editing;
+  if (editing === null || editing.blockId !== blockId) return null;
+  return <div className="context-edit-inline" data-context-edit-inline={blockId}>
+    <textarea data-context-edit-input={blockId} value={editing.text} rows={8}
+      onChange={(event) => rowEdit.change(event.target.value)} />
+    <div className="context-edit-actions">
+      <button type="button" className="context-edit-button is-primary" data-context-edit-save={blockId}
+        disabled={rowEdit.saving} onClick={() => rowEdit.save(blockId, editing.text)}>
+        {t("promptCapture.editSave")}
+      </button>
+      <button type="button" className="context-edit-button" onClick={rowEdit.cancel}>{t("promptCapture.editCancel")}</button>
+    </div>
+  </div>;
 }
 
 /** 块内子条目（镜像后端 `src/context-edit.ts` 的 `splitSubEntries`：同一规则，两端一致）。 */
