@@ -604,5 +604,6 @@ export async function fetchContextPreview(
     excluded: { count: edit.excluded.length },
     payload: { sha256: "", chars: 0 },
   };
-  return { detail: normalizeDetail(row, raw, [], false), edit, payloadPresent: true };
+  // 与真实详情一致：使用后端给的消息区域分类（否则显示"未分类"）。
+  return { detail: normalizeDetail(row, raw, payload.messageRegions, false), edit, payloadPresent: true };
 }
