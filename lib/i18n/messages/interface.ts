@@ -1130,11 +1130,6 @@ export const interfaceCopy: Record<string, { en: string; "zh-CN": string; source
     "zh-CN": "[图片",
     "source": "[image"
   },
-  "interface.pi.coding.agent": {
-    "en": "Pi coding agent",
-    "zh-CN": "Pi 编程智能体",
-    "source": "Pi Coding Agent"
-  },
   "interface.on": {
     "en": "On",
     "zh-CN": "开启",

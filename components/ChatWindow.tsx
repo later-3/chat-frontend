@@ -670,8 +670,7 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
                         <div className="pb-1 text-[11px] font-medium text-text-muted">
                           {workflowAgentId === "planner"
                             ? t("chat.plannerStage")
-                            : (workflowAgentId === "pi-coding-agent" ? t("interface.pi.coding.agent")
-                              : workflowAgentId === "session-memory-writer" ? t("sessionActivity.memoryWriter") : workflowAgentId)}
+                            : workflowAgentId === "session-memory-writer" ? t("sessionActivity.memoryWriter") : workflowAgentId}
                         </div>
                         {messageView}
                       </div>
@@ -814,8 +813,7 @@ export function ChatWindow({ chatActionsSlot, projectId, deviceId, contextProjec
                   <div className="pb-1 text-[11px] font-medium text-text-muted">
                     {activeRunStage.agentId === "planner"
                       ? t("chat.plannerStage")
-                      : (activeRunStage.agentId === "pi-coding-agent" ? t("interface.pi.coding.agent")
-                        : activeRunStage.agentId === "session-memory-writer" ? t("sessionActivity.memoryWriter") : activeRunStage.agentId)}
+                      : activeRunStage.agentId === "session-memory-writer" ? t("sessionActivity.memoryWriter") : activeRunStage.agentId}
                   </div>
                 )}
                 <MessageView message={streamState.streamingMessage as AgentMessage} isStreaming cwd={messageCwd} onOpenFile={onOpenFile} />
