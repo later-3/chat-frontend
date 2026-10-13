@@ -6,8 +6,12 @@ import { useI18n } from "@/hooks/useI18n";
 import { PromptCaptureBlock, contentText } from "./PromptCaptureTurnTree";
 import { regionLabelKey } from "@/lib/prompt-captures";
 import {
+  EMPTY_CONTEXT_EDIT,
+  fetchContextEdit,
   fetchInteractionTurnGroup,
   fetchRequestDetail,
+  saveContextEdit,
+  type ContextEditState,
   type InteractionRequestGroupView,
   type InteractionRowView,
   type InteractionTurnGroupView,
@@ -226,7 +230,8 @@ export function TurnInteractions({ sessionId, projectId, turnKey, mode, defaultE
                     </div>
                   ))}
                 </div>}
-                <RequestDetailViewPanel detail={entry.detail} row={row} request={request} filter={blockFilter} />
+                <RequestDetailViewPanel detail={entry.detail} row={row} request={request} filter={blockFilter}
+                  sessionId={sessionId} projectId={projectId} editable={mode === "full-history"} />
               </div>}
             </section>;
           })}
@@ -257,13 +262,44 @@ function RequestMeta({ detail, row, request }: {
 /** 发起方 bar（02 §2.1 a 视角）与请求组共用同一详情面板——同一条捕获记录、两个视图锚点。
  *  B3-R3：**按原始请求体自身的结构与顺序展示**（model → messages 逐条[system 内按自带 chat_* 标签块折叠] → tools 逐个），
  *  把抽象定义（区域标签/人话名/revision）作为标注叠上去——以实现为准，不按自创解析重排。 */
-export function RequestDetailViewPanel({ detail, row, request, filter }: {
+export function RequestDetailViewPanel({ detail, row, request, filter, sessionId, projectId, editable = false }: {
   readonly detail: RequestDetailView;
   readonly row: InteractionRowView | undefined;
   readonly request?: InteractionRequestGroupView;
   readonly filter: BlockFilter;
+  readonly sessionId?: string;
+  readonly projectId?: string;
+  /** B5：可编辑（勾选/恢复“发给模型的内容”）。默认 false = 只读展示。 */
+  readonly editable?: boolean;
 }) {
   const { t } = useI18n();
+  const canEdit = editable && sessionId !== undefined && projectId !== undefined;
+  const [contextEdit, setContextEdit] = useState<ContextEditState>(EMPTY_CONTEXT_EDIT);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  useEffect(() => {
+    if (!canEdit) return;
+    const controller = new AbortController();
+    void fetchContextEdit(sessionId, projectId, controller.signal).then(setContextEdit).catch(() => undefined);
+    return () => controller.abort();
+  }, [canEdit, sessionId, projectId]);
+  const excludedSet = new Set(contextEdit.excluded);
+  const toggleBlock = (blockId: string) => {
+    if (!canEdit || savingEdit) return;
+    const nextExcluded = excludedSet.has(blockId)
+      ? contextEdit.excluded.filter((id) => id !== blockId)
+      : [...contextEdit.excluded, blockId];
+    setContextEdit({ ...contextEdit, excluded: nextExcluded });
+    setSavingEdit(true);
+    setEditError(null);
+    void saveContextEdit(sessionId, projectId, { excluded: nextExcluded, modified: contextEdit.modified, added: contextEdit.added })
+      .then((saved) => setContextEdit(saved))
+      .catch((cause) => {
+        setEditError(cause instanceof Error ? cause.message : String(cause));
+        void fetchContextEdit(sessionId, projectId).then(setContextEdit).catch(() => undefined);
+      })
+      .finally(() => setSavingEdit(false));
+  };
   const payload = detail.payload ?? {};
   const messages = Array.isArray(payload.messages) ? (payload.messages as { role?: string; content?: unknown }[]) : [];
   const marks = detail.messageRegions;
@@ -275,6 +311,10 @@ export function RequestDetailViewPanel({ detail, row, request, filter }: {
   const bodyMessages = systemMessage !== undefined ? messages.slice(1) : messages;
   const systemContent = systemMessage === undefined ? (typeof payload.system === "string" ? payload.system : null) : contentText(systemMessage.content);
   const systemBlocks = systemContent === null ? [] : splitChatTagBlocks(systemContent);
+  // B5 编辑层：将发送块 = 未被排除的块（Pi base 块不可排除）。
+  const keptBlocks = systemBlocks.filter((block) => block.tag === "" || !excludedSet.has(`tag:${block.tag}`));
+  const excludedBlocks = systemBlocks.filter((block) => block.tag !== "" && excludedSet.has(`tag:${block.tag}`));
+  const sendChars = keptBlocks.reduce((total, block) => total + block.text.length, 0);
 
   const showSystem = filter === "all" || filter === "system";
   const showMessages = filter === "all" || filter === "history";
@@ -307,17 +347,22 @@ export function RequestDetailViewPanel({ detail, row, request, filter }: {
             <span className="raw-role">{t("promptCapture.messageRow", { index: 0, role: "system" })}</span>
             <span className="workspace-muted">{t("promptCapture.payloadChars", { chars: (systemContent ?? "").length.toLocaleString() })}
               {" · "}{t("promptCapture.blocksCount", { n: systemBlocks.length })}</span>
+            {canEdit && <span className="workspace-muted" data-context-edit-summary>
+              {t("promptCapture.editSendSummary", { n: keptBlocks.length, chars: sendChars.toLocaleString() })}
+            </span>}
+            {savingEdit && <span className="workspace-muted">{t("promptCapture.editSaving")}</span>}
           </summary>
+          {editError !== null && <p className="surface-error" role="alert" data-context-edit-error>
+            {t("promptCapture.editSaveError", { message: editError })}
+          </p>}
           <div className="raw-system-blocks" data-raw-system-blocks>
-            {systemBlocks.map((block, index) => <details key={index} className="prompt-capture-section raw-tag-block"
-              data-tag={block.tag} open={false}>
-              <summary>
-                <span className="raw-tag">{block.tag === "" ? t("promptCapture.piBaseBlock") : `<${block.tag}>`}</span>
-                {block.attributes !== "" && <span className="raw-attrs" title={block.attributes}>{block.attributes}</span>}
-                <span className="workspace-muted">{t("promptCapture.payloadChars", { chars: block.text.length.toLocaleString() })}</span>
-              </summary>
-              <pre className="prompt-capture-block-text">{block.text}</pre>
-            </details>)}
+            {keptBlocks.map((block, index) => <SystemBlockRow key={index} block={block} excluded={false}
+              canEdit={canEdit} onToggleBlock={toggleBlock} />)}
+            {excludedBlocks.length > 0 && <details className="prompt-capture-section context-excluded-region" data-context-excluded open={false}>
+              <summary><span className="raw-role">{t("promptCapture.editExcludedRegion", { n: excludedBlocks.length })}</span></summary>
+              {excludedBlocks.map((block, index) => <SystemBlockRow key={index} block={block} excluded
+                canEdit={canEdit} onToggleBlock={toggleBlock} />)}
+            </details>}
           </div>
         </details>
       </div>}
@@ -342,8 +387,16 @@ export function RequestDetailViewPanel({ detail, row, request, filter }: {
       <summary>{t("promptCapture.tools", { count: tools.length })}</summary>
       {tools.map((tool, index) => {
         const name = tool.function?.name ?? tool.name ?? "?";
-        return <details key={index} className="prompt-capture-section raw-tool">
-          <summary><span className="raw-role">{name}</span></summary>
+        const toolExcluded = excludedSet.has(`tools:${name}`);
+        return <details key={index} className={`prompt-capture-section raw-tool${toolExcluded ? " is-excluded" : ""}`}
+          data-excluded={toolExcluded || undefined}>
+          <summary>
+            {canEdit && <input type="checkbox" data-context-edit-toggle={`tools:${name}`} checked={!toolExcluded}
+              aria-label={t("promptCapture.editExclude")}
+              onClick={(event) => { event.preventDefault(); event.stopPropagation(); toggleBlock(`tools:${name}`); }} />}
+            <span className="raw-role">{name}</span>
+            {toolExcluded && <span className="workspace-muted" data-excluded-badge>{t("promptCapture.editExcludedBadge")}</span>}
+          </summary>
           <pre className="prompt-capture-block-text is-mono">{JSON.stringify(tool, null, 2)}</pre>
         </details>;
       })}
@@ -354,6 +407,29 @@ export function RequestDetailViewPanel({ detail, row, request, filter }: {
       <pre className="prompt-capture-raw">{JSON.stringify(detail.payload, null, 2)}</pre>
     </details>
   </div>;
+}
+
+function SystemBlockRow({ block, excluded, canEdit, onToggleBlock }: {
+  readonly block: ChatTagBlock;
+  readonly excluded: boolean;
+  readonly canEdit: boolean;
+  readonly onToggleBlock: (blockId: string) => void;
+}) {
+  const { t } = useI18n();
+  const blockId = `tag:${block.tag}`;
+  return <details className={`prompt-capture-section raw-tag-block${excluded ? " is-excluded" : ""}`}
+    data-tag={block.tag} data-excluded={excluded || undefined} open={false}>
+    <summary>
+      {canEdit && block.tag !== "" && <input type="checkbox" data-context-edit-toggle={blockId} checked={!excluded}
+        aria-label={t("promptCapture.editExclude")}
+        onClick={(event) => { event.preventDefault(); event.stopPropagation(); onToggleBlock(blockId); }} />}
+      <span className="raw-tag">{block.tag === "" ? t("promptCapture.piBaseBlock") : `<${block.tag}>`}</span>
+      {block.attributes !== "" && <span className="raw-attrs" title={block.attributes}>{block.attributes}</span>}
+      {excluded && <span className="workspace-muted" data-excluded-badge>{t("promptCapture.editExcludedBadge")}</span>}
+      <span className="workspace-muted">{t("promptCapture.payloadChars", { chars: block.text.length.toLocaleString() })}</span>
+    </summary>
+    <pre className="prompt-capture-block-text">{block.text}</pre>
+  </details>;
 }
 
 /** system 内容按自带 <chat_*> 标签切块（原始结构还原）；标签外的前缀 = Pi 基础区（tag 为空串）。 */

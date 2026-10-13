@@ -478,3 +478,73 @@ export async function fetchSessionMessages(sessionId: string, projectId: string,
     };
   });
 }
+
+// ---------------------------------------------------------------------------
+// B5 上下文编辑层：发给模型的内容 = 可勾选/可修改/可追加的文字块
+// ---------------------------------------------------------------------------
+
+export interface ContextEditState {
+  /** 不再发送的块（blockId：tag:<chat_xxx> / entry:<entryId> / tools:<名>）。 */
+  readonly excluded: readonly string[];
+  readonly modified: Readonly<Record<string, string>>;
+  readonly added: Readonly<Record<string, readonly string[]>>;
+  readonly revision: number;
+}
+
+export const EMPTY_CONTEXT_EDIT: ContextEditState = { excluded: [], modified: {}, added: {}, revision: 0 };
+
+function parseContextEdit(payload: unknown): ContextEditState {
+  if (!isRecord(payload)) throw new Error("编辑层响应不是对象");
+  const excluded = Array.isArray(payload.excluded) ? payload.excluded.filter((item): item is string => typeof item === "string") : [];
+  const modified: Record<string, string> = {};
+  if (isRecord(payload.modified)) {
+    for (const [key, value] of Object.entries(payload.modified)) if (typeof value === "string") modified[key] = value;
+  }
+  const added: Record<string, string[]> = {};
+  if (isRecord(payload.added)) {
+    for (const [key, value] of Object.entries(payload.added)) {
+      if (Array.isArray(value)) added[key] = value.filter((item): item is string => typeof item === "string");
+    }
+  }
+  return { excluded, modified, added, revision: num(payload.revision, 0) };
+}
+
+export async function fetchContextEdit(sessionId: string, projectId: string, signal?: AbortSignal): Promise<ContextEditState> {
+  const payload = await readJson(
+    await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/context-edit?projectId=${encodeURIComponent(projectId)}`, { signal, credentials: "same-origin" }),
+    "读取上下文编辑层",
+  );
+  return parseContextEdit(payload);
+}
+
+/** 保存编辑层；409（revision 冲突）重读一次后重试一次，仍冲突抛给 UI。 */
+export async function saveContextEdit(
+  sessionId: string,
+  projectId: string,
+  next: { readonly excluded: readonly string[]; readonly modified: Readonly<Record<string, string>>; readonly added: Readonly<Record<string, readonly string[]>> },
+): Promise<ContextEditState> {
+  const url = `/api/sessions/${encodeURIComponent(sessionId)}/context-edit?projectId=${encodeURIComponent(projectId)}`;
+  const attempt = async (expectedRevision: number): Promise<ContextEditState> => {
+    const response = await fetch(url, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ ...next, expectedRevision }),
+    });
+    if (response.status === 409) {
+      const current = await fetchContextEdit(sessionId, projectId);
+      const retry = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ ...next, expectedRevision: current.revision }),
+      });
+      if (!retry.ok) throw new Error(`保存上下文编辑层：HTTP ${retry.status}`);
+      return parseContextEdit(await retry.json());
+    }
+    if (!response.ok) throw new Error(`保存上下文编辑层：HTTP ${response.status}`);
+    return parseContextEdit(await response.json());
+  };
+  const current = await fetchContextEdit(sessionId, projectId);
+  return attempt(current.revision);
+}

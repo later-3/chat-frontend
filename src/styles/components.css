@@ -1523,6 +1523,16 @@ span.token.table {
 .raw-attrs { color: var(--text-dim); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
 .raw-system-blocks { display: flex; flex-direction: column; gap: 6px; padding: 4px 0 8px; }
 .raw-tag-block > summary { gap: 10px; }
+/* --- B5：发送内容编辑层（勾选 / 已排除折叠区 / 发送统计） --- */
+.raw-tag-block > summary > input[type="checkbox"],
+.raw-tool > summary > input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; flex: 0 0 auto; margin: 0; }
+.raw-tag-block.is-excluded > summary,
+.raw-tool.is-excluded > summary { opacity: 0.55; }
+.raw-tag-block.is-excluded .raw-tag,
+.raw-tool.is-excluded .raw-role { text-decoration: line-through; }
+.context-excluded-region { border-left: 2px solid var(--border); padding-left: 8px; }
+.context-excluded-region > summary { color: var(--text-muted); }
+[data-context-edit-summary] { margin-left: auto; }
 .full-history-turn { border: 0; background: none; overflow: visible; }
 .full-history-turn-header {
   display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px;

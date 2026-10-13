@@ -274,7 +274,8 @@ function FullHistoryTurnRow({ group, position, nextTimestamp, groups, rows, sess
                 initiatorDetail === null
                   ? <div className="initiator-detail" data-initiator-detail role="status">{t("promptCapture.loadingPayload")}</div>
                   : <div className="initiator-detail" data-initiator-detail data-view="initiator">
-                      <RequestDetailViewPanel detail={initiatorDetail} row={firstRequest} filter="all" />
+                      <RequestDetailViewPanel detail={initiatorDetail} row={firstRequest} filter="all"
+                        sessionId={sessionId} projectId={projectId} editable />
                     </div>
               )}
               {/* b：回复方（左）+ 回复侧交互树 */}
